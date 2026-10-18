@@ -300,6 +300,20 @@ PA_DEFAULT = 0xFFFFFFFF  # (uint32_t) -1 : valeur choisie par le serveur
 BYTES_PER_SAMPLE = 2
 LATENCY_CHUNKS = 4  # ~80 ms
 PCM_SCALE = 32000  # un peu sous 32767, la crête des entiers 16 bits
+# Souffle de fond inaudible (±2 pas sur 32 000, ~-84 dB) ajouté en sortie : la sortie audio de WSLg (bureau à
+# distance de Windows) coupe un flux de silence pur et met du temps à le relancer, les effets arrivent alors en
+# retard et hachés dès que la musique est éteinte.
+KEEPALIVE_LSB = 2
+_KEEPALIVE = array("h", (random.Random(0).randint(-KEEPALIVE_LSB, KEEPALIVE_LSB) for _ in range(RATE)))
+
+
+def _keep_alive(pcm, pos):
+    """Ajoute au bloc PCM le souffle de fond, à partir de l'échantillon pos de sa boucle d'une seconde."""
+    samples = array("h", pcm)
+    n = len(_KEEPALIVE)
+    for i in range(len(samples)):
+        samples[i] += _KEEPALIVE[(pos + i) % n]
+    return samples.tobytes()
 
 
 class _SampleSpec(ctypes.Structure):
@@ -378,8 +392,10 @@ class Sound:
         err = ctypes.c_int()
         # La musique (~2 s de calcul) est générée à côté pour ne pas retarder les effets.
         threading.Thread(target=lambda: setattr(self, "tracks", _build_music()), daemon=True).start()
+        floor_pos = 0
         while True:
-            pcm = self._mix()
+            pcm = _keep_alive(self._mix(), floor_pos)
+            floor_pos = (floor_pos + CHUNK) % len(_KEEPALIVE)
             if lib.pa_simple_write(stream, pcm, len(pcm), ctypes.byref(err)) < 0:
                 self.ok = False
                 return

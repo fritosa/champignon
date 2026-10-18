@@ -180,6 +180,17 @@ class MusicTest(unittest.TestCase):
         self.assertIsNone(self.snd.music)
 
 
+class KeepAliveTest(unittest.TestCase):
+    def test_silence_never_pure_and_signal_kept(self):
+        silence = array("h", [0] * sound.CHUNK).tobytes()
+        out = array("h", sound._keep_alive(silence, 0))
+        self.assertTrue(any(out))  # jamais de silence pur : WSLg couperait le flux
+        self.assertLessEqual(max(map(abs, out)), sound.KEEPALIVE_LSB)
+        loud = array("h", [sound.PCM_SCALE, -sound.PCM_SCALE] * (sound.CHUNK // 2))
+        mixed = array("h", sound._keep_alive(loud.tobytes(), len(sound._KEEPALIVE) - 3))  # bouclage du souffle
+        self.assertTrue(all(abs(a - b) <= sound.KEEPALIVE_LSB for a, b in zip(mixed, loud)))
+
+
 class MixerTest(unittest.TestCase):
     def setUp(self):
         self.snd = sound.Sound(enabled=False)

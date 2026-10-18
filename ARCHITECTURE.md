@@ -117,6 +117,8 @@ fichier, nouvelle convention).
   limiteur à gain (`_limiter`) : si un bloc dépasse `CEIL`, tout le bloc est baissé, puis le gain remonte de
   `RELEASE` par bloc. Ne jamais saturer ou écrêter échantillon par échantillon : la musique craque dès
   qu'un effet fort s'y ajoute.
+- La sortie ajoute un souffle inaudible (`_keep_alive`, ±`KEEPALIVE_LSB`) : sous WSLg, un flux de silence
+  pur est coupé puis relancé en retard, et les effets seuls (sans musique) arrivaient hachés.
 - **Priorités** (`sound.PRIORITY`) : à partir de 2, ce sont des jingles exclusifs (un seul à la fois, un plus
   important coupe le précédent en fondu, un moins important est ignoré). Les autres (1 par défaut) sont des
   bruitages, limités à `MAX_MINOR` voix et atténués (`DUCK`) pendant un jingle. Tout nouveau son long ou
