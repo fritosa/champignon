@@ -17,6 +17,7 @@ SFX_GAP = dict(level=0.6, hit=0.08, achievement=0.6, crit=0.15, buy=0.12, fizzle
 DEFAULT_SFX_GAP = 0.05
 MSG_TIME = 6
 BIG_TIME = 3  # titre en grosses lettres (messages importants : tout MSG_TIME)
+AUDIO_LABELS = dict(all="musique + effets", sfx="effets seuls", off="muet")
 MSG_COLORS = dict(info="white", good="green", bad="red", loot="cyan", star="yellow", epic="magenta")
 KEY_HELP = [
     ("ESPACE", "Détonateur : gagne de la radiation (attention à la surchauffe)."),
@@ -28,7 +29,7 @@ KEY_HELP = [
     ("Entrée", "Achète ou active la ligne sélectionnée."),
     ("M", "Quantité achetée par Entrée : ×1, ×10, ×100 ou max."),
     ("Tab ←→", "Onglet suivant / précédent."),
-    ("0", "Son : musique + effets → effets seuls → muet."),
+    ("0", "Son : " + " → ".join(AUDIO_LABELS[m] for m in AUDIO_MODES) + "."),
     ("+ / -", f"Volume général (par paliers de {VOLUME_STEP} %)."),
     ("Q", "Sauvegarde et quitte."),
 ]
@@ -37,6 +38,7 @@ SHAKE = dict(boom=1.3, perfect=0.6, prestige=0.6, supernova=1.5)
 QTY = [1, 10, 100, "max"]
 TABS = ["Unités", "Talents", "Prestige", "Succès", "Infos"]
 MIN_W, MIN_H = 60, 20
+MAX_FLOATS = 6  # nombres flottants affichés en même temps
 
 
 def row(text, attr=0, action=None, desc="", sel=True, sprite=None):
@@ -663,19 +665,8 @@ class UI:
         rows.append(row(f"Skin : {data.SKINS[g.skin]}  ({len(g.skins)}/{len(data.SKINS)})", self.c("magenta"),
                         ("skin",), "Entrée : changer de skin. Les défis et 5 prestiges en débloquent d'autres."))
         rows.append(row(f"── ARBRE DE PRESTIGE ({fmt(g.isotopes)} ⚛) " + "─" * 10, self.c("cyan"), sel=False))
-        for p in data.PTALENTS:
-            pid, r = p["id"], g.pr(p["id"])
-            cost = "MAX" if r >= p["max"] else f"{fmt(g.ptalent_cost(pid))} ⚛"
-            nw = max(10, self.tab_w - 18)
-            text = f"{p['name'][:nw]:<{nw}} {r}/{p['max']:<2} {cost:>8}"
-            if r >= p["max"]:
-                attr = self.c("green")
-            elif g.isotopes >= g.ptalent_cost(pid):
-                attr = self.c("yellow") | curses.A_BOLD
-            else:
-                attr = self.c("white")
-            desc = p["desc"] + (f" Niveau max actuel : {fmt(g.cap)}." if pid == "p_cap" else "")
-            rows.append(row(text, attr, ("ptalent", pid), desc + self.qty_note()))
+        rows += self.tree_rows(data.PTALENTS, "ptalent", g.pr, g.ptalent_cost, g.isotopes, "⚛",
+                               lambda pid: f" Niveau max actuel : {fmt(g.cap)}." if pid == "p_cap" else "")
         if g.supernova_unlocked:
             rows += self.supernova_rows()
         return rows
@@ -690,18 +681,24 @@ class UI:
                             ("supernova",), desc))
         else:
             rows.append(row(f"Supernova : atteins le niveau {fmt(data.MAX_CAP)}", self.c("grey"), None, desc))
-        for p in data.STALENTS:
-            sid, r = p["id"], g.sr(p["id"])
-            cost = "MAX" if r >= p["max"] else f"{fmt(g.stalent_cost(sid))} ✦"
-            nw = max(10, self.tab_w - 18)
-            text = f"{p['name'][:nw]:<{nw}} {r}/{p['max']:<2} {cost:>8}"
-            if r >= p["max"]:
+        return rows + self.tree_rows(data.STALENTS, "stalent", g.sr, g.stalent_cost, g.stars, "✦")
+
+    def tree_rows(self, talents, kind, rank, cost, budget, unit, extra_desc=lambda tid: ""):
+        """Arbre payé en isotopes ou en étoiles : nom, rang, coût du rang suivant ; jaune si on peut payer."""
+        rows = []
+        nw = max(10, self.tab_w - 18)
+        for t in talents:
+            tid, r = t["id"], rank(t["id"])
+            maxed = r >= t["max"]
+            price = "MAX" if maxed else f"{fmt(cost(tid))} {unit}"
+            text = f"{t['name'][:nw]:<{nw}} {r}/{t['max']:<2} {price:>8}"
+            if maxed:
                 attr = self.c("green")
-            elif g.stars >= g.stalent_cost(sid):
+            elif budget >= cost(tid):
                 attr = self.c("yellow") | curses.A_BOLD
             else:
                 attr = self.c("white")
-            rows.append(row(text, attr, ("stalent", sid), p["desc"] + self.qty_note()))
+            rows.append(row(text, attr, (kind, tid), t["desc"] + extra_desc(tid) + self.qty_note()))
         return rows
 
     def achievement_rows(self):
@@ -736,10 +733,7 @@ class UI:
         head, key, grey = self.c("cyan") | curses.A_BOLD, self.c("yellow") | curses.A_BOLD, self.c("white")
         rows = [row("── TOUCHES " + "─" * 20, head, sel=False)]
         for k, what in KEY_HELP:
-            text = f"{k:<9} {what}"
-            if len(text) > self.tab_w - 2:
-                text = text[:self.tab_w - 3] + "…"
-            rows.append(row(text, key, None, what))
+            rows.append(row(_clip(f"{k:<9} {what}", self.tab_w - 2), key, None, what))
         best = st["best_prestige_time"]
         rows.append(row("── STATISTIQUES " + "─" * 15, head, sel=False))
         for label, value in [
@@ -759,7 +753,7 @@ class UI:
             ("Mutations choisies", fmt(st["mutations"])),
             ("Défis réussis", f"{len(g.challenges_done)}/{len(data.CHALLENGES)}"),
             ("Skins débloqués", f"{len(g.skins)}/{len(data.SKINS)}"),
-            ("Son", dict(all="musique + effets", sfx="effets seuls", off="muet")[g.audio] + f" · {g.volume} %"),
+            ("Son", f"{AUDIO_LABELS[g.audio]} · {g.volume} %"),
             ("Synergies découvertes", f"{len(g.synergies_found)}/{len(events.SYNERGIES)}"),
         ]:
             vw = max(10, len(value))
@@ -775,14 +769,18 @@ class UI:
             rows.append(row("── DERNIÈRE PARTIE " + "─" * 12, head, sel=False))
             for label, value in self.report_lines(g.last_run):
                 text = f"{label} : {value}"
-                if len(text) > self.tab_w - 2:
-                    text = text[:self.tab_w - 3] + "…"
-                rows.append(row(text, grey, None, f"{label} : {value}"))
+                rows.append(row(_clip(text, self.tab_w - 2), grey, None, text))
         return rows
 
     def draw_tab(self, y0, x0, H, W):
         self.tab_w = W - 4
         self.box(y0, x0, H, W, "", self.c("grey"))
+        self.draw_tab_labels(y0, x0, W)
+        self.draw_tab_help(y0 + H - 1, x0, W)
+        self.draw_tab_body(y0 + 1, x0 + 2, H - 2, W - 4)
+
+    def draw_tab_labels(self, y, x0, W):
+        """Noms des onglets sur le bord haut, raccourcis jusqu'à tenir ; • si un achat y est possible."""
         names = ["???" if i == 2 and not self.g.prestige_unlocked else n for i, n in enumerate(TABS)]
         if self.qty != 1:
             names[0] += f" ×{self.qty}"
@@ -795,8 +793,11 @@ class UI:
         x = x0 + 2
         for i, label in enumerate(labels):
             attr = curses.A_REVERSE | curses.A_BOLD if i == self.tab else self.c("white")
-            self.put(y0, x, label, attr)
+            self.put(y, x, label, attr)
             x += len(label) + 1
+
+    def draw_tab_help(self, y, x0, W):
+        """Aide des touches sur le bord bas, de moins en moins détaillée selon la largeur."""
         son = dict(all="♪", sfx="on", off="off")[self.g.audio] if self.sound and self.sound.ok else "indispo"
         if son in ("♪", "on") and self.g.volume < 100:
             son += f" {self.g.volume}%"
@@ -804,9 +805,11 @@ class UI:
                       f" M ×{self.qty} · 5 aide · 0 son {son} · Q ", f" M ×{self.qty} · 5 aide · Q ", " 5 aide "):
             if len(help_) <= W - 2:
                 break
-        self.put(y0 + H - 1, x0 + max(1, (W - len(help_)) // 2), help_[:W - 2], self.c("grey"))
+        self.put(y, x0 + max(1, (W - len(help_)) // 2), help_[:W - 2], self.c("grey"))
 
-        iy, ix, IH, IW = y0 + 1, x0 + 2, H - 2, W - 4
+    def draw_tab_body(self, iy, ix, IH, IW):
+        """Liste défilante des lignes de l'onglet, puis sous un trait la description de la ligne choisie
+        (avec le sprite de l'unité à droite s'il tient)."""
         rows = self.rows()
         selectable = [i for i, r in enumerate(rows) if r["sel"]]
         cur = None
@@ -820,34 +823,9 @@ class UI:
             desc = "Appuie encore sur Entrée pour confirmer !"
             desc_attr = self.c("red") | curses.A_BOLD
         sprite = rows[cur]["sprite"] if cur is not None and not confirming else None
-        art_rows = []
-        if sprite and IW >= 36:
-            uid, unlocked = sprite
-            art_rows = art.sprite(art.UNIT_ART[uid], self.t)
-            art_attr = self.c(data.UNIT_BY_ID[uid]["color"]) | curses.A_BOLD if unlocked else self.c("grey")
-        text_w = IW - (len(art_rows[0]) + 2 if art_rows else 0)
-        min_list_h = 5
-        max_desc_h = IH - 1 - min_list_h
-        lines = textwrap.wrap(desc, text_w)
-        n_desc = max(2, min(max(len(lines), len(art_rows)), max_desc_h))
-        if len(art_rows) > n_desc:
-            art_rows = []
-            text_w = IW
-            lines = textwrap.wrap(desc, IW)
-            n_desc = max(2, min(len(lines), max_desc_h))
-        if len(lines) > n_desc:
-            lines = lines[:n_desc - 1] + [lines[n_desc - 1][:text_w - 1] + "…"]
-        list_h = max(1, IH - 1 - n_desc)
-        if selectable:
-            sc = self.scroll[self.tab]
-            if cur < sc:
-                sc = cur
-            elif cur >= sc + list_h:
-                sc = cur - list_h + 1
-            if cur == selectable[0]:
-                sc = 0
-            self.scroll[self.tab] = sc
-        sc = self.scroll[self.tab] if selectable else 0
+        lines, art_rows, art_attr = self.desc_layout(desc, sprite, IH, IW)
+        list_h = max(1, IH - 1 - len(lines))
+        sc = self.scroll_to(cur, selectable, list_h)
         for i, r in enumerate(rows[sc:sc + list_h]):
             idx = sc + i
             prefix = "▶ " if idx == cur else "  "
@@ -864,6 +842,42 @@ class UI:
         if art_rows:
             w = len(art_rows[0])
             self.draw_sprite(iy + list_h + 1, ix + IW - w, w, len(art_rows) - 1, 0, art_rows, art_attr)
+
+    def desc_layout(self, desc, sprite, IH, IW):
+        """Lignes de la description (au moins 2, la liste en garde 5), complétées de lignes vides jusqu'à la
+        hauteur du sprite ; le sprite est abandonné s'il ne tient pas. Renvoie (lignes, sprite, attribut)."""
+        art_rows, art_attr = [], 0
+        if sprite and IW >= 36:
+            uid, unlocked = sprite
+            art_rows = art.sprite(art.UNIT_ART[uid], self.t)
+            art_attr = self.c(data.UNIT_BY_ID[uid]["color"]) | curses.A_BOLD if unlocked else self.c("grey")
+        text_w = IW - (len(art_rows[0]) + 2 if art_rows else 0)
+        min_list_h = 5
+        max_desc_h = IH - 1 - min_list_h
+        lines = textwrap.wrap(desc, text_w)
+        n_desc = max(2, min(max(len(lines), len(art_rows)), max_desc_h))
+        if len(art_rows) > n_desc:
+            art_rows = []
+            text_w = IW
+            lines = textwrap.wrap(desc, IW)
+            n_desc = max(2, min(len(lines), max_desc_h))
+        if len(lines) > n_desc:
+            lines = lines[:n_desc - 1] + [lines[n_desc - 1][:text_w - 1] + "…"]
+        return lines + [""] * (n_desc - len(lines)), art_rows, art_attr
+
+    def scroll_to(self, cur, selectable, list_h):
+        """Défilement de l'onglet qui garde la ligne choisie visible (tout en haut sur la première)."""
+        if not selectable:
+            return 0
+        sc = self.scroll[self.tab]
+        if cur < sc:
+            sc = cur
+        elif cur >= sc + list_h:
+            sc = cur - list_h + 1
+        if cur == selectable[0]:
+            sc = 0
+        self.scroll[self.tab] = sc
+        return sc
 
     # --- Overlays et bandeau -----------------------------------------------------------
 
@@ -1013,10 +1027,8 @@ class UI:
                 crit = g.last_crit == g.time
                 self.add_float(("CRIT ! +" if crit else "+") + self.num(gained),
                                (self.c("red") if crit else self.c("yellow")) | curses.A_BOLD, self.rng.randint(-4, 4))
-                self.floats = self.floats[-6:]
             elif fizzled:
                 self.add_float("pschitt…", self.c("grey") | curses.A_BOLD, self.rng.randint(-4, 4))
-                self.floats = self.floats[-6:]
             if g.level > lvl and lvl:
                 self.add_float(f"NIVEAU {self.num(g.level)} !", self.c("green") | curses.A_BOLD)
         elif key in (ord("q"), ord("Q")):
@@ -1032,8 +1044,9 @@ class UI:
             events.choose_mutation(g, key - ord("1"))
         elif key == ord("0"):
             g.audio = AUDIO_MODES[(AUDIO_MODES.index(g.audio) + 1) % len(AUDIO_MODES)]
-            g.log("Son : " + dict(all="musique + effets", sfx="effets seuls", off="muet (0 pour le remettre)")[g.audio],
-                  "bad" if g.audio == "off" else "info")
+            muted = g.audio == "off"
+            g.log("Son : " + AUDIO_LABELS[g.audio] + (" (0 pour le remettre)" if muted else ""),
+                  "bad" if muted else "info")
         elif key in (ord("+"), ord("="), ord("-")):
             if g.change_volume(-1 if key == ord("-") else 1):
                 self.sfx("tick")  # aperçu au nouveau volume
@@ -1074,6 +1087,7 @@ class UI:
     def add_float(self, text, attr, dx=0):
         """Texte qui s'élève au-dessus du champignon (voir update_particles)."""
         self.floats.append(dict(text=text, age=0.0, dx=dx, attr=attr))
+        del self.floats[:-MAX_FLOATS]
 
     def selected_action(self):
         selectable = [r for r in self.rows() if r["sel"]]
@@ -1117,6 +1131,11 @@ class UI:
                     self.spawn_acc.clear()
             else:
                 self.confirm = (action, self.t + 3)
+
+
+def _clip(text, width):
+    """Texte coupé à width caractères, « … » compris."""
+    return text if len(text) <= width else text[:width - 1] + "…"
 
 
 def _dur(sec):
