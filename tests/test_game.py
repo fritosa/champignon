@@ -64,8 +64,10 @@ class ClickTest(unittest.TestCase):
         self.assertTrue(g.overheated)
         self.assertIn("overheat", g.sfx)
         before = g.radiation
+        g.sfx.clear()
         g.click()
         self.assertEqual(g.radiation, before)
+        self.assertEqual(list(g.sfx), ["nope"])  # appui refusé mais audible
 
     def test_crit_sound_only_when_manual(self):
         g = exploded_game(FixedRandom(0.0))

@@ -25,7 +25,7 @@ PRIORITY = dict(supernova=6, prestige=6, boom=5, perfect=5, fanfare=4, synergy=4
                 talent=2, drop=2, partial=2, fizzle=2, level=2, buy=2)
 MUSIC_VOL = 0.25
 # Crête visée par effet après normalisation (DEFAULT_LEVEL sinon) : les bruitages fréquents restent plus discrets.
-LEVEL = dict(tick=0.3, click=0.45, plane=0.5, charge=0.5, alarm=0.6)
+LEVEL = dict(tick=0.3, click=0.45, nope=0.45, plane=0.5, charge=0.5, alarm=0.6)
 DEFAULT_LEVEL = 0.8
 MUSIC_PEAK = 0.9
 MUSIC_FADE_SECONDS = 1.0
