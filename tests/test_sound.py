@@ -122,6 +122,10 @@ class MusicTest(unittest.TestCase):
 
     def test_every_track_has_chords_and_style(self):
         self.assertEqual(set(sound.STYLES), set(sound.PROGRESSIONS))
+        for name, style in sound.STYLES.items():
+            self.assertEqual(len(sound.PROGRESSIONS[name]), sound.BARS, name)  # la boucle dure BARS mesures
+            self.assertTrue(set(style["bass"]) <= {0, 1, 2, 3}, name)  # indices dans la marche de la basse
+            self.assertGreaterEqual(style["theme_every"], 1, name)
 
     def run_chunks(self, n):
         return [array("h", self.snd._mix()) for _ in range(n)]
