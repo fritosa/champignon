@@ -106,7 +106,9 @@ fichier, nouvelle convention).
   muet) et `g.volume` (touches + et -, de 0 à 100 % par paliers de `VOLUME_STEP`). `UI.play_sfx` les recopie
   dans `Sound` à chaque image ; le volume s'applique au mixage final.
 - Tous les sons sont synthétisés dans `sound._build()` ; la musique (3 pistes : `calm`, `tension`, `epic`)
-  dans `_build_music()`, choisie par `UI.music_track()`.
+  dans `_build_music()`, choisie par `UI.music_track()`. Style radio rétro à la Fallout : swing (`SWING`),
+  accords de jazz (`PROGRESSIONS`), puis `_radio` (bande étroite, souffle, craquements). Les pistes ont
+  toutes la même longueur et bouclent sans clic (`_add_at` replie la fin au début).
 - Chaque effet est normalisé à sa crête visée (`sound.LEVEL`, 0.8 par défaut). Le mixage final passe par un
   limiteur à gain (`_limiter`) : si un bloc dépasse `CEIL`, tout le bloc est baissé, puis le gain remonte de
   `RELEASE` par bloc. Ne jamais saturer ou écrêter échantillon par échantillon : la musique craque dès

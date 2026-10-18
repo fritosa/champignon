@@ -145,58 +145,102 @@ def _build():
 BEAT = 0.5  # 120 bpm
 BEATS_PER_BAR = 4
 BARS = 8
-FIFTH = 7  # demi-tons
-A2, AS2, C3, D3, E2, F2, G2 = 110.0, 116.5, 130.8, 146.8, 82.4, 87.3, 98.0
-# Accords (fondamentale, tierce en demi-tons), un par mesure.
+SWING = 2 / 3  # la croche du temps faible tombe aux deux tiers du temps (swing ternaire)
+C3, D3, E2, F2, G2, A2, B2 = 130.8, 146.8, 82.4, 87.3, 98.0, 110.0, 123.5
+# Accords en demi-tons au-dessus de la fondamentale : sixte et septièmes du jazz des années 40.
+MAJ6, MIN6, MIN7, DOM7 = (0, 4, 7, 9), (0, 3, 7, 9), (0, 3, 7, 10), (0, 4, 7, 10)
+# Un accord (fondamentale, accord) par mesure, façon radio d'abri antiatomique : crooner, film noir, big band.
 PROGRESSIONS = {
-    "calm": [(A2, 3), (A2, 3), (F2, 4), (F2, 4), (C3, 4), (C3, 4), (G2, 4), (G2, 4)],
-    "tension": [(A2, 3), (AS2, 4), (A2, 3), (E2, 4), (A2, 3), (AS2, 4), (D3, 3), (E2, 4)],
-    "epic": [(A2, 3), (F2, 4), (C3, 4), (G2, 4), (A2, 3), (F2, 4), (C3, 4), (E2, 4)],
+    "calm": [(C3, MAJ6), (A2, DOM7), (D3, MIN7), (G2, DOM7), (C3, MAJ6), (E2, DOM7), (F2, MAJ6), (G2, DOM7)],
+    "tension": [(A2, MIN6), (A2, MIN6), (D3, MIN6), (E2, DOM7), (A2, MIN6), (F2, DOM7), (B2, MIN7), (E2, DOM7)],
+    "epic": [(C3, MAJ6), (C3, MAJ6), (F2, MAJ6), (F2, MAJ6), (C3, MAJ6), (A2, DOM7), (D3, MIN7), (G2, DOM7)],
 }
+# Rythmes du thème (débuts de note en temps, durée en temps), tirés au hasard mesure par mesure.
+PHRASES = [((0, 1.5), (1.5, 0.5), (2, 2)), ((0, SWING), (SWING, 1 - SWING), (1, 1), (3, 1)),
+           ((1, 1), (2, 1), (3, 1)), ((0, 3),), ((0.5 + SWING / 2, 1), (2, 0.5), (2 + SWING, 1.3))]
+RADIO_LOW_CUT = 0.93  # passe-haut à un pôle (~250 Hz) : pas de grave, comme un petit haut-parleur
+RADIO_HIGH_CUT = 0.45  # passe-bas à un pôle, appliqué deux fois (~3 kHz)
+CRACKLES_PER_SECOND = 7
 
 
 def _add_at(out, t, samples):
-    """Ajoute les échantillons à partir de t secondes, coupés à la fin de out."""
-    start = int(t * RATE)
-    for i, x in enumerate(samples[:len(out) - start]):
-        out[start + i] += x
+    """Ajoute les échantillons à partir de t secondes, repliés au début de out (la piste boucle)."""
+    start, n = int(t * RATE), len(out)
+    for i, x in enumerate(samples):
+        out[(start + i) % n] += x
 
 
 def _semitones(n):
     return 2 ** (n / 12)
 
 
+def _radio(track, seed):
+    """Vieux poste : bande passante étroite, souffle et craquements de vinyle. Les filtres tournent deux fois
+    sur la boucle pour que leur état à la fin rejoigne le début (pas de clic au bouclage)."""
+    rng = random.Random(seed)
+    n = len(track)
+    for _ in range(int(n / RATE * CRACKLES_PER_SECOND)):
+        pos, amp = rng.randrange(n), rng.uniform(0.05, 0.3) * rng.choice((-1, 1))
+        for i in range(12):
+            track[(pos + i) % n] += amp * 0.6 ** i
+    hiss = noise(n / RATE, 0.012, 1e9, 0.9, seed)
+    track = [x + h for x, h in zip(track, hiss)]
+    out = [0.0] * n
+    prev_x = high = low1 = low2 = 0.0
+    for lap in range(2):
+        for i, x in enumerate(track):
+            high = RADIO_LOW_CUT * (high + x - prev_x)
+            prev_x = x
+            low1 += RADIO_HIGH_CUT * (high - low1)
+            low2 += RADIO_HIGH_CUT * (low1 - low2)
+            if lap:
+                out[i] = low2
+    return out
+
+
 def _track(name):
-    """Boucle de BARS mesures : basse, arpège et (sauf calme) batterie de bruit."""
+    """Boucle de BARS mesures en swing : contrebasse qui marche, piano, balais, thème de vibraphone, radio."""
     out = [0.0] * int(BARS * BEATS_PER_BAR * BEAT * RATE)
     calm, epic = name == "calm", name == "epic"
-    kick = tone(120, 40, 0.12, "sine", 0.6, decay=0.05)
-    hat = noise(0.04, 0.12, 0.01, 0.9, 11)
-    snare = noise(0.15, 0.3, 0.05, 0.5, 12)
-    bass_per_beat = 2 if epic else 1
-    bass_len = BEAT / bass_per_beat
-    bass_wave = "square" if epic else "tri"
-    arp_len = BEAT / (2 if calm else 4)
-    arp_wave, arp_vol = ("tri", 0.1) if calm else ("square", 0.07)
-    for bar, (root, third) in enumerate(PROGRESSIONS[name]):
+    rng = random.Random(name)
+    ride = noise(0.18, 0.1, 0.06, 0.95, 21)
+    brush = noise(0.25, 0.12, 0.1, 0.4, 22)
+    kick = tone(110, 50, 0.15, "sine", 0.5, decay=0.06)
+    progression = PROGRESSIONS[name]
+    for bar, (root, chord) in enumerate(progression):
         bar_start = bar * BEATS_PER_BAR * BEAT
-        low = root * 2
-        chord = [low, low * _semitones(third), low * _semitones(FIFTH), root * 4]
-        bass = tone(root, root, bass_len * 0.9, bass_wave, 0.25, decay=bass_len * 0.6)
-        for b in range(BEATS_PER_BAR * bass_per_beat):
-            _add_at(out, bar_start + b * bass_len, bass)
-        for i in range(int(BEATS_PER_BAR * BEAT / arp_len)):
-            going_up = i % 8 < 4
-            note = chord[i % 4] if going_up else chord[3 - i % 4]
-            arp = tone(note * 2, note * 2, arp_len * 0.8, arp_wave, arp_vol, decay=arp_len * 0.5)
-            _add_at(out, bar_start + i * arp_len, arp)
-        if not calm:
-            for b in range(BEATS_PER_BAR):
-                _add_at(out, bar_start + b * BEAT, kick)
-                _add_at(out, bar_start + (b + 0.5) * BEAT, hat)
-                if epic and b % 2:
-                    _add_at(out, bar_start + b * BEAT, snare)
-    return _normalize(out, MUSIC_PEAK)
+        next_root = progression[(bar + 1) % BARS][0]
+        # Contrebasse : fondamentale, tierce, quinte, puis une note chromatique qui mène à l'accord suivant.
+        approach = next_root * _semitones(-1 if next_root > root else 1)
+        walk = [root, root * _semitones(chord[1]), root * _semitones(chord[2]), approach]
+        if calm:  # ballade : la basse joue sur les temps 1 et 3 seulement
+            walk = [walk[0], None, walk[2], None]
+        for b, f in enumerate(walk):
+            if f:
+                _add_at(out, bar_start + b * BEAT, tone(f, f, BEAT * 0.95, "tri", 0.35, attack=0.004, decay=0.2))
+        # Piano : accord court sur les temps 2 et 4, et une relance swinguée en big band.
+        voicing = [root * 2 * _semitones(i) for i in chord]
+        stab = mix(*((0, tone(f, f, 0.3, "tri", 0.06, decay=0.1)) for f in voicing))
+        hits = [1, 3] + ([2 + SWING, 3 + SWING] if epic else [])
+        for beat in hits:
+            _add_at(out, bar_start + beat * BEAT, stab)
+        # Batterie aux balais : « ding, ding-a ding » sur la cymbale, frotté sur 2 et 4.
+        for beat in (0, 1, 1 + SWING, 2, 3, 3 + SWING):
+            _add_at(out, bar_start + beat * BEAT, ride)
+        for beat in (1, 3):
+            _add_at(out, bar_start + beat * BEAT, brush)
+        if epic:
+            for beat in (0, 2):
+                _add_at(out, bar_start + beat * BEAT, kick)
+        # Thème : notes de l'accord, deux octaves au-dessus, légèrement vibrées comme un vibraphone.
+        if name == "tension" and bar % 2:
+            continue  # thème clairsemé : une mesure sur deux reste en suspens
+        for start, length in rng.choice(PHRASES):
+            f = root * 4 * _semitones(rng.choice(chord))
+            note = tone(f, f, length * BEAT, "sine", 0.16, attack=0.01, decay=length * BEAT * 0.6,
+                        vibrato=(5, 0.006))
+            _add_at(out, bar_start + start * BEAT, note)
+    return _normalize(_radio(out, name), MUSIC_PEAK)
 
 
 def _build_music():
