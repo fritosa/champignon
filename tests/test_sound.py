@@ -185,6 +185,7 @@ class KeepAliveTest(unittest.TestCase):
         silence = array("h", [0] * sound.CHUNK).tobytes()
         out = array("h", sound._keep_alive(silence, 0))
         self.assertTrue(any(out))  # jamais de silence pur : WSLg couperait le flux
+        self.assertGreater(len(set(sound._KEEPALIVE)), 2)  # un souffle, pas une constante
         self.assertLessEqual(max(map(abs, out)), sound.KEEPALIVE_LSB)
         loud = array("h", [sound.PCM_SCALE, -sound.PCM_SCALE] * (sound.CHUNK // 2))
         mixed = array("h", sound._keep_alive(loud.tobytes(), len(sound._KEEPALIVE) - 3))  # bouclage du souffle

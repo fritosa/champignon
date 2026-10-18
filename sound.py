@@ -304,7 +304,9 @@ PCM_SCALE = 32000  # un peu sous 32767, la crête des entiers 16 bits
 # distance de Windows) coupe un flux de silence pur et met du temps à le relancer, les effets arrivent alors en
 # retard et hachés dès que la musique est éteinte.
 KEEPALIVE_LSB = 2
-_KEEPALIVE = array("h", (random.Random(0).randint(-KEEPALIVE_LSB, KEEPALIVE_LSB) for _ in range(RATE)))
+_rng = random.Random(0)
+_KEEPALIVE = array("h", (_rng.randint(-KEEPALIVE_LSB, KEEPALIVE_LSB) for _ in range(RATE)))
+del _rng
 
 
 def _keep_alive(pcm, pos):
