@@ -23,7 +23,7 @@ fichier, nouvelle convention).
 | `main.py` | Boucle principale (20 images/s), choix de la partie, intro des nouvelles parties, autosauvegarde toutes les 30 s, `--reset`. | `game`, `saves`, `screens`, `ui`, `sound` |
 | `sim.py` | Bot qui joue sans affichage, pour vérifier l'équilibrage. | `game`, `events`, `data` |
 | `apercu.py` | Génère `apercu.svg`, la capture en couleurs du README : le vrai rendu de `UI` sur un écran factice. À relancer quand l'écran change. | `game`, `ui`, `events` |
-| `install.sh` | Crée (ou `--desinstaller` retire) la commande `champignon`, lien vers `main.py` dans `~/.local/bin`. Refuse d'écraser un fichier qui n'est pas un lien. | — |
+| `install.sh` | Crée (ou `--desinstaller` retire) la commande `champignon`, lien vers `main.py` dans `~/.local/bin`. Refuse d'écraser un fichier qui n'est pas un lien, et de retirer un lien qui pointe ailleurs. | — |
 | `tests/` | `unittest`. `tests/__init__.py` redirige `CHAMPIGNON_SAVE` vers un dossier temporaire. | |
 
 ### 📏 Règles d'architecture
