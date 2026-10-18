@@ -161,6 +161,16 @@ PHRASES = [((0, 1.5), (1.5, 0.5), (2, 2)), ((0, SWING), (SWING, 1 - SWING), (1, 
 RADIO_LOW_CUT = 0.93  # passe-haut à un pôle (~250 Hz) : pas de grave, comme un petit haut-parleur
 RADIO_HIGH_CUT = 0.45  # passe-bas à un pôle, appliqué deux fois (~3 kHz)
 CRACKLES_PER_SECOND = 7
+NOTE_RELEASE = 0.01  # fondu final des notes (s) : une note coupée net claque
+
+
+def _note(*args, **kwargs):
+    """tone() terminé par un court fondu à zéro, pour les notes de la musique."""
+    samples = tone(*args, **kwargs)
+    n = min(len(samples), int(NOTE_RELEASE * RATE))
+    for i in range(n):
+        samples[-1 - i] *= i / n
+    return samples
 
 
 def _add_at(out, t, samples):
@@ -177,13 +187,13 @@ def _semitones(n):
 def _radio(track, seed):
     """Vieux poste : bande passante étroite, souffle et craquements de vinyle. Les filtres tournent deux fois
     sur la boucle pour que leur état à la fin rejoigne le début (pas de clic au bouclage)."""
-    rng = random.Random(seed)
+    rng = random.Random(f"{seed}-craquements")
     n = len(track)
     for _ in range(int(n / RATE * CRACKLES_PER_SECOND)):
         pos, amp = rng.randrange(n), rng.uniform(0.05, 0.3) * rng.choice((-1, 1))
         for i in range(12):
             track[(pos + i) % n] += amp * 0.6 ** i
-    hiss = noise(n / RATE, 0.012, 1e9, 0.9, seed)
+    hiss = noise((n + 1) / RATE, 0.012, 1e9, 0.9, f"{seed}-souffle")[:n]  # +1 : jamais plus court que la piste
     track = [x + h for x, h in zip(track, hiss)]
     out = [0.0] * n
     prev_x = high = low1 = low2 = 0.0
@@ -205,7 +215,8 @@ def _track(name):
     rng = random.Random(name)
     ride = noise(0.18, 0.1, 0.06, 0.95, 21)
     brush = noise(0.25, 0.12, 0.1, 0.4, 22)
-    kick = tone(110, 50, 0.15, "sine", 0.5, decay=0.06)
+    # Sous le passe-haut de la radio, seul le claquement de la grosse caisse passe : on le lui donne.
+    kick = mix((0, _note(180, 70, 0.15, "sine", 0.5, decay=0.06)), (0, noise(0.03, 0.4, 0.01, 0.5, 23)))
     progression = PROGRESSIONS[name]
     for bar, (root, chord) in enumerate(progression):
         bar_start = bar * BEATS_PER_BAR * BEAT
@@ -217,10 +228,10 @@ def _track(name):
             walk = [walk[0], None, walk[2], None]
         for b, f in enumerate(walk):
             if f:
-                _add_at(out, bar_start + b * BEAT, tone(f, f, BEAT * 0.95, "tri", 0.35, attack=0.004, decay=0.2))
+                _add_at(out, bar_start + b * BEAT, _note(f, f, BEAT * 0.95, "tri", 0.35, attack=0.004, decay=0.2))
         # Piano : accord court sur les temps 2 et 4, et une relance swinguée en big band.
         voicing = [root * 2 * _semitones(i) for i in chord]
-        stab = mix(*((0, tone(f, f, 0.3, "tri", 0.06, decay=0.1)) for f in voicing))
+        stab = mix(*((0, _note(f, f, 0.3, "tri", 0.06, decay=0.1)) for f in voicing))
         hits = [1, 3] + ([2 + SWING, 3 + SWING] if epic else [])
         for beat in hits:
             _add_at(out, bar_start + beat * BEAT, stab)
@@ -233,13 +244,13 @@ def _track(name):
             for beat in (0, 2):
                 _add_at(out, bar_start + beat * BEAT, kick)
         # Thème : notes de l'accord, deux octaves au-dessus, légèrement vibrées comme un vibraphone.
-        if name == "tension" and bar % 2:
-            continue  # thème clairsemé : une mesure sur deux reste en suspens
-        for start, length in rng.choice(PHRASES):
-            f = root * 4 * _semitones(rng.choice(chord))
-            note = tone(f, f, length * BEAT, "sine", 0.16, attack=0.01, decay=length * BEAT * 0.6,
-                        vibrato=(5, 0.006))
-            _add_at(out, bar_start + start * BEAT, note)
+        # En tension, le thème est clairsemé : une mesure sur deux reste en suspens.
+        if name != "tension" or bar % 2 == 0:
+            for start, length in rng.choice(PHRASES):
+                f = root * 4 * _semitones(rng.choice(chord))
+                note = _note(f, f, length * BEAT, "sine", 0.16, attack=0.01, decay=length * BEAT * 0.6,
+                             vibrato=(5, 0.006))
+                _add_at(out, bar_start + start * BEAT, note)
     return _normalize(_radio(out, name), MUSIC_PEAK)
 
 
@@ -356,7 +367,7 @@ class Sound:
             return
         self.ok = True
         err = ctypes.c_int()
-        # La musique (~1 s de calcul) est générée à côté pour ne pas retarder les effets.
+        # La musique (~2 s de calcul) est générée à côté pour ne pas retarder les effets.
         threading.Thread(target=lambda: setattr(self, "tracks", _build_music()), daemon=True).start()
         while True:
             pcm = self._mix()
