@@ -1,37 +1,16 @@
 """Tests de l'UI sans terminal : on construit UI sans __init__ (qui initialise curses)."""
 
 import curses
-import os
 import random
-import tempfile
-import time
 import unittest
 from unittest import mock
 
-import data
 import events
 import game
-import saves
-import screens
 import ui
 from game import Game
 
-from .helpers import FixedRandom, exploded_game
-
-
-class FakeSound:
-    def __init__(self, ok=True):
-        self.ok = ok
-        self.muted = False
-        self.music_on = True
-        self.music = None
-        self.played = []
-
-    def set_music(self, name):
-        self.music = name
-
-    def play(self, name, vol=1.0):
-        self.played.append(name)
+from .helpers import FakeScreen, FakeSound, FixedRandom, exploded_game
 
 
 def bare_ui(g=None, sound=None):
@@ -553,119 +532,6 @@ class InfoTabTest(unittest.TestCase):
         self.assertEqual(ui._dur(7260), "2 h 01 min")
 
 
-class AgoTest(unittest.TestCase):
-    def test_units(self):
-        now = time.time()
-        self.assertEqual(screens._ago(now - 30), "à l'instant")
-        self.assertEqual(screens._ago(now - 125), "il y a 2 min")
-        self.assertEqual(screens._ago(now - 7300), "il y a 2 h")
-        self.assertEqual(screens._ago(now - 3 * 86400 - 5), "il y a 3 j")
-
-
-class FakeScreen:
-    def __init__(self, keys, size=(30, 100)):
-        self.keys = list(keys)
-        self.size = size
-        self.text = []
-        self.delay = []
-
-    def getmaxyx(self):
-        return self.size
-
-    def erase(self):
-        self.text = []
-
-    def addnstr(self, y, x, s, n, attr=0):
-        # Mêmes refus que curses : hors écran, n <= 0, ou écriture jusqu'au coin bas-droit.
-        h, w = self.size
-        s = s[:n]
-        if n <= 0 or not (0 <= y < h and 0 <= x < w) or x + len(s) > w or (y == h - 1 and x + len(s) >= w):
-            raise curses.error("addnstr() returned ERR")
-        self.text.append(s)
-
-    def refresh(self):
-        pass
-
-    def nodelay(self, flag):
-        self.delay.append(flag)
-
-    def getch(self):
-        return self.keys.pop(0)
-
-
-class SaveMenuTest(unittest.TestCase):
-    def setUp(self):
-        self.dir = tempfile.TemporaryDirectory()
-        self.addCleanup(self.dir.cleanup)
-        patcher = mock.patch.object(saves, "SAVE_PATH", os.path.join(self.dir.name, "s.json"))
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        for n in (1, 2):
-            Game().save(saves.slot_path(n))
-        self.slots = saves.save_slots()
-
-    def menu(self, keys, **kw):
-        scr = FakeScreen(keys, **kw)
-        return screens.save_menu(scr, self.slots, FakeSound()), scr
-
-    def test_enter_continues_main(self):
-        path, scr = self.menu([10])
-        self.assertEqual(path, saves.slot_path(1))
-        self.assertEqual(scr.delay, [False, True])  # mode bloquant restauré
-
-    def test_navigate_to_second(self):
-        path, _ = self.menu([curses.KEY_DOWN, ord("z"), 10])
-        self.assertEqual(path, saves.slot_path(2))
-
-    def test_new_game_uses_free_slot(self):
-        path, scr = self.menu([curses.KEY_UP, 10])  # remonte en boucle sur « Nouvelle partie »
-        self.assertEqual(path, saves.slot_path(3))
-        self.assertTrue(any("Nouvelle partie" in t for t in scr.text))
-        self.assertTrue(any("Continuer : Partie 2" in t for t in scr.text))
-
-    def test_quit(self):
-        path, scr = self.menu([ord("q")])
-        self.assertIsNone(path)
-        self.assertEqual(scr.delay[-1], True)
-
-    def test_escape_does_not_quit(self):
-        path, _ = self.menu([27, 10])
-        self.assertEqual(path, saves.slot_path(1))
-
-    def test_tiny_terminals(self):
-        for size in [(5, 20), (24, 3), (8, 1), (1, 80), (2, 2)]:
-            path, _ = self.menu([10], size=size)
-            self.assertEqual(path, saves.slot_path(1), size)
-
-    def test_scrolls_to_selection(self):
-        for n in range(3, 16):
-            Game().save(saves.slot_path(n))
-        self.slots = saves.save_slots()
-        path, scr = self.menu([curses.KEY_UP] + [10], size=(24, 80))
-        self.assertEqual(path, saves.slot_path(16))
-        self.assertTrue(any("Nouvelle partie" in t for t in scr.text))
-        self.assertFalse(any("Partie principale" in t for t in scr.text))  # défilé hors écran
-
-    def test_bad_field_types(self):
-        self.slots = [(1, saves.slot_path(1), {"level": "5", "isotopes": None, "prestige_count": [],
-                                              "wall_time": None})]
-        path, scr = self.menu([10])
-        self.assertEqual(path, saves.slot_path(1))
-        self.assertTrue(any("niveau 0" in t for t in scr.text))
-
-    def test_all_slots_taken(self):
-        with mock.patch.object(screens, "free_slot", return_value=None):
-            sound = FakeSound()
-            scr = FakeScreen([curses.KEY_UP, 10, ord("q")])
-            self.assertIsNone(screens.save_menu(scr, self.slots, sound))
-        self.assertIn("nope", sound.played)
-        self.assertTrue(any("Plus d'emplacement libre" in t for t in scr.text))
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-
 class NanarUITest(unittest.TestCase):
     def test_fizzle_float(self):
         u = bare_ui(exploded_game(FixedRandom(0.0)))
@@ -685,16 +551,6 @@ class NanarUITest(unittest.TestCase):
         self.assertEqual(u.scr.keys, [])  # l'écran d'histoire a consommé ses deux touches
         self.assertTrue(any("Zédé" in t for t in u.scr.text))
 
-    def test_story_ignores_keys_at_first(self):
-        # Le joueur martèle encore ESPACE quand l'histoire s'ouvre : ces appuis ne la ferment pas.
-        clock = iter(i * 0.3 for i in range(1000))
-        scr = FakeScreen([ord(" ")] * 4)
-        scr.timeout = lambda ms: None
-        with mock.patch.object(screens.time, "monotonic", lambda: next(clock)), self.assertRaises(IndexError):
-            screens.intro(scr, None, screens.STORIES[("nanar", "end")], guard=60)  # toujours ouverte quand les touches s'épuisent
-        self.assertEqual(scr.keys, [])  # les 4 appuis ont été lus (et ignorés), l'IndexError vient de getch
-        self.assertFalse(any("continuer" in t or "commencer" in t for t in scr.text))  # texte pas encore affiché en entier
-
     def test_challenge_without_story_shows_nothing(self):
         u = bare_ui()
         u.scr = FakeScreen([ord("a")], size=(30, 100))
@@ -702,12 +558,6 @@ class NanarUITest(unittest.TestCase):
         u.show_story()
         self.assertIsNone(u.g.pending_story)
         self.assertEqual(u.scr.keys, [ord("a")])
-
-    def test_stories_match_challenges(self):
-        for cid, part in screens.STORIES:
-            self.assertIn(cid, data.CHALLENGE_BY_ID)
-            self.assertIn(part, ("start", "end"))
-        self.assertIn(("nanar", "end"), screens.STORIES)
 
     def test_replay_story_with_only_one_part(self):
         u = bare_ui()
@@ -837,25 +687,5 @@ class UnitSpriteTest(unittest.TestCase):
             self.assertFalse(any(w[2] == "=" for w in writes), (W, H))
 
 
-class IntroTest(unittest.TestCase):
-    def test_first_key_reveals_second_closes(self):
-        scr = FakeScreen([-1, ord("a"), ord("b")])
-        scr.timeout = lambda ms: None
-        screens.intro(scr, FakeSound())
-        self.assertEqual(scr.keys, [])
-        self.assertTrue(any("Morille" in t for t in scr.text))
-        self.assertTrue(any("commencer" in t for t in scr.text))
-
-    def test_small_screen(self):
-        scr = FakeScreen([ord("a"), ord("b")], size=(8, 20))
-        scr.timeout = lambda ms: None
-        screens.intro(scr)
-
-    def test_texts_fit_80x24(self):
-        # Le terminal par défaut : le dernier paragraphe (introduction ou histoire) doit rester visible.
-        for pages in [screens.INTRO] + list(screens.STORIES.values()):
-            scr = FakeScreen([ord("a"), ord("b")], size=(24, 80))
-            scr.timeout = lambda ms: None
-            screens.intro(scr, pages=pages)
-            last = screens._nbsp(pages[-1]).split()[-1]
-            self.assertTrue(any(last in t for t in scr.text), pages[0])
+if __name__ == "__main__":
+    unittest.main()
