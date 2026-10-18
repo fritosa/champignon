@@ -277,13 +277,9 @@ def choose_chest(g, idx):
     elif kind == "gauge":
         g.crit_gauge = 1.0
     elif kind == "army":
-        for uid, before in g.units.items():
-            if before:
-                after = before + max(1, int(before * 0.1 * power))
-                g.units[uid] = after
-                for milestone in data.UNIT_MILESTONES:
-                    if before < milestone <= after:
-                        g._announce_milestone(uid, milestone)
+        for uid, n in g.units.items():
+            if n:
+                g.add_units(uid, max(1, int(n * 0.1 * power)))
     elif kind == "shield":
         if g.inspector:
             _inspector_gone(g, chased=False)
@@ -306,10 +302,6 @@ def _inspector_can_come(g):
     return g.level >= _INSPECTOR_LEVEL and (g.challenge == "watched" or not g.has_mut("fog"))
 
 
-def _inspector_interval(g):
-    return g.rng.uniform(30, 60) if g.challenge == "watched" else g.rng.uniform(150, 300)
-
-
 def chase(g):
     """X frappe l'inspecteur s'il y en a un, sinon l'autre ennemi présent."""
     inspector = g.inspector
@@ -328,7 +320,7 @@ def chase(g):
 
 def _inspector_gone(g, chased):
     g.inspector = None
-    g.next_inspector = g.time + _inspector_interval(g)
+    g.schedule_inspector()
     if chased:
         g.stats["inspectors"] += 1
         g.run_stats["inspectors"] += 1
@@ -371,10 +363,6 @@ def enemy_progress(g, e):
     return (g.time - e["start"]) / e["dur"]
 
 
-def _enemy_interval(g):
-    return g.rng.uniform(15, 30) if g.challenge == "invasion" else g.rng.uniform(90, 180)
-
-
 def enemy_duration(g, kind):
     return ENEMIES[kind]["dur"] * (1.5 if "invasion" in g.challenges_done else 1)
 
@@ -387,7 +375,7 @@ def spawn_enemy(g):
     invasion = g.challenge == "invasion"
     pool = [k for k, e in ENEMIES.items() if g.level >= e["level"] or invasion]
     if not pool:
-        g.next_enemy = g.time + _enemy_interval(g)
+        g.schedule_enemy()
         return
     g.sfx.append("enemy")
     if not invasion:
@@ -407,7 +395,7 @@ def _enemy_gone(g, e, chased):
     kind = e["kind"]
     g.enemies.remove(e)
     if not g.enemies:
-        g.next_enemy = g.time + _enemy_interval(g)
+        g.schedule_enemy()
     if chased:
         g.stats["enemies"] += 1
         g.sfx.append("chased")

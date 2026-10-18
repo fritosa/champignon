@@ -227,7 +227,8 @@ class NewChallengesTest(unittest.TestCase):
         g.challenge, g.level, g.next_plane = "watched", 10, 1e9
         g.mutations.append("fog")
         g.talents["l_guard"] = 1
-        self.assertTrue(30 <= events._inspector_interval(g) <= 60)
+        g.schedule_inspector()
+        self.assertTrue(30 <= g.next_inspector - g.time <= 60)
         g.next_inspector = g.time
         events.tick(g, 0.1)
         self.assertIsNotNone(g.inspector)
@@ -510,7 +511,8 @@ class EnemyTest(unittest.TestCase):
     def test_invasion(self):
         g = self.g
         g.challenge = "invasion"
-        self.assertTrue(15 <= events._enemy_interval(g) <= 30)
+        g.schedule_enemy()
+        self.assertTrue(15 <= g.next_enemy - g.time <= 30)
         g.level, g.next_enemy = 1, g.time
         g.tick(0.1)
         self.assertTrue(g.enemies)  # tous les types dès le début

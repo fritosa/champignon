@@ -176,8 +176,7 @@ class Game:
         self.inspector = None
         self.enemies = []
         self.wave = 0  # numéro de la dernière vague (défi Invasion)
-        self.next_enemy = self.time + (self.rng.uniform(15, 30) if self.challenge == "invasion" else
-                                       self.rng.uniform(60, 120))
+        self.schedule_enemy(first=True)
         self.next_plane = self.time + self.rng.uniform(40, 90)
         self.schedule_inspector(first=True)
         self.auto_acc = 0.0
@@ -190,6 +189,13 @@ class Game:
         else:
             delay = self.rng.uniform(120, 240) if first else self.rng.uniform(150, 300)
         self.next_inspector = self.time + delay
+
+    def schedule_enemy(self, first=False):
+        if self.challenge == "invasion":
+            delay = self.rng.uniform(15, 30)
+        else:
+            delay = self.rng.uniform(60, 120) if first else self.rng.uniform(90, 180)
+        self.next_enemy = self.time + delay
 
     def log(self, msg, kind="info", title=None):
         """kind : info, good, bad, loot, star ou epic (couleur du bandeau dans l'UI) ;
@@ -443,17 +449,16 @@ class Game:
                 and self.radiation >= self.unit_cost(uid))
 
     def buy_unit(self, uid):
-        if not self.can_buy_unit(uid):
-            return False
-        self.radiation -= self.unit_cost(uid)
-        self.units[uid] += 1
-        if self.units[uid] in data.UNIT_MILESTONES:
-            self._announce_milestone(uid, self.units[uid])
-        return True
+        return self.buy_unit_n(uid, 1) == 1
 
-    def _announce_milestone(self, uid, m):
-        self.sfx.append("milestone")
-        self.log(f"Palier : {m} {data.UNIT_BY_ID[uid]['name']}s, production ×2 !", "good", title="PALIER")
+    def add_units(self, uid, k):
+        """Ajoute k unités et annonce chaque palier franchi."""
+        before = self.units[uid]
+        self.units[uid] += k
+        for m in data.UNIT_MILESTONES:
+            if before < m <= self.units[uid]:
+                self.sfx.append("milestone")
+                self.log(f"Palier : {m} {data.UNIT_BY_ID[uid]['name']}s, production ×2 !", "good", title="PALIER")
 
     def unit_cost_n(self, uid, k):
         """Coût total des k prochaines unités."""
@@ -475,12 +480,8 @@ class Game:
         total = self.unit_cost_n(uid, k)
         if k <= 0 or not self.can_buy_unit(uid) or self.radiation < total:
             return 0
-        before = self.units[uid]
         self.radiation = max(0.0, self.radiation - total)  # en un bloc : pas d'écart d'arrondi en cours de route
-        self.units[uid] += k
-        for m in data.UNIT_MILESTONES:
-            if before < m <= self.units[uid]:
-                self._announce_milestone(uid, m)
+        self.add_units(uid, k)
         return k
 
     def buy_unit_max(self, uid):
@@ -804,7 +805,7 @@ class Game:
         if g.challenge == "watched" and not g.inspector:
             g.schedule_inspector(first=True)  # reset_run a tourné avant que le défi soit chargé
         if g.challenge == "invasion":
-            g.next_enemy = g.time + g.rng.uniform(15, 30)
+            g.schedule_enemy()
         g.load_threats(d.get("threats"))  # après les échéances par défaut : la sauvegarde l'emporte
         if "iso_earned" not in d.get("stats", {}):
             g.stats["iso_earned"] = g.isotopes_invested()  # sauvegardes d'avant la supernova

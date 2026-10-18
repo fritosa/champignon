@@ -34,7 +34,8 @@ fichier, nouvelle convention).
 - **Les messages passent par `g.log(msg, kind, title)`.** `kind` donne la couleur du bandeau
   (`info`, `good`, `bad`, `loot`, `star`, `epic`), `title` un titre court en grosses lettres.
 - **Le temps** : `g.time` (temps de jeu total), `g.run_time` (partie en cours). Les échéances sont stockées en
-  temps absolu (`next_plane`, `next_inspector`, `next_enemy`, `freeze_until`, `bribe_until`...).
+  temps absolu (`next_plane`, `next_inspector`, `next_enemy`, `freeze_until`, `bribe_until`...). Inspecteur et
+  ennemis sont programmés par `Game.schedule_inspector` / `schedule_enemy` (délais selon le défi en cours).
 - **Hasard** : toujours `g.rng` (injectable, les tests passent un `random.Random(0)` ou `FixedRandom`).
 - **Défi Brouillard de guerre** : tout nombre affiché passe par `g.fmt()` (messages) ou `UI.num()` (écran)
   pour être masqué en `???`.
@@ -54,7 +55,8 @@ fichier, nouvelle convention).
   les appuis refusés jouent `jam`), critiques ×10.
   Dans le code les noms restent `click*`, mais **les textes affichés disent « appui » / « détonation »,
   jamais « clic »** (on joue au clavier).
-- **Unités** (`data.UNITS`) : coût ×1,15 par unité, paliers ×2 à 50/100/200..., débloquées par les talents `u_<id>`
+- **Unités** (`data.UNITS`) : coût ×1,15 par unité, paliers ×2 à 50/100/200... (les unités achetées ou offertes en jeu passent par
+  `Game.add_units`, qui annonce les paliers franchis), débloquées par les talents `u_<id>`
   et boostées par `m_<id>` (générés automatiquement dans `data.py`).
 - **Talents de run** (PT, branches DÉTONATION / INFANTERIE / LOGISTIQUE), **prestige** (⚛, arbre `PTALENTS`),
   **supernova** (✦, arbre `STALENTS`, remet aussi à zéro le prestige).
