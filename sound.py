@@ -25,7 +25,7 @@ PRIORITY = dict(supernova=6, prestige=6, boom=5, perfect=5, fanfare=4, synergy=4
                 talent=2, drop=2, partial=2, fizzle=2, level=2, buy=2)
 MUSIC_VOL = 0.25
 # Crête visée par effet après normalisation (DEFAULT_LEVEL sinon) : les bruitages fréquents restent plus discrets.
-LEVEL = dict(tick=0.3, click=0.45, nope=0.45, plane=0.5, charge=0.5, alarm=0.6)
+LEVEL = dict(tick=0.3, click=0.45, jam=0.45, plane=0.5, charge=0.5, alarm=0.6)
 DEFAULT_LEVEL = 0.8
 MUSIC_PEAK = 0.9
 MUSIC_FADE_SECONDS = 1.0
@@ -107,6 +107,7 @@ def _build():
                     (0, noise(0.08, 0.5, 0.03, 0.7, 3)))
     s["overheat"] = mix((0, tone(700, 120, 0.5, "saw", 0.22)), (0, noise(0.6, 0.15, 0.3, 0.8, 4)))
     s["nope"] = tone(110, 100, 0.12, "square", 0.15)
+    s["jam"] = tone(140, 90, 0.08, "square", 0.15)  # appui refusé pendant la surchauffe
     s["buy"] = seq(tone(988, 988, 0.06, "square", 0.15), tone(1319, 1319, 0.22, "square", 0.15, decay=0.08))
     s["milestone"] = mix((0, seq(*(tone(f, f, 0.06, "square", 0.12) for f in (784, 988, 1175, 1568)))),
                          (0.24, tone(2093, 2093, 0.3, "tri", 0.2, decay=0.1)))

@@ -67,7 +67,7 @@ class ClickTest(unittest.TestCase):
         g.sfx.clear()
         g.click()
         self.assertEqual(g.radiation, before)
-        self.assertEqual(list(g.sfx), ["nope"])  # appui refusé mais audible
+        self.assertEqual(list(g.sfx), ["jam"])  # appui refusé mais audible
 
     def test_crit_sound_only_when_manual(self):
         g = exploded_game(FixedRandom(0.0))

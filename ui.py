@@ -15,7 +15,7 @@ from game import AUDIO_MODES, VOLUME_STEP, fmt, need
 from saves import free_slot, slot_path
 
 # Délai minimal entre deux occurrences d'un même son.
-SFX_GAP = dict(level=0.6, hit=0.08, achievement=0.6, crit=0.15, buy=0.12, fizzle=0.5, nope=0.15)
+SFX_GAP = dict(level=0.6, hit=0.08, achievement=0.6, crit=0.15, buy=0.12, fizzle=0.5, jam=0.15)
 DEFAULT_SFX_GAP = 0.05
 MSG_TIME = 6
 BIG_TIME = 3  # titre en grosses lettres (messages importants : tout MSG_TIME)

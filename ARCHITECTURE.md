@@ -50,7 +50,7 @@ fichier, nouvelle convention).
 - **Niveaux** : radiation gagnée → `progress` ; `need(level) = 25 * level**2.4`. Niveau max = `g.cap`
   (100 × 10^rang de « Expansion du cœur », jusqu'à 1 000 000).
 - **Appui (ESPACE)** : `Game.click(manual)`. Combo, surchauffe (`overheat_threshold`,
-  les appuis refusés jouent `nope`), critiques ×10.
+  les appuis refusés jouent `jam`), critiques ×10.
   Dans le code les noms restent `click*`, mais **les textes affichés disent « appui » / « détonation »,
   jamais « clic »** (on joue au clavier).
 - **Unités** (`data.UNITS`) : coût ×1,15 par unité, paliers ×2 à 50/100/200..., débloquées par les talents `u_<id>`

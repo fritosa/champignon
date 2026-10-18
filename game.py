@@ -329,7 +329,7 @@ class Game:
                 self.log("Défi Manchot : ESPACE est interdit !", "bad", title="NON !")
                 return
             if self.overheated:
-                self.sfx.append("nope")  # appui refusé, mais audible : sinon le spam semble couper le son
+                self.sfx.append("jam")  # appui refusé, mais audible : sinon le spam semble couper le son
                 return
             if self._press_overheats():
                 self._overheat()
