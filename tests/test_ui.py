@@ -540,6 +540,14 @@ class NanarUITest(unittest.TestCase):
         u.handle(ord(" "))
         self.assertEqual(u.floats[-1]["text"], "pschitt…")
 
+    def test_floats_capped(self):
+        u = bare_ui()
+        u.floats = []
+        for i in range(ui.MAX_FLOATS + 3):
+            u.add_float(str(i), 0)
+        self.assertEqual(len(u.floats), ui.MAX_FLOATS)
+        self.assertEqual(u.floats[-1]["text"], str(ui.MAX_FLOATS + 2))
+
     def test_story_shown_once_then_cleared(self):
         u = bare_ui()
         u.scr = FakeScreen([ord("a"), ord("b")], size=(30, 100))

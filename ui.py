@@ -690,11 +690,12 @@ class UI:
         for t in talents:
             tid, r = t["id"], rank(t["id"])
             maxed = r >= t["max"]
-            price = "MAX" if maxed else f"{fmt(cost(tid))} {unit}"
+            c = None if maxed else cost(tid)
+            price = "MAX" if maxed else f"{fmt(c)} {unit}"
             text = f"{t['name'][:nw]:<{nw}} {r}/{t['max']:<2} {price:>8}"
             if maxed:
                 attr = self.c("green")
-            elif budget >= cost(tid):
+            elif budget >= c:
                 attr = self.c("yellow") | curses.A_BOLD
             else:
                 attr = self.c("white")
