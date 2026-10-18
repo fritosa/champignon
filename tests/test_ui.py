@@ -12,6 +12,7 @@ import data
 import events
 import game
 import saves
+import screens
 import ui
 from game import Game
 
@@ -555,10 +556,10 @@ class InfoTabTest(unittest.TestCase):
 class AgoTest(unittest.TestCase):
     def test_units(self):
         now = time.time()
-        self.assertEqual(ui._ago(now - 30), "à l'instant")
-        self.assertEqual(ui._ago(now - 125), "il y a 2 min")
-        self.assertEqual(ui._ago(now - 7300), "il y a 2 h")
-        self.assertEqual(ui._ago(now - 3 * 86400 - 5), "il y a 3 j")
+        self.assertEqual(screens._ago(now - 30), "à l'instant")
+        self.assertEqual(screens._ago(now - 125), "il y a 2 min")
+        self.assertEqual(screens._ago(now - 7300), "il y a 2 h")
+        self.assertEqual(screens._ago(now - 3 * 86400 - 5), "il y a 3 j")
 
 
 class FakeScreen:
@@ -605,7 +606,7 @@ class SaveMenuTest(unittest.TestCase):
 
     def menu(self, keys, **kw):
         scr = FakeScreen(keys, **kw)
-        return ui.save_menu(scr, self.slots, FakeSound()), scr
+        return screens.save_menu(scr, self.slots, FakeSound()), scr
 
     def test_enter_continues_main(self):
         path, scr = self.menu([10])
@@ -653,10 +654,10 @@ class SaveMenuTest(unittest.TestCase):
         self.assertTrue(any("niveau 0" in t for t in scr.text))
 
     def test_all_slots_taken(self):
-        with mock.patch.object(ui, "free_slot", return_value=None):
+        with mock.patch.object(screens, "free_slot", return_value=None):
             sound = FakeSound()
             scr = FakeScreen([curses.KEY_UP, 10, ord("q")])
-            self.assertIsNone(ui.save_menu(scr, self.slots, sound))
+            self.assertIsNone(screens.save_menu(scr, self.slots, sound))
         self.assertIn("nope", sound.played)
         self.assertTrue(any("Plus d'emplacement libre" in t for t in scr.text))
 
@@ -689,8 +690,8 @@ class NanarUITest(unittest.TestCase):
         clock = iter(i * 0.3 for i in range(1000))
         scr = FakeScreen([ord(" ")] * 4)
         scr.timeout = lambda ms: None
-        with mock.patch.object(ui.time, "monotonic", lambda: next(clock)), self.assertRaises(IndexError):
-            ui.intro(scr, None, ui.STORIES[("nanar", "end")], guard=60)  # toujours ouverte quand les touches s'épuisent
+        with mock.patch.object(screens.time, "monotonic", lambda: next(clock)), self.assertRaises(IndexError):
+            screens.intro(scr, None, screens.STORIES[("nanar", "end")], guard=60)  # toujours ouverte quand les touches s'épuisent
         self.assertEqual(scr.keys, [])  # les 4 appuis ont été lus (et ignorés), l'IndexError vient de getch
         self.assertFalse(any("continuer" in t or "commencer" in t for t in scr.text))  # texte pas encore affiché en entier
 
@@ -703,10 +704,10 @@ class NanarUITest(unittest.TestCase):
         self.assertEqual(u.scr.keys, [ord("a")])
 
     def test_stories_match_challenges(self):
-        for cid, part in ui.STORIES:
+        for cid, part in screens.STORIES:
             self.assertIn(cid, data.CHALLENGE_BY_ID)
             self.assertIn(part, ("start", "end"))
-        self.assertIn(("nanar", "end"), ui.STORIES)
+        self.assertIn(("nanar", "end"), screens.STORIES)
 
     def test_replay_story_with_only_one_part(self):
         u = bare_ui()
@@ -840,7 +841,7 @@ class IntroTest(unittest.TestCase):
     def test_first_key_reveals_second_closes(self):
         scr = FakeScreen([-1, ord("a"), ord("b")])
         scr.timeout = lambda ms: None
-        ui.intro(scr, FakeSound())
+        screens.intro(scr, FakeSound())
         self.assertEqual(scr.keys, [])
         self.assertTrue(any("Morille" in t for t in scr.text))
         self.assertTrue(any("commencer" in t for t in scr.text))
@@ -848,13 +849,13 @@ class IntroTest(unittest.TestCase):
     def test_small_screen(self):
         scr = FakeScreen([ord("a"), ord("b")], size=(8, 20))
         scr.timeout = lambda ms: None
-        ui.intro(scr)
+        screens.intro(scr)
 
     def test_texts_fit_80x24(self):
         # Le terminal par défaut : le dernier paragraphe (introduction ou histoire) doit rester visible.
-        for pages in [ui.INTRO] + list(ui.STORIES.values()):
+        for pages in [screens.INTRO] + list(screens.STORIES.values()):
             scr = FakeScreen([ord("a"), ord("b")], size=(24, 80))
             scr.timeout = lambda ms: None
-            ui.intro(scr, pages=pages)
-            last = ui._nbsp(pages[-1]).split()[-1]
+            screens.intro(scr, pages=pages)
+            last = screens._nbsp(pages[-1]).split()[-1]
             self.assertTrue(any(last in t for t in scr.text), pages[0])

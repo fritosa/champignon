@@ -18,7 +18,7 @@ description, en silhouette grise tant que l'unité n'est pas débloquée.
 **Nouveau défi** : entrée dans `data.CHALLENGES` (avec `skin`) + skin dans `data.SKINS` + palette dans
 `art.PALETTES` + la contrainte et la récompense dans le code. Si le défi change une échéance de début de run,
 penser à la fin de `Game.load`. Le succès « Maître des défis » suit automatiquement `len(CHALLENGES)`. Optionnel : une histoire de
-lancement et de réussite dans `ui.STORIES`.
+lancement et de réussite dans `screens.STORIES`.
 
 **Nouveau talent** : entrée dans `data.TALENTS` / `PTALENTS` / `STALENTS` + effet dans le multiplicateur
 concerné de `Game`. Si un talent ne doit jamais être acheté par l'auto-achat, adapter `auto_talents`.
@@ -45,4 +45,4 @@ Page préc./suiv., Entrée.
 
 **Nouvel écran plein (overlay)** : dessiné en fin de `UI.draw` ; s'il doit capturer les touches, le traiter
 en tête de `UI.handle` (voir l'écran de fin de partie). Écrans bloquants hors jeu (menu, intro) : fonctions
-à part dans `ui.py` qui pilotent `scr` elles-mêmes et remettent `scr.nodelay(True)` en sortant.
+de `screens.py` qui pilotent `scr` elles-mêmes et remettent `scr.nodelay(True)` en sortant.

@@ -18,8 +18,9 @@ fichier, nouvelle convention).
 | `game.py` | Classe `Game` : état complet, multiplicateurs, actions, prestige/supernova, `tick`, conversion de l'état en dict JSON et retour (`to_dict` / `load`). | `data`, `events`, `saves` |
 | `art.py` | Génération ASCII : champignon procédural, palettes des skins, sprites des unités et ennemis, grosse police. Renvoie des cellules/lignes, ne touche pas à curses. | — |
 | `sound.py` | Synthèse des effets et de la musique (stdlib), mixage dans un thread, sortie PulseAudio via ctypes. Silencieux sans PulseAudio. | — |
-| `ui.py` | Tout ce qui est curses : rendu des panneaux et overlays, touches, menu des parties, introduction. | tous |
-| `main.py` | Boucle principale (20 images/s), choix de la partie, intro des nouvelles parties, autosauvegarde toutes les 30 s, `--reset`. | `game`, `saves`, `ui`, `sound` |
+| `screens.py` | Écrans plein écran hors partie, qui pilotent `scr` eux-mêmes : introduction et histoires des défis (texte tapé à la machine), menu des parties. | `game`, `saves` |
+| `ui.py` | Classe `UI` : rendu curses des panneaux et overlays de la partie, touches. | tous |
+| `main.py` | Boucle principale (20 images/s), choix de la partie, intro des nouvelles parties, autosauvegarde toutes les 30 s, `--reset`. | `game`, `saves`, `screens`, `ui`, `sound` |
 | `sim.py` | Bot qui joue sans affichage, pour vérifier l'équilibrage. | `game`, `events`, `data` |
 | `apercu.py` | Génère `apercu.svg`, la capture en couleurs du README : le vrai rendu de `UI` sur un écran factice. À relancer quand l'écran change. | `game`, `ui`, `events` |
 | `tests/` | `unittest`. `tests/__init__.py` redirige `CHAMPIGNON_SAVE` vers un dossier temporaire. | |
@@ -69,11 +70,11 @@ fichier, nouvelle convention).
   dans `Game.production` tant qu'il y en a, sans cumul).
 - **Défis** (`data.CHALLENGES`) : contraintes codées en dur là où elles s'appliquent (chercher
   `self.challenge == "<id>"` / `g.challenge == "<id>"`), récompense via `"<id>" in challenges_done`.
-- **Histoires de défis** (`ui.STORIES`, clés `(id, "start" | "end")`) : `Game` pose `pending_story` au lancement
+- **Histoires de défis** (`screens.STORIES`, clés `(id, "start" | "end")`) : `Game` pose `pending_story` au lancement
   et à la réussite d'un défi ; `UI.show_story` (appelé par la boucle de `main.run`, pas par `draw`) l'affiche
   en plein écran (même écran tapé à la machine que l'introduction, touches ignorées pendant `STORY_GUARD` s)
   puis l'efface. Un défi sans histoire n'affiche rien ; une fois réussi, l'onglet Infos propose de la relire.
-  Le lore : le professeur Amédée Morille (`ui.INTRO`), Gérard Zédé (Nanarland : un nanar, mauvais film
+  Le lore : le professeur Amédée Morille (`screens.INTRO`), Gérard Zédé (Nanarland : un nanar, mauvais film
   sympathique, jamais un navet).
 - **Skins** : palettes dans `art.PALETTES` (sauf `rainbow`, géré dans `art._color`, et `mario`, géré à part dans `art._cap` et `art._stem`).
 

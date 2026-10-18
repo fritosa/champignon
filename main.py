@@ -20,7 +20,8 @@ os.environ.setdefault("ESCDELAY", "25")
 import saves  # noqa: E402
 from game import Game  # noqa: E402
 from sound import Sound  # noqa: E402
-from ui import UI, intro, save_menu  # noqa: E402
+from screens import intro, save_menu  # noqa: E402
+from ui import UI  # noqa: E402
 
 FRAME_DURATION = 0.05
 AUTOSAVE_INTERVAL = 30
