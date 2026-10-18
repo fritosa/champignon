@@ -508,6 +508,13 @@ class EnemyTest(unittest.TestCase):
         g.tick(1.1)
         self.assertEqual(g.next_inspector, before)
 
+    def test_enemy_delays(self):
+        g = self.g
+        g.schedule_enemy(first=True)
+        self.assertTrue(60 <= g.next_enemy - g.time <= 120)
+        g.schedule_enemy()
+        self.assertTrue(90 <= g.next_enemy - g.time <= 180)
+
     def test_invasion(self):
         g = self.g
         g.challenge = "invasion"

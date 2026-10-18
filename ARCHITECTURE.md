@@ -55,9 +55,9 @@ fichier, nouvelle convention).
   les appuis refusés jouent `jam`), critiques ×10.
   Dans le code les noms restent `click*`, mais **les textes affichés disent « appui » / « détonation »,
   jamais « clic »** (on joue au clavier).
-- **Unités** (`data.UNITS`) : coût ×1,15 par unité, paliers ×2 à 50/100/200... (les unités achetées ou offertes en jeu passent par
-  `Game.add_units`, qui annonce les paliers franchis), débloquées par les talents `u_<id>`
-  et boostées par `m_<id>` (générés automatiquement dans `data.py`).
+- **Unités** (`data.UNITS`) : coût ×1,15 par unité, paliers ×2 à 50/100/200... (les unités achetées ou
+  offertes en jeu passent par `Game.add_units`, qui annonce les paliers franchis), débloquées par les
+  talents `u_<id>` et boostées par `m_<id>` (générés automatiquement dans `data.py`).
 - **Talents de run** (PT, branches DÉTONATION / INFANTERIE / LOGISTIQUE), **prestige** (⚛, arbre `PTALENTS`),
   **supernova** (✦, arbre `STALENTS`, remet aussi à zéro le prestige).
 - **Mutations** aux niveaux 25, 50, 75, 100, 200, 400... ; **synergies** quand une paire précise est réunie.
