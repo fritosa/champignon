@@ -39,9 +39,10 @@ python3 sim.py [runs] [appuis/s]   # simulation sans affichage pour l'équilibra
 python3 apercu.py          # régénère apercu.svg, la capture du README
 ```
 
-La commande `champignon` est un lien vers `main.py` (exécutable, shebang python3), à créer une fois :
-`ln -s "$PWD/main.py" ~/.local/bin/champignon` (`~/.local/bin` doit être dans le PATH). Sans le lien :
-`./main.py` ou `python3 main.py` depuis le dossier du projet. Fermer le terminal sauvegarde la partie
+Installation, une fois, depuis le dossier du projet : `./install.sh`. Il crée la commande `champignon` (un
+lien vers `main.py` dans `~/.local/bin`, ou le dossier passé en argument) et indique la ligne à ajouter si ce
+dossier n'est pas dans le PATH. Seul python3 est requis. `./install.sh --desinstaller` retire la commande
+sans toucher aux parties. Sans installer : `./main.py` ou `python3 main.py` depuis le dossier du projet. Fermer le terminal sauvegarde la partie
 (SIGHUP/SIGTERM traités comme Ctrl+C).
 
 ## 🎮 Le mode d'emploi du détonateur
