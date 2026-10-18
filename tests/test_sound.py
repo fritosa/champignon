@@ -120,6 +120,9 @@ class MusicTest(unittest.TestCase):
         for name, t in self.tracks.items():
             self.assertLessEqual(max(map(abs, t)), 0.9 + 1e-6, name)
 
+    def test_every_track_has_chords_and_style(self):
+        self.assertEqual(set(sound.STYLES), set(sound.PROGRESSIONS))
+
     def run_chunks(self, n):
         return [array("h", self.snd._mix()) for _ in range(n)]
 

@@ -158,9 +158,19 @@ PROGRESSIONS = {
 # Rythmes du thème (débuts de note en temps, durée en temps), tirés au hasard mesure par mesure.
 PHRASES = [((0, 1.5), (1.5, 0.5), (2, 2)), ((0, SWING), (SWING, 1 - SWING), (1, 1), (3, 1)),
            ((1, 1), (2, 1), (3, 1)), ((0, 3),), ((0.5 + SWING / 2, 1), (2, 0.5), (2 + SWING, 1.3))]
+# Arrangement de chaque piste, en temps de la mesure. Contrebasse : temps joués parmi fondamentale, tierce,
+# quinte, approche ; thème : joué une mesure sur theme_every.
+STYLES = {
+    "calm": dict(bass=(0, 2), piano=(1, 3), kick=(), theme_every=1),  # ballade de crooner
+    "tension": dict(bass=(0, 1, 2, 3), piano=(1, 3), kick=(), theme_every=2),  # thème en suspens
+    "epic": dict(bass=(0, 1, 2, 3), piano=(1, 3, 2 + SWING, 3 + SWING), kick=(0, 2), theme_every=1),  # big band
+}
+RIDE = (0, 1, 1 + SWING, 2, 3, 3 + SWING)  # « ding, ding-a ding » sur la cymbale
+BRUSH = (1, 3)  # balais frottés
 RADIO_LOW_CUT = 0.93  # passe-haut à un pôle (~250 Hz) : pas de grave, comme un petit haut-parleur
 RADIO_HIGH_CUT = 0.45  # passe-bas à un pôle, appliqué deux fois (~3 kHz)
 CRACKLES_PER_SECOND = 7
+CRACKLE_LENGTH, CRACKLE_DECAY = 12, 0.6  # échantillons, décroissance par échantillon
 NOTE_RELEASE = 0.01  # fondu final des notes (s) : une note coupée net claque
 
 
@@ -191,8 +201,8 @@ def _radio(track, seed):
     n = len(track)
     for _ in range(int(n / RATE * CRACKLES_PER_SECOND)):
         pos, amp = rng.randrange(n), rng.uniform(0.05, 0.3) * rng.choice((-1, 1))
-        for i in range(12):
-            track[(pos + i) % n] += amp * 0.6 ** i
+        for i in range(CRACKLE_LENGTH):
+            track[(pos + i) % n] += amp * CRACKLE_DECAY ** i
     hiss = noise((n + 1) / RATE, 0.012, 1e9, 0.9, f"{seed}-souffle")[:n]  # +1 : jamais plus court que la piste
     track = [x + h for x, h in zip(track, hiss)]
     out = [0.0] * n
@@ -208,10 +218,32 @@ def _radio(track, seed):
     return out
 
 
+def _play(out, bar_start, beats, samples):
+    for beat in beats:
+        _add_at(out, bar_start + beat * BEAT, samples)
+
+
+def _bass(out, bar_start, root, chord, next_root, beats):
+    """Contrebasse qui marche : fondamentale, tierce, quinte, puis une note chromatique vers l'accord suivant."""
+    approach = next_root * _semitones(-1 if next_root > root else 1)
+    walk = [root, root * _semitones(chord[1]), root * _semitones(chord[2]), approach]
+    for beat in beats:
+        f = walk[beat]
+        _add_at(out, bar_start + beat * BEAT, _note(f, f, BEAT * 0.95, "tri", 0.35, attack=0.004, decay=0.2))
+
+
+def _theme(out, bar_start, root, chord, rng):
+    """Notes de l'accord deux octaves au-dessus, légèrement vibrées comme un vibraphone."""
+    for start, length in rng.choice(PHRASES):
+        f = root * 4 * _semitones(rng.choice(chord))
+        note = _note(f, f, length * BEAT, "sine", 0.16, attack=0.01, decay=length * BEAT * 0.6, vibrato=(5, 0.006))
+        _add_at(out, bar_start + start * BEAT, note)
+
+
 def _track(name):
-    """Boucle de BARS mesures en swing : contrebasse qui marche, piano, balais, thème de vibraphone, radio."""
+    """Boucle de BARS mesures en swing (contrebasse, piano, balais, thème de vibraphone) passée à la radio."""
     out = [0.0] * int(BARS * BEATS_PER_BAR * BEAT * RATE)
-    calm, epic = name == "calm", name == "epic"
+    style = STYLES[name]
     rng = random.Random(name)
     ride = noise(0.18, 0.1, 0.06, 0.95, 21)
     brush = noise(0.25, 0.12, 0.1, 0.4, 22)
@@ -220,42 +252,19 @@ def _track(name):
     progression = PROGRESSIONS[name]
     for bar, (root, chord) in enumerate(progression):
         bar_start = bar * BEATS_PER_BAR * BEAT
-        next_root = progression[(bar + 1) % BARS][0]
-        # Contrebasse : fondamentale, tierce, quinte, puis une note chromatique qui mène à l'accord suivant.
-        approach = next_root * _semitones(-1 if next_root > root else 1)
-        walk = [root, root * _semitones(chord[1]), root * _semitones(chord[2]), approach]
-        if calm:  # ballade : la basse joue sur les temps 1 et 3 seulement
-            walk = [walk[0], None, walk[2], None]
-        for b, f in enumerate(walk):
-            if f:
-                _add_at(out, bar_start + b * BEAT, _note(f, f, BEAT * 0.95, "tri", 0.35, attack=0.004, decay=0.2))
-        # Piano : accord court sur les temps 2 et 4, et une relance swinguée en big band.
+        _bass(out, bar_start, root, chord, progression[(bar + 1) % BARS][0], style["bass"])
         voicing = [root * 2 * _semitones(i) for i in chord]
-        stab = mix(*((0, _note(f, f, 0.3, "tri", 0.06, decay=0.1)) for f in voicing))
-        hits = [1, 3] + ([2 + SWING, 3 + SWING] if epic else [])
-        for beat in hits:
-            _add_at(out, bar_start + beat * BEAT, stab)
-        # Batterie aux balais : « ding, ding-a ding » sur la cymbale, frotté sur 2 et 4.
-        for beat in (0, 1, 1 + SWING, 2, 3, 3 + SWING):
-            _add_at(out, bar_start + beat * BEAT, ride)
-        for beat in (1, 3):
-            _add_at(out, bar_start + beat * BEAT, brush)
-        if epic:
-            for beat in (0, 2):
-                _add_at(out, bar_start + beat * BEAT, kick)
-        # Thème : notes de l'accord, deux octaves au-dessus, légèrement vibrées comme un vibraphone.
-        # En tension, le thème est clairsemé : une mesure sur deux reste en suspens.
-        if name != "tension" or bar % 2 == 0:
-            for start, length in rng.choice(PHRASES):
-                f = root * 4 * _semitones(rng.choice(chord))
-                note = _note(f, f, length * BEAT, "sine", 0.16, attack=0.01, decay=length * BEAT * 0.6,
-                             vibrato=(5, 0.006))
-                _add_at(out, bar_start + start * BEAT, note)
+        _play(out, bar_start, style["piano"], mix(*((0, _note(f, f, 0.3, "tri", 0.06, decay=0.1)) for f in voicing)))
+        _play(out, bar_start, RIDE, ride)
+        _play(out, bar_start, BRUSH, brush)
+        _play(out, bar_start, style["kick"], kick)
+        if bar % style["theme_every"] == 0:
+            _theme(out, bar_start, root, chord, rng)
     return _normalize(_radio(out, name), MUSIC_PEAK)
 
 
 def _build_music():
-    return {name: _track(name) for name in PROGRESSIONS}
+    return {name: _track(name) for name in STYLES}
 
 
 CEIL = 0.95  # crête maximale en sortie
