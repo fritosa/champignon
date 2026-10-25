@@ -26,6 +26,22 @@ fichier, nouvelle convention).
 | `install.sh` | Crée (ou `--desinstaller` retire) la commande `champignon`, lien vers `main.py` dans `~/.local/bin`. Refuse d'écraser un fichier qui n'est pas un lien, et de retirer un lien qui pointe ailleurs. | — |
 | `tests/` | `unittest`. `tests/__init__.py` redirige `CHAMPIGNON_SAVE` vers un dossier temporaire. | |
 
+### 🦀 Portage Rust (en cours)
+
+Le Python reste la version jouable ; le crate Rust (`Cargo.toml`, `src/`) reprend les mêmes règles et textes,
+module par module. `src/main.rs` est encore vide. Tests : `cargo test` ; équilibrage : `cargo run --release
+--bin sim` (progression du même ordre que `sim.py`, pas identique : autre générateur aléatoire).
+
+| Fichier | Rôle (équivalent Python) |
+|---|---|
+| `src/data.rs`, `src/events.rs`, `src/game.rs` | `data.py`, `events.py`, `game.py`. Hasard injectable via `g.rng` (`Box<dyn Rng>`). Sauvegarde typée par `SaveData` (serde), chaque champ lu indépendamment (invalide → valeur par défaut). |
+| `src/rng.rs` | Trait `Rng` (`random`, `uniform`, `choice`, `sample`…), `StdRandom` (graine fixe ou système), `FixedRandom` pour les tests. |
+| `src/saves.rs` | `saves.py`. Dossier `~/.champignon/save_<n>.json` (`CHAMPIGNON_SAVE_DIR` pour le déplacer), version 1, indépendant des sauvegardes Python. |
+| `src/art.rs` | `art.py`, rendu identique cellule par cellule. |
+| `src/sound.rs` | `sound.py` : même synthèse et musique, `libpulse-simple` chargée à l'exécution (`libloading`). |
+| `src/term.rs` | Remplace curses : styles, touches, trait `Screen`, terminal réel `TermScreen` (crossterm, double tampon) et `BufferScreen` en mémoire pour les tests. |
+| `src/bin/sim.rs` | `sim.py`. |
+
 ### 📏 Règles d'architecture
 
 - **La logique ne connaît pas curses.** `game.py` et `events.py` sont purs et testables. L'UI lit l'état et
