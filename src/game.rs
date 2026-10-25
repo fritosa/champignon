@@ -493,7 +493,8 @@ fn load_walker(w: &WalkerData, max_hits: u32) -> Option<(f64, f64, u32)> {
     valid.then_some((elapsed, dur, hits))
 }
 
-fn now() -> f64 {
+/// Wall-clock time in seconds since the epoch.
+pub fn wall_time() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs_f64())
@@ -1706,7 +1707,7 @@ impl Game {
             challenges_done: list(&mut self.challenges_done.iter()),
             synergies_found: list(&mut self.synergies_found.iter()),
             skins: list(&mut self.skins.iter()),
-            wall_time: Some(now()),
+            wall_time: Some(wall_time()),
         }
     }
 
@@ -1727,7 +1728,7 @@ impl Game {
             return None;
         }
         let data: SaveData = serde_json::from_value(Value::Object(d)).ok()?;
-        Some(Game::from_save(data, now()))
+        Some(Game::from_save(data, wall_time()))
     }
 
     /// Game rebuilt from the content of a save (`wall` = current wall-clock time, for offline progress).
