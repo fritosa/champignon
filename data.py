@@ -1,10 +1,10 @@
-"""Définitions statiques : unités, talents de run, talents de prestige, défis, skins."""
+"""Static definitions: units, run talents, prestige talents, challenges, skins."""
 
 BASE_CAP = 100
 MAX_CAP = 1_000_000
 
-# Unités achetées en radiation. Chacune est débloquée par un talent "u_<id>"
-# et boostée (×2 par rang) par le talent "m_<id>".
+# Units bought with radiation. Each one is unlocked by a "u_<id>" talent
+# and boosted (×2 per rank) by the "m_<id>" talent.
 UNITS = [
     dict(id="soldier", name="Soldat", icon="i", cost=15, prod=0.5, proj="o", color="green",
          unlock_name="Conscription", unlock_cost=1, mult_name="Grenades à fragmentation"),
@@ -27,18 +27,18 @@ UNITS = [
 ]
 UNIT_BY_ID = {u["id"]: u for u in UNITS}
 UNIT_COST_GROWTH = 1.15
-# Paliers : chaque seuil atteint multiplie la production de l'unité.
+# Milestones: each threshold reached multiplies the unit's production.
 UNIT_MILESTONES = (50, 100, 200, 300, 400, 500)
 MILESTONE_MULT = 2
 
 
 def _talent(id, name, branch, depth, max, cost, desc, req=()):
-    """Talent de run. req : [(id du talent requis, rang minimum)]."""
+    """Run talent. req: [(required talent id, minimum rank)]."""
     return dict(id=id, name=name, branch=branch, depth=depth, max=max, cost=cost, desc=desc, req=list(req))
 
 
 def _unit_talents():
-    """Pour chaque unité, dans l'ordre : le talent qui la débloque (après la précédente) et celui qui la booste."""
+    """For each unit, in order: the talent that unlocks it (after the previous one) and the one that boosts it."""
     talents = []
     previous = None
     for unit in UNITS:
@@ -52,7 +52,7 @@ def _unit_talents():
     return talents
 
 
-# Talents de run : coût = cost[0] + cost[1] * rang actuel, payé en PT.
+# Run talents: cost = cost[0] + cost[1] * current rank, paid in PT.
 TALENTS = [
     _talent("t_click", "Détonateur renforcé", "det", 0, 10, (1, 1), "+2 de puissance de détonation de base par rang."),
     _talent("t_crit", "Fission critique", "det", 1, 5, (2, 1), "+5 % de chance de détonation critique par rang.",
@@ -83,16 +83,16 @@ TALENTS += [
 ]
 TALENT_BY_ID = {t["id"]: t for t in TALENTS}
 BRANCHES = [("det", "DÉTONATION"), ("inf", "INFANTERIE"), ("log", "LOGISTIQUE")]
-# Talents conservés au reset avec "Automates persistants".
+# Talents kept on reset with "Automates persistants".
 KEPT_TALENTS = ("t_auto", "l_autobuy", "l_discount")
 
 
 def _perk(id, name, max, desc, base=1, growth=1.5, costs=None):
-    """Talent permanent (prestige ⚛ ou supernova ✦)."""
+    """Permanent talent (prestige ⚛ or supernova ✦)."""
     return dict(id=id, name=name, max=max, desc=desc, base=base, growth=growth, costs=costs)
 
 
-# Talents de prestige, payés en isotopes. Coût = round(base * growth^rang) ou costs[rang].
+# Prestige talents, paid in isotopes. Cost = round(base * growth^rank) or costs[rank].
 PTALENTS = [
     _perk("p_cap", "Expansion du cœur", 4, "Niveau max ×10 (100 → 1 000 000).", costs=[20, 150, 1_200, 9_000]),
     _perk("p_prod", "Uranium appauvri", 25, "Production ×1,5 par rang (multiplicatif).", base=2, growth=1.45),
@@ -109,7 +109,7 @@ PTALENTS = [
 ]
 PTALENT_BY_ID = {p["id"]: p for p in PTALENTS}
 
-# Talents de supernova, payés en étoiles (✦). Remis à zéro jamais.
+# Supernova talents, paid in stars (✦). Never reset.
 STALENTS = [
     _perk("s_prod", "Fusion stellaire", 10, "Production ×3 par rang.", base=1, growth=2),
     _perk("s_iso", "Nucléosynthèse", 10, "Isotopes gagnés ×2 par rang.", base=1, growth=2),

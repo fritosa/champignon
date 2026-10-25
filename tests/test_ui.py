@@ -1,4 +1,4 @@
-"""Tests de l'UI sans terminal : on construit UI sans __init__ (qui initialise curses)."""
+"""UI tests without a terminal: UI is built without __init__ (which initializes curses)."""
 
 import curses
 import random
@@ -161,7 +161,7 @@ class QuantityTest(unittest.TestCase):
     def test_talent_ranks(self):
         self.u.tab, self.u.qty = 1, 100
         self.g.pt = 1000
-        self.u.sel[1] = 0  # premier talent sélectionnable : Détonateur renforcé (max 10)
+        self.u.sel[1] = 0  # first selectable talent: Détonateur renforcé (max 10)
         self.u.activate()
         self.assertEqual(self.g.tr("t_click"), 10)
 
@@ -230,9 +230,9 @@ class EffectsTest(unittest.TestCase):
         with mock.patch.object(ui.sys, "__stdout__") as out:
             u.update_title()
             u.t = 7.0
-            u.update_title()  # même niveau : rien
+            u.update_title()  # same level: nothing
             u.g.level, u.t = 42, 7.5
-            u.update_title()  # moins d'une seconde : rien
+            u.update_title()  # under a second: nothing
             u.t = 8.5
             u.update_title()
         writes = [c.args[0] for c in out.write.call_args_list]
@@ -258,7 +258,7 @@ class BlindTest(unittest.TestCase):
 
 
 class PutScreen:
-    """Écran minimal pour UI.put/box : enregistre chaque écriture et refuse ce qui sort de l'écran."""
+    """Minimal screen for UI.put/box: records every write and refuses anything off screen."""
 
     def __init__(self, h, w):
         self.h, self.w, self.writes = h, w, []
@@ -275,7 +275,7 @@ class TabBarTest(unittest.TestCase):
         u.h, u.w, u.qty = 24, W, qty
         u.g.audio = audio
         u.g.talents["u_soldier"] = 1
-        u.g.radiation = 1e9  # des « • » partout sur les onglets
+        u.g.radiation = 1e9  # "•" marks on every tab
         u.draw_tab(0, 0, 14, W)
         return u.scr.writes
 
@@ -286,7 +286,7 @@ class TabBarTest(unittest.TestCase):
             labels = "".join(s for _, s in top)
             for i in range(1, 6):
                 self.assertIn(str(i), labels, W)
-            self.assertTrue(all(x + len(s) <= W - 1 for x, s in top), W)  # pas sur le bord droit
+            self.assertTrue(all(x + len(s) <= W - 1 for x, s in top), W)  # not on the right edge
 
     def test_help_line_complete_variant(self):
         for W in (30, 44, 60, 80):
@@ -339,7 +339,7 @@ class ChestKeysTest(unittest.TestCase):
         u.handle(ord("1"))
         self.assertIsNone(u.g.pending_chest)
         self.assertEqual(u.g.crit_gauge, 1.0)
-        self.assertEqual(u.g.mutations, [])  # la mutation attend son tour
+        self.assertEqual(u.g.mutations, [])  # the mutation waits its turn
         self.assertEqual(u.tab, 0)
 
 
@@ -380,7 +380,7 @@ class ReportUITest(unittest.TestCase):
         u = self.finished()
         u.handle(ord(" "))
         self.assertFalse(u.g.report_ready)
-        self.assertFalse(u.g.exploded)  # ESPACE n'a pas fait exploser la bombe
+        self.assertFalse(u.g.exploded)  # SPACE didn't detonate the bomb
         u.handle(ord(" "))
         self.assertTrue(u.g.exploded)
 
@@ -418,7 +418,7 @@ class ReportUITest(unittest.TestCase):
 
     def test_key_not_swallowed_when_report_invisible(self):
         u = self.finished()
-        u.w, u.h = 40, 10  # « Terminal trop petit » : l'écran de fin n'est pas dessiné
+        u.w, u.h = 40, 10  # "Terminal trop petit": the end screen is not drawn
         u.handle(ord(" "))
         self.assertTrue(u.g.exploded)
 
@@ -468,9 +468,9 @@ class BigTitleTest(unittest.TestCase):
         g = exploded_game()
         g.log("Coffre : Frénésie !", "loot", "COFFRE")
         lines = [t for t, _ in bare_ui(g).banner_lines(60)]
-        self.assertEqual(len(lines), 4)  # 3 lignes de titre + le bandeau
+        self.assertEqual(len(lines), 4)  # 3 title lines + the banner
         self.assertTrue(all("█" in t or "▀" in t for t in lines[:3]))
-        self.assertEqual(len({len(t) for t in lines[:3]}), 1)  # même largeur : centrage aligné
+        self.assertEqual(len({len(t) for t in lines[:3]}), 1)  # same width: centering lines up
         self.assertEqual(lines[3], "Coffre : Frénésie !")
 
     def test_big_title_expires_unless_important(self):
@@ -481,7 +481,7 @@ class BigTitleTest(unittest.TestCase):
         g.log("Succès", "star", "SUCCÈS !")
         g.time += ui.BIG_TIME + 0.1
         lines = [t for t, _ in bare_ui(g).banner_lines(60)]
-        self.assertEqual(len(lines), 3 + 1)  # titre toujours là ; « Coffre » (6,2 s) a expiré
+        self.assertEqual(len(lines), 3 + 1)  # title still there; "Coffre" (6.2 s) has expired
         self.assertEqual(lines[3], "Succès")
 
     def test_only_newest_is_big(self):
@@ -556,7 +556,7 @@ class NanarUITest(unittest.TestCase):
         with mock.patch.object(ui, "STORY_GUARD", 0.0):
             u.show_story()
         self.assertIsNone(u.g.pending_story)
-        self.assertEqual(u.scr.keys, [])  # l'écran d'histoire a consommé ses deux touches
+        self.assertEqual(u.scr.keys, [])  # the story screen consumed its two keys
         self.assertTrue(any("Zédé" in t for t in u.scr.text))
 
     def test_challenge_without_story_shows_nothing(self):
@@ -574,7 +574,7 @@ class NanarUITest(unittest.TestCase):
         with mock.patch.dict(ui.STORIES, {("race", "end"): ["FIN"]}), mock.patch.object(ui, "intro") as shown:
             action = next(r["action"] for r in u.info_rows() if r["text"].startswith("Revoir le défi"))
             with mock.patch.object(u, "selected_action", return_value=action):
-                u.activate()  # pas de KeyError sur la partie "start" absente
+                u.activate()  # no KeyError on the missing "start" part
         self.assertEqual(shown.call_count, 1)
 
     def test_replay_row_after_success(self):
@@ -612,7 +612,7 @@ class AudioModeKeyTest(unittest.TestCase):
 
 
 class FieldDrawTest(unittest.TestCase):
-    """Le panneau du champignon avec toute l'armée et chaque ennemi reste dans l'écran."""
+    """The mushroom panel with the whole army and every enemy stays on screen."""
 
     def test_army_and_enemies_inside_screen(self):
         for W in (30, 45, 80):
@@ -646,7 +646,7 @@ class LongDescTest(unittest.TestCase):
         u = bare_ui()
         u.g.prestige_count = 1
         u.tab = 2
-        u.sel[2] = 1  # premier défi
+        u.sel[2] = 1  # first challenge
         u.scr = PutScreen(30, 60)
         u.h, u.w = 30, 60
         u.draw_tab(10, 0, 19, 60)
@@ -659,7 +659,7 @@ class LongDescTest(unittest.TestCase):
         u.g.talents["u_soldier"] = 1
         u.g.talents["u_mortar"] = 1
         u.g.talents["u_artillery"] = 1
-        u.g.pt = 2  # assez pour t_click (1 PT) mais pas pour le déblocage suivant (8 PT)
+        u.g.pt = 2  # enough for t_click (1 PT) but not the next unlock (8 PT)
         self.assertFalse(u.tab_has_news(1))
 
 
@@ -675,18 +675,18 @@ class UnitSpriteTest(unittest.TestCase):
 
     @staticmethod
     def art_line(writes, y, x0=60):
-        """Caractères isolés écrits sur la ligne y à droite de x0 (le sprite est écrit caractère par caractère)."""
+        """Single characters written on line y right of x0 (the sprite is drawn character by character)."""
         return "".join(ch for wy, wx, ch in sorted(writes) if wy == y and wx >= x0 and len(ch) == 1 and ch != "│")
 
     def test_selected_unit_sprite_beside_desc(self):
         writes = self.draw(80)
         self.assertEqual([self.art_line(writes, y) for y in (25, 26, 27)], ["o", "/|=", "/\\"])
-        self.assertIn((26, 75, "/"), writes)  # collé au bord droit de la zone de description
+        self.assertIn((26, 75, "/"), writes)  # flush with the right edge of the description area
         desc = [w for w in writes if w[0] == 25 and w[1] == 2][0][2]
-        self.assertLessEqual(2 + len(desc), 75 - 2)  # le texte ne passe pas sous le dessin
+        self.assertLessEqual(2 + len(desc), 75 - 2)  # the text doesn't run under the drawing
 
     def test_locked_unit_silhouette(self):
-        writes = self.draw(80, sel=1)  # ligne « ??? » : le mortier à débloquer
+        writes = self.draw(80, sel=1)  # "???" line: the mortar to unlock
         self.assertEqual(self.art_line(writes, 27), "[_]")
 
     def test_no_sprite_when_narrow_or_short(self):

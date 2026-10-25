@@ -1,7 +1,7 @@
-"""Génération procédurale du champignon atomique en ASCII.
+"""Procedural ASCII generation of the atomic mushroom.
 
-Chaque fonction renvoie une liste de cellules (y, x, caractère, couleur) relatives au panneau,
-la couleur étant un nom ("red", "orange", ...) que l'UI convertit en attribut curses.
+Each function returns a list of cells (y, x, character, color) relative to the panel,
+the color being a name ("red", "orange", ...) that the UI turns into a curses attribute.
 """
 
 import math
@@ -32,7 +32,7 @@ BOMB = [
 
 
 def _noise(x, y, frame):
-    """Valeur pseudo-aléatoire sur 16 bits, stable pour une même case et une même image."""
+    """16-bit pseudo-random value, stable for a given cell and frame."""
     return ((x * 73856093) ^ (y * 19349663) ^ (frame * 83492791)) & 0xFFFF
 
 
@@ -41,7 +41,7 @@ def _pick(seq, n):
 
 
 def size_fraction(level, cap):
-    """Taille relative (0..1) : grandit avec le niveau, maxi au niveau max de la run."""
+    """Relative size (0..1): grows with the level, maxed at the run's max level."""
     if level <= 0:
         return 0.0
     return 0.15 + 0.85 * math.log(1 + level) / math.log(1 + cap)
@@ -61,12 +61,12 @@ def bomb(W, H):
 
 
 def mushroom_height(H, f):
-    """Hauteur totale d'un champignon de taille f dans un panneau de hauteur H."""
+    """Total height of a size-f mushroom in a panel of height H."""
     return max(4, int(round((H - 2) * f)))
 
 
 def _dimensions(W, H, f, twin):
-    """(hauteur totale, largeur d'un chapeau) d'un champignon de taille f ; les jumeaux se partagent la largeur."""
+    """(total height, cap width) of a size-f mushroom; twins share the width."""
     height = mushroom_height(H, f)
     cap_w = min(W - 2, max(5, int(height * 2.4)))
     if twin:
@@ -75,7 +75,7 @@ def _dimensions(W, H, f, twin):
 
 
 def mushroom(W, H, f, t, skin="classic", twin=False):
-    """Champignon de taille f (0..1) dans un panneau W×H, sol sur la dernière ligne."""
+    """Mushroom of size f (0..1) in a W×H panel, ground on the last line."""
     ground = H - 1
     frame = int(t * 6)
     height, cap_w = _dimensions(W, H, f, twin)
@@ -105,7 +105,7 @@ def _one(cells, cx, ground, height, cap_h, stem_h, cap_w, frame, t, skin):
 
 
 def _cap(cells, cx, top, cap_h, cap_w, frame, t, skin, mario):
-    """Chapeau : un dôme, plus large en bas, avec une bordure inférieure légèrement rentrée."""
+    """Cap: a dome, wider at the bottom, with a slightly tucked-in lower rim."""
     for i in range(cap_h):
         rel = (i + 1) / cap_h
         width = cap_w * (0.4 + 0.6 * math.sin(rel * math.pi / 2))
@@ -126,8 +126,8 @@ def _cap(cells, cx, top, cap_h, cap_w, frame, t, skin, mario):
 
 
 def _stem(cells, cx, top, stem_h, cap_h, cap_w, height, frame, t, skin, mario):
-    """Pied : s'élargit vers le bas, avec un anneau de condensation sur les grands champignons."""
-    stem_w = max(1, int(cap_w * 0.16)) | 1  # impair, pour rester centré sur cx
+    """Stem: widens toward the bottom, with a condensation ring on large mushrooms."""
+    stem_w = max(1, int(cap_w * 0.16)) | 1  # odd, to stay centered on cx
     ring_row = int(stem_h * 0.35) if height >= 10 else None
     for j in range(stem_h):
         y = top + j
@@ -158,7 +158,7 @@ def _ring(cells, cx, y, half, frame):
 
 
 def _dust(cells, cx, ground, height, cap_w, frame):
-    """Nuage de poussière à la base, effiloché sur les bords."""
+    """Dust cloud at the base, frayed at the edges."""
     rows = [(ground - 1, 1.3)] + ([(ground - 2, 0.8)] if height >= 7 else [])
     for y, scale in rows:
         half = max(2, int(cap_w * scale / 2))
@@ -171,15 +171,15 @@ def _dust(cells, cx, ground, height, cap_w, frame):
 
 
 def mushroom_width(W, H, f, twin=False):
-    """Largeur approximative occupée au sol (pour placer les unités et l'inspecteur)."""
+    """Approximate width taken on the ground (to place the units and the inspector)."""
     cap_w = _dimensions(W, H, f, twin)[1]
     if twin:
         return min(W - 2, 2 * cap_w + 2)
     return min(W - 2, int(cap_w * 1.3))
 
 
-# --- Unités et ennemis ------------------------------------------------------------
-# Deux images par sprite (animation), lignes alignées en bas, tournées vers la droite.
+# --- Units and enemies ------------------------------------------------------------
+# Two frames per sprite (animation), lines bottom-aligned, facing right.
 
 UNIT_ART = {
     "soldier": ([" o ", "/|=", "/ \\"], [" o ", "/|=", " | "]),
@@ -205,7 +205,7 @@ _MIRRORED_CHARS = str.maketrans("()<>[]{}/\\`'", ")(><][}{\\/'`")
 
 
 def sprite(frames, t, mirror=False):
-    """Image courante d'un sprite (2 images/s), retournée horizontalement si mirror."""
+    """Current frame of a sprite (2 frames/s), flipped horizontally if mirror."""
     rows = frames[int(t * 2) % len(frames)]
     w = max(map(len, rows))
     rows = [r.ljust(w) for r in rows]
@@ -216,7 +216,7 @@ def sprite_width(frames):
     return max(len(r) for f in frames for r in f)
 
 
-# --- Police en grosses lettres (3 lignes, demi-blocs) --------------------------------
+# --- Big-letter font (3 lines, half blocks) ------------------------------------------
 
 _BIG_ROWS = 3
 BIG_FONT = {
@@ -240,13 +240,13 @@ BIG_FONT = {
 
 
 def _plain(text):
-    """Majuscules sans accents (É → E, Œ → OE) pour la grosse police."""
+    """Uppercase without accents (É → E, Œ → OE) for the big font."""
     text = text.upper().replace("Œ", "OE").replace("Æ", "AE")
     return "".join(c for c in unicodedata.normalize("NFD", text) if not unicodedata.combining(c))
 
 
 def big_text(text):
-    """Trois lignes de grosses lettres ; les caractères inconnus sont ignorés."""
+    """Three lines of big letters; unknown characters are skipped."""
     glyphs = [BIG_FONT[c] for c in _plain(text) if c in BIG_FONT]
     if not glyphs:
         return [""] * _BIG_ROWS

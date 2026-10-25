@@ -11,7 +11,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def used_sound_names():
-    """Noms de sons émis dans le code (g.sfx.append("x") / self.sfx("x"))."""
+    """Sound names emitted in the code (g.sfx.append("x") / self.sfx("x"))."""
     names = set()
     for name in ("game.py", "events.py", "ui.py"):
         with open(os.path.join(ROOT, name)) as f:
@@ -69,7 +69,7 @@ class BankTest(unittest.TestCase):
         self.assertAlmostEqual(gain, 0.5)
         self.assertAlmostEqual(max(map(abs, out)), sound.CEIL)
         gains = [o / x for o, x in zip(out, buf)]
-        self.assertGreater(gains[0], 0.9)  # pas de chute brutale en début de bloc
+        self.assertGreater(gains[0], 0.9)  # no sudden drop at the start of the block
         self.assertTrue(all(b <= a + 1e-12 for a, b in zip(gains, gains[1:])))
         self.assertTrue(all(abs(g - 0.5) < 1e-9 for g in gains[10:]))
 
@@ -87,8 +87,8 @@ class BankTest(unittest.TestCase):
         for _ in range(30):
             out, gain = sound._limiter([0.5] * 10, gain)
             gains.append(gain)
-            self.assertTrue(all(b >= a for a, b in zip([last] + out, out)))  # rampe sans saut, même entre blocs
-            self.assertAlmostEqual(out[-1], 0.5 * gain)  # le bloc finit au gain renvoyé
+            self.assertTrue(all(b >= a for a, b in zip([last] + out, out)))  # ramp without jumps, even across blocks
+            self.assertAlmostEqual(out[-1], 0.5 * gain)  # the block ends at the returned gain
             last = out[-1]
         self.assertAlmostEqual(gains[0], 0.5 + sound.RELEASE)
         self.assertEqual(gains[-1], 1.0)
@@ -115,7 +115,7 @@ class MusicTest(unittest.TestCase):
 
     def test_tracks_same_length_no_clipping(self):
         lengths = {len(t) for t in self.tracks.values()}
-        self.assertEqual(len(lengths), 1)  # même longueur : on change de piste sans perdre le temps
+        self.assertEqual(len(lengths), 1)  # same length: switching tracks keeps the beat
         self.assertEqual(lengths.pop(), int(sound.BARS * 4 * sound.BEAT * sound.RATE))
         for name, t in self.tracks.items():
             self.assertLessEqual(max(map(abs, t)), 0.9 + 1e-6, name)
@@ -123,8 +123,8 @@ class MusicTest(unittest.TestCase):
     def test_every_track_has_chords_and_style(self):
         self.assertEqual(set(sound.STYLES), set(sound.PROGRESSIONS))
         for name, style in sound.STYLES.items():
-            self.assertEqual(len(sound.PROGRESSIONS[name]), sound.BARS, name)  # la boucle dure BARS mesures
-            self.assertTrue(set(style["bass"]) <= {0, 1, 2, 3}, name)  # indices dans la marche de la basse
+            self.assertEqual(len(sound.PROGRESSIONS[name]), sound.BARS, name)  # the loop lasts BARS bars
+            self.assertTrue(set(style["bass"]) <= {0, 1, 2, 3}, name)  # indices into the bass walk
             self.assertGreaterEqual(style["theme_every"], 1, name)
 
     def run_chunks(self, n):
@@ -157,7 +157,7 @@ class MusicTest(unittest.TestCase):
         self.run_chunks(60)
         self.snd.set_music("epic")
         self.run_chunks(5)
-        self.assertEqual(self.snd.music, "calm")  # fondu sortant d'abord
+        self.assertEqual(self.snd.music, "calm")  # fade out first
         self.run_chunks(60)
         self.assertEqual(self.snd.music, "epic")
 
@@ -184,11 +184,11 @@ class KeepAliveTest(unittest.TestCase):
     def test_silence_never_pure_and_signal_kept(self):
         silence = array("h", [0] * sound.CHUNK).tobytes()
         out = array("h", sound._keep_alive(silence, 0))
-        self.assertTrue(any(out))  # jamais de silence pur : WSLg couperait le flux
-        self.assertGreater(len(set(sound._KEEPALIVE)), 2)  # un souffle, pas une constante
+        self.assertTrue(any(out))  # never pure silence: WSLg would cut the stream
+        self.assertGreater(len(set(sound._KEEPALIVE)), 2)  # a hiss, not a constant
         self.assertLessEqual(max(map(abs, out)), sound.KEEPALIVE_LSB)
         loud = array("h", [sound.PCM_SCALE, -sound.PCM_SCALE] * (sound.CHUNK // 2))
-        mixed = array("h", sound._keep_alive(loud.tobytes(), len(sound._KEEPALIVE) - 3))  # bouclage du souffle
+        mixed = array("h", sound._keep_alive(loud.tobytes(), len(sound._KEEPALIVE) - 3))  # hiss wraps around
         self.assertTrue(all(abs(a - b) <= sound.KEEPALIVE_LSB for a, b in zip(mixed, loud)))
 
 
@@ -222,7 +222,7 @@ class MixerTest(unittest.TestCase):
         self.assertEqual(self.pcm()[0], 12800)
         self.snd.play("loud")
         self.snd.play("loud")
-        self.assertAlmostEqual(self.pcm()[0], sound.CEIL * 32000, delta=2)  # limiteur : plafonné à CEIL
+        self.assertAlmostEqual(self.pcm()[0], sound.CEIL * 32000, delta=2)  # limiter: capped at CEIL
 
     def test_master_volume(self):
         self.snd.volume = 0.5
@@ -237,8 +237,8 @@ class MixerTest(unittest.TestCase):
         self.snd.play("half")
         self.snd.muted = True
         self.snd.play("half")
-        self.assertEqual(len(self.snd.voices), 1)  # pas de nouveau son
-        self.assertTrue(all(x == 0 for x in self.pcm()))  # et ceux en cours sont coupés
+        self.assertEqual(len(self.snd.voices), 1)  # no new sound
+        self.assertTrue(all(x == 0 for x in self.pcm()))  # and playing ones are cut
         self.assertEqual(self.snd.voices, [])
 
     def test_minor_voice_limit(self):
@@ -257,17 +257,17 @@ class PriorityTest(unittest.TestCase):
     def test_one_jingle_at_a_time(self):
         self.snd.play("achievement")
         self.snd.play("achievement")
-        self.snd.play("level")  # moins important : ignoré
+        self.snd.play("level")  # less important: ignored
         self.assertEqual(len(self.snd.voices), 1)
 
     def test_more_important_jingle_cuts_previous(self):
         self.snd.play("level")
         self.snd.play("boom")
-        self.assertEqual([v[4] for v in self.snd.voices], [True, False])  # level en fondu de sortie
+        self.assertEqual([v[4] for v in self.snd.voices], [True, False])  # level fading out
         self.snd._mix()
         self.assertEqual(len(self.snd.voices), 1)
         self.assertEqual(self.snd.voices[0][3], sound.PRIORITY["boom"])
-        self.snd.play("level")  # le boom joue encore
+        self.snd.play("level")  # the boom is still playing
         self.assertEqual(len(self.snd.voices), 1)
 
     def test_minor_sounds_ducked_during_jingle(self):

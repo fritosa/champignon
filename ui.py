@@ -1,4 +1,4 @@
-"""Interface curses : rendu des panneaux, animations et gestion des touches."""
+"""Curses interface: panel rendering, animations and key handling."""
 
 import curses
 import math
@@ -12,11 +12,11 @@ import events
 from game import AUDIO_MODES, VOLUME_STEP, fmt, need
 from screens import ENTER_KEYS, KEY_TAB, STORIES, STORY_GUARD, intro
 
-# Délai minimal entre deux occurrences d'un même son.
+# Minimum delay between two plays of the same sound.
 SFX_GAP = dict(level=0.6, hit=0.08, achievement=0.6, crit=0.15, buy=0.12, fizzle=0.5, jam=0.15)
 DEFAULT_SFX_GAP = 0.05
 MSG_TIME = 6
-BIG_TIME = 3  # titre en grosses lettres (messages importants : tout MSG_TIME)
+BIG_TIME = 3  # title in big letters (important messages: all of MSG_TIME)
 AUDIO_LABELS = dict(all="musique + effets", sfx="effets seuls", off="muet")
 MSG_COLORS = dict(info="white", good="green", bad="red", loot="cyan", star="yellow", epic="magenta")
 KEY_HELP = [
@@ -33,16 +33,16 @@ KEY_HELP = [
     ("+ / -", f"Volume général (par paliers de {VOLUME_STEP} %)."),
     ("Q", "Sauvegarde et quitte."),
 ]
-# Durée de la secousse d'écran par son (le flash du boom dure 0,8 s).
+# Screen shake duration per sound (the boom flash lasts 0.8 s).
 SHAKE = dict(boom=1.3, perfect=0.6, prestige=0.6, supernova=1.5)
 QTY = [1, 10, 100, "max"]
 TABS = ["Unités", "Talents", "Prestige", "Succès", "Infos"]
 MIN_W, MIN_H = 60, 20
-MAX_FLOATS = 6  # nombres flottants affichés en même temps
+MAX_FLOATS = 6  # floating numbers shown at once
 
 
 def row(text, attr=0, action=None, desc="", sel=True, sprite=None):
-    """sprite : (id d'unité, débloquée) pour afficher son dessin à côté de la description."""
+    """sprite: (unit id, unlocked) to draw its art next to the description."""
     return dict(text=text, attr=attr, action=action, desc=desc, sel=sel, sprite=sprite)
 
 
@@ -53,7 +53,7 @@ class UI:
         self.sfx_last = {}
         self.qty = 1
         self.shake_until = 0.0
-        self.title = None  # None : titre du terminal désactivé
+        self.title = None  # None: terminal title disabled
         self.title_at = -9.0
         self.g = game
         self.tab = 0
@@ -72,7 +72,7 @@ class UI:
         self.colors = {}
         self._init_colors()
 
-    # --- Bas niveau ----------------------------------------------------------------
+    # --- Low level -----------------------------------------------------------------
 
     def _init_colors(self):
         if not curses.has_colors():
@@ -112,7 +112,7 @@ class UI:
             return
         if x < 0:
             s, x = s[-x:], 0
-        last_line = y == self.h - 1  # écrire le coin bas-droit fait échouer addstr
+        last_line = y == self.h - 1  # writing the bottom-right corner makes addstr fail
         s = s[:self.w - x - (1 if last_line else 0)]
         try:
             self.scr.addstr(y, x, s, attr)
@@ -134,7 +134,7 @@ class UI:
         n = max(0, min(width, int(round(frac * width))))
         return full * n + empty * (width - n)
 
-    # --- Rendu -------------------------------------------------------------------------
+    # --- Rendering ---------------------------------------------------------------------
 
     def draw(self, dt):
         self.t += dt
@@ -162,7 +162,7 @@ class UI:
         self.update_title()
 
     def show_story(self):
-        """Histoire de défi en attente (lancement ou réussite) : écran plein, une seule fois."""
+        """Pending challenge story (start or success): full screen, shown once."""
         if self.g.pending_story:
             story, self.g.pending_story = STORIES.get(self.g.pending_story), None
             if story:
@@ -191,7 +191,7 @@ class UI:
             name = g.sfx.popleft()
             if name in SHAKE:
                 self.shake_until = max(self.shake_until, self.t + SHAKE[name])
-            key = "click" if name.startswith("click") else name  # les variantes d'appui partagent un délai
+            key = "click" if name.startswith("click") else name  # press variants share one delay
             too_soon = self.t - self.sfx_last.get(key, -9) < SFX_GAP.get(key, DEFAULT_SFX_GAP)
             if not self.sound or key in played or too_soon:
                 continue
@@ -219,7 +219,7 @@ class UI:
 
         if self.t < self.shake_until and IW > 4:
             shift = self.rng.choice((0, 1))
-            ix, IW = ix + shift, IW - 1  # la largeur perdue garde le décalage dans le cadre
+            ix, IW = ix + shift, IW - 1  # the lost width keeps the shift inside the frame
         self.put(iy + ground, ix, "▁" * IW, self.c("grey"))
         if not g.exploded:
             for y, x, ch, col in art.bomb(IW, IH):
@@ -248,7 +248,7 @@ class UI:
         self.draw_banners(iy, ix, IW, banners)
 
     def big_lines(self, title, kind, IW, flashing=False):
-        """Titre en grosses lettres (3 lignes de même largeur), ou en lettres espacées s'il ne tient pas."""
+        """Title in big letters (3 lines of equal width), or in spaced letters if it does not fit."""
         attr = self.c(MSG_COLORS[kind]) | curses.A_BOLD
         if flashing and self.blink(0.15):
             attr = self.c("white") | curses.A_BOLD
@@ -261,7 +261,7 @@ class UI:
         return [(r.ljust(width), attr) for r in rows]
 
     def draw_sky(self, iy, ix, IW, ground):
-        """Décor qui évolue avec le niveau : nuages, puis étoiles, puis planètes (positions fixes par taille)."""
+        """Backdrop that evolves with the level: clouds, then stars, then planets (fixed positions per size)."""
         lvl, top = self.g.level, ground - 3
         if top < 2 or IW < 10:
             return
@@ -282,7 +282,7 @@ class UI:
                 self.put(iy + rng.randint(1, top), ix + rng.randint(0, IW - 1), ch, self.c(col) | curses.A_BOLD)
 
     def update_title(self):
-        """Niveau dans le titre du terminal (séquence OSC), au plus une fois par seconde et seulement s'il change."""
+        """Level in the terminal title (OSC sequence), at most once per second and only when it changes."""
         if self.title is None or self.t - self.title_at < 1:
             return
         text = f"☢ Niv. {self.num(self.g.level)} — Champignon atomique"
@@ -303,7 +303,7 @@ class UI:
         return self.c("alert") if self.blink(0.3) else self.c(calm)
 
     def banner_lines(self, IW):
-        """Alertes en cours puis derniers messages (le plus récent en haut), empilés sous le bord du panneau."""
+        """Active alerts then latest messages (most recent on top), stacked under the panel edge."""
         g = self.g
         lines = []
         if g.inspector:
@@ -331,8 +331,8 @@ class UI:
         return lines
 
     def draw_sprite(self, iy, ix, IW, bottom, x, rows, attr, opaque=False):
-        """Sprite dont la dernière ligne est en `bottom`, coupé aux bords du panneau.
-        Opaque : les espaces intérieurs effacent le décor (lisible devant la poussière)."""
+        """Sprite whose last line is at `bottom`, clipped to the panel edges.
+        Opaque: inner spaces erase the backdrop (readable in front of the dust)."""
         top = bottom - len(rows) + 1
         for i, line in enumerate(rows):
             y = top + i
@@ -344,9 +344,9 @@ class UI:
                     self.put(iy + y, ix + x + j, ch, attr)
 
     def draw_army(self, iy, ix, IW, ground, gap):
-        """Un sprite par type d'unité possédé, un 2e dès 10 unités et un 3e dès 100 s'il reste de la place.
-        Rangés des bords vers le centre en laissant libre le pied ; ceux de droite regardent à gauche.
-        Les bombardiers volent à part."""
+        """One sprite per owned unit type, a 2nd from 10 units and a 3rd from 100 if there is room.
+        Placed from the edges toward the center, leaving the stem clear; those on the right face left.
+        Bombers fly separately."""
         g = self.g
         owned = [u for u in data.UNITS if g.units[u["id"]] and u["id"] != "bomber"]
         wanted = [(u, copy) for copy in range(3) for u in owned if g.units[u["id"]] >= 10 ** copy]
@@ -374,7 +374,7 @@ class UI:
             self.draw_sprite(iy, ix, IW, 3 + 3 * i, x, art.sprite(frames, self.t), self.c("cyan") | curses.A_BOLD)
 
     def update_particles(self, iy, ix, IW, IH, ground, size, gap, dt, min_row=1):
-        """Projectiles des unités vers le champignon, puis nombres flottants au-dessus de sa tête."""
+        """Unit projectiles toward the mushroom, then floating numbers above its head."""
         g = self.g
         top = ground - art.mushroom_height(IH, size)
         if not g.frozen:
@@ -450,8 +450,8 @@ class UI:
         self.put(iy + ground - 3, ix + x, hits, self.c("red"))
 
     def draw_enemy(self, iy, ix, IW, ground, gap):
-        """Ennemis venus de la gauche (les drones par le ciel), coups restants au-dessus de chacun.
-        Le plus avancé s'arrête au pied du champignon, les suivants font la queue derrière lui."""
+        """Enemies coming from the left (drones through the sky), remaining hits above each one.
+        The front one stops at the foot of the mushroom, the others queue up behind it."""
         g = self.g
         for sky in (False, True):
             target = IW // 2 - gap
@@ -463,7 +463,7 @@ class UI:
                 target = max(0, target - w)
                 progress = max(0.0, min(1.0, events.enemy_progress(g, en)))
                 if en["kind"] == "hippies":
-                    progress = min(1.0, progress * 4)  # ils arrivent vite puis font leur sit-in
+                    progress = min(1.0, progress * 4)  # they arrive fast then stage their sit-in
                 x = int(-w + (target + w) * progress)
                 target = min(target, x) - 1
                 rows = art.sprite(frames, self.t)
@@ -474,7 +474,7 @@ class UI:
                     self.put(iy + bottom - len(rows), ix + max(0, x), hits, self.c("yellow"))
 
     def num(self, x):
-        """Nombre formaté, masqué pendant le défi Brouillard de guerre."""
+        """Formatted number, hidden during the Fog of War challenge."""
         return "???" if self.g.challenge == "blind" else fmt(x)
 
     def draw_stats(self, y0, x0, H, W):
@@ -547,7 +547,7 @@ class UI:
                 self.put(iy + i, x, text, attr)
                 x += len(text)
 
-    # --- Onglets -------------------------------------------------------------------------
+    # --- Tabs ----------------------------------------------------------------------------
 
     def tab_has_news(self, i):
         g = self.g
@@ -684,7 +684,7 @@ class UI:
         return rows + self.tree_rows(data.STALENTS, "stalent", g.sr, g.stalent_cost, g.stars, "✦")
 
     def tree_rows(self, talents, kind, rank, cost, budget, unit, extra_desc=lambda tid: ""):
-        """Arbre payé en isotopes ou en étoiles : nom, rang, coût du rang suivant ; jaune si on peut payer."""
+        """Tree paid in isotopes or stars: name, rank, next rank cost; yellow if affordable."""
         rows = []
         nw = max(10, self.tab_w - 18)
         for t in talents:
@@ -781,7 +781,7 @@ class UI:
         self.draw_tab_body(y0 + 1, x0 + 2, H - 2, W - 4)
 
     def draw_tab_labels(self, y, x0, W):
-        """Noms des onglets sur le bord haut, raccourcis jusqu'à tenir ; • si un achat y est possible."""
+        """Tab names on the top edge, shortened until they fit; • if something there is affordable."""
         names = ["???" if i == 2 and not self.g.prestige_unlocked else n for i, n in enumerate(TABS)]
         if self.qty != 1:
             names[0] += f" ×{self.qty}"
@@ -798,19 +798,20 @@ class UI:
             x += len(label) + 1
 
     def draw_tab_help(self, y, x0, W):
-        """Aide des touches sur le bord bas, de moins en moins détaillée selon la largeur."""
-        son = dict(all="♪", sfx="on", off="off")[self.g.audio] if self.sound and self.sound.ok else "indispo"
-        if son in ("♪", "on") and self.g.volume < 100:
-            son += f" {self.g.volume}%"
-        for help_ in (f" Entrée acheter · M ×{self.qty} · 5 aide · 0 son {son} · Q ",
-                      f" M ×{self.qty} · 5 aide · 0 son {son} · Q ", f" M ×{self.qty} · 5 aide · Q ", " 5 aide "):
+        """Key help on the bottom edge, less and less detailed as width shrinks."""
+        sound_label = dict(all="♪", sfx="on", off="off")[self.g.audio] if self.sound and self.sound.ok else "indispo"
+        if sound_label in ("♪", "on") and self.g.volume < 100:
+            sound_label += f" {self.g.volume}%"
+        for help_ in (f" Entrée acheter · M ×{self.qty} · 5 aide · 0 son {sound_label} · Q ",
+                      f" M ×{self.qty} · 5 aide · 0 son {sound_label} · Q ",
+                      f" M ×{self.qty} · 5 aide · Q ", " 5 aide "):
             if len(help_) <= W - 2:
                 break
         self.put(y, x0 + max(1, (W - len(help_)) // 2), help_[:W - 2], self.c("grey"))
 
     def draw_tab_body(self, iy, ix, IH, IW):
-        """Liste défilante des lignes de l'onglet, puis sous un trait la description de la ligne choisie
-        (avec le sprite de l'unité à droite s'il tient)."""
+        """Scrolling list of the tab rows, then under a rule the description of the selected row
+        (with the unit sprite on the right if it fits)."""
         rows = self.rows()
         selectable = [i for i, r in enumerate(rows) if r["sel"]]
         cur = None
@@ -845,8 +846,8 @@ class UI:
             self.draw_sprite(iy + list_h + 1, ix + IW - w, w, len(art_rows) - 1, 0, art_rows, art_attr)
 
     def desc_layout(self, desc, sprite, IH, IW):
-        """Lignes de la description (au moins 2, la liste en garde 5), complétées de lignes vides jusqu'à la
-        hauteur du sprite ; le sprite est abandonné s'il ne tient pas. Renvoie (lignes, sprite, attribut)."""
+        """Description lines (at least 2, the list keeps 5), padded with blank lines up to the sprite height;
+        the sprite is dropped if it does not fit. Returns (lines, sprite, attribute)."""
         art_rows, art_attr = [], 0
         if sprite and IW >= 36:
             uid, unlocked = sprite
@@ -867,7 +868,7 @@ class UI:
         return lines + [""] * (n_desc - len(lines)), art_rows, art_attr
 
     def scroll_to(self, cur, selectable, list_h):
-        """Défilement de l'onglet qui garde la ligne choisie visible (tout en haut sur la première)."""
+        """Tab scroll that keeps the selected row visible (at the very top for the first one)."""
         if not selectable:
             return 0
         sc = self.scroll[self.tab]
@@ -880,14 +881,14 @@ class UI:
         self.scroll[self.tab] = sc
         return sc
 
-    # --- Overlays et bandeau -----------------------------------------------------------
+    # --- Overlays and banner -----------------------------------------------------------
 
     def clear(self, y, x, h, w):
         for i in range(h):
             self.put(y + i, x, " " * w)
 
     def popup(self, bh, bw, title, attr):
-        """Fenêtre vide centrée, encadrée ; renvoie son coin haut-gauche."""
+        """Empty centered framed window; returns its top-left corner."""
         y, x = (self.h - bh) // 2, (self.w - bw) // 2
         self.clear(y, x, bh, bw)
         self.box(y, x, bh, bw, title, attr)
@@ -918,7 +919,7 @@ class UI:
             self.put(y + 1, x + max(1, (bw - len(text)) // 2), text[:bw - 2], self.c(col) | curses.A_BOLD)
 
     def report_lines(self, r):
-        """Lignes (libellé, valeur) du résumé d'une partie terminée."""
+        """(label, value) rows of a finished game summary."""
         gain = f"+{fmt(r['gain'])} {'✦' if r['kind'] == 'supernova' else '⚛'}"
         lines = [("Durée", _dur(r["time"])), ("Niveau atteint", f"{fmt(r['level'])} / {fmt(r['cap'])}"),
                  ("Gain", gain), ("Radiation produite", f"{fmt(r['earned'])} ☢"),
@@ -1009,14 +1010,14 @@ class UI:
         start = int(self.news_off)
         self.put(y, len(label) + 1, text[start:start + ww], self.c("white"))
 
-    # --- Touches -------------------------------------------------------------------------
+    # --- Keys ----------------------------------------------------------------------------
 
     def handle(self, key):
         g = self.g
         too_small = getattr(self, "w", 0) and (self.w < MIN_W or self.h < MIN_H)
         report_shown = g.report_ready and g.last_run and not too_small
         if report_shown and key != curses.KEY_RESIZE:
-            g.report_ready = False  # la touche ferme l'écran de fin, sans autre effet
+            g.report_ready = False  # the key closes the end screen, with no other effect
             self.sfx("tick")
             return None
         if key == ord(" "):
@@ -1050,8 +1051,8 @@ class UI:
                   "bad" if muted else "info")
         elif key in (ord("+"), ord("="), ord("-")):
             if g.change_volume(-1 if key == ord("-") else 1):
-                self.sfx("tick")  # aperçu au nouveau volume
-            # Un seul bandeau de volume : sinon 20 appuis vident l'historique (8 messages) des messages utiles.
+                self.sfx("tick")  # preview at the new volume
+            # A single volume banner: otherwise 20 presses flush the useful messages from the history (8 messages).
             if g.messages and g.messages[-1][0].startswith("Volume : "):
                 g.messages.pop()
             g.log(f"Volume : {g.volume} %", "info")
@@ -1086,7 +1087,7 @@ class UI:
             self.scr.clear()
 
     def add_float(self, text, attr, dx=0):
-        """Texte qui s'élève au-dessus du champignon (voir update_particles)."""
+        """Text rising above the mushroom (see update_particles)."""
         self.floats.append(dict(text=text, age=0.0, dx=dx, attr=attr))
         del self.floats[:-MAX_FLOATS]
 
@@ -1135,7 +1136,7 @@ class UI:
 
 
 def _clip(text, width):
-    """Texte coupé à width caractères, « … » compris."""
+    """Text cut to width characters, including the « … »."""
     return text if len(text) <= width else text[:width - 1] + "…"
 
 

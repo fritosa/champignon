@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Champignon atomique — jeu incrémental en terminal.
+"""Champignon atomique — an incremental game in the terminal.
 
-Lancement : champignon (lien ~/.local/bin/champignon → main.py), ./main.py ou python3 main.py
-(--reset pour effacer toutes les parties, --mute sans son)
+Launch: champignon (link ~/.local/bin/champignon → main.py), ./main.py or python3 main.py
+(--reset to erase all games, --mute for no sound)
 
-Au démarrage, si des parties existent, un menu propose de continuer l'une d'elles ou d'en créer une nouvelle.
+At startup, if games exist, a menu offers to continue one of them or to create a new one.
 """
 
 import curses
@@ -14,7 +14,7 @@ import signal
 import sys
 import time
 
-# Échap réagit en 25 ms au lieu d'une seconde ; à définir avant l'initialisation de curses.
+# Escape reacts in 25 ms instead of one second; must be set before curses is initialized.
 os.environ.setdefault("ESCDELAY", "25")
 
 import saves  # noqa: E402
@@ -25,9 +25,9 @@ from ui import UI  # noqa: E402
 
 FRAME_DURATION = 0.05
 AUTOSAVE_INTERVAL = 30
-MAX_TICK = 1.0  # après une mise en veille, le jeu ne rattrape pas tout le temps écoulé d'un coup
+MAX_TICK = 1.0  # after a sleep, the game doesn't catch up on all the elapsed time at once
 YES = ("o", "oui", "y", "yes")
-# Séquences xterm : empiler le titre du terminal, puis le vider et restaurer l'ancien.
+# xterm sequences: push the terminal title, then clear it and restore the old one.
 PUSH_TITLE = "\x1b[22;0t"
 RESTORE_TITLE = "\x1b]0;\x07\x1b[23;0t"
 
@@ -59,7 +59,7 @@ def run(scr, purged):
     scr.keypad(True)
     sound = Sound(enabled="--mute" not in sys.argv)
     slots = saves.save_slots()
-    # Sans partie lisible, on démarre sur le premier emplacement libre (main a vérifié qu'il en existe un).
+    # With no readable game, start on the first free slot (main checked that one exists).
     path = save_menu(scr, slots, sound) if slots else saves.slot_path(saves.free_slot())
     if path is None:
         return None
@@ -72,7 +72,7 @@ def run(scr, purged):
     ui = UI(scr, g, sound)
     titled = _can_set_title()
     if titled:
-        ui.title = ""  # "" active le titre (None le désactive)
+        ui.title = ""  # "" enables the title (None disables it)
         sys.__stdout__.write(PUSH_TITLE)
     last = last_save = time.monotonic()
     try:
@@ -84,14 +84,14 @@ def run(scr, purged):
                     return path
             g.tick(dt)
             ui.draw(dt)
-            ui.show_story()  # écran plein bloquant : hors de draw
+            ui.show_story()  # blocking full screen: outside of draw
             if now - last_save > AUTOSAVE_INTERVAL:
                 g.save(path)
                 last_save = now
             time.sleep(max(0.0, FRAME_DURATION - (time.monotonic() - now)))
     finally:
-        g.save(path)  # d'abord : le terminal est peut-être déjà fermé (SIGHUP)
-        run.path = path  # pour le message de fin, même après Ctrl+C
+        g.save(path)  # first: the terminal may already be closed (SIGHUP)
+        run.path = path  # for the exit message, even after Ctrl+C
         if titled:
             _restore_title()
 
@@ -101,7 +101,7 @@ def _interrupt(signum, frame):
 
 
 def reset():
-    """Efface toutes les parties après confirmation. Renvoie False si le joueur renonce."""
+    """Erases all games after confirmation. Returns False if the player backs out."""
     files = saves.all_files()
     if not files:
         print("Aucune partie à effacer.")
@@ -124,14 +124,14 @@ def reset():
 
 def main():
     locale.setlocale(locale.LC_ALL, "")
-    # Terminal fermé ou kill : même chemin que Ctrl+C, donc la partie est sauvegardée en sortant.
+    # Terminal closed or kill: same path as Ctrl+C, so the game is saved on exit.
     for sig in (signal.SIGHUP, signal.SIGTERM):
         signal.signal(sig, _interrupt)
     if "--reset" in sys.argv and not reset():
         return
     purged = saves.purge_obsolete()
     if not saves.save_slots() and saves.free_slot() is None:
-        # Jamais écraser un fichier illisible ou d'une version plus récente.
+        # Never overwrite an unreadable file or one from a newer version.
         print(f"Aucune partie utilisable et aucun emplacement libre ({saves.MAX_SLOTS} fichiers) : "
               "supprime un fichier de sauvegarde ou lance champignon --reset.")
         return

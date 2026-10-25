@@ -1,5 +1,5 @@
-"""Écrans plein écran hors partie : introduction et histoires des défis (texte tapé à la machine), menu de
-choix de la partie au lancement."""
+"""Full-screen screens outside a game: introduction and challenge stories (typewriter text), game
+selection menu at launch."""
 
 import curses
 import re
@@ -31,10 +31,10 @@ INTRO = [
     "doublage était inaudible.",
     "CET ÉTÉ... APPUIE SUR ESPACE.",
 ]
-INTRO_SPEED = 80  # caractères/s
-STORY_GUARD = 1.0  # s de touches ignorées par une histoire de défi (on martèle encore ESPACE)
+INTRO_SPEED = 80  # characters/s
+STORY_GUARD = 1.0  # seconds of keys ignored by a challenge story (players are still hammering SPACE)
 
-# Histoires de défis, affichées comme l'introduction au lancement ("start") et à la réussite ("end").
+# Challenge stories, shown like the introduction at launch ("start") and on success ("end").
 STORIES = {
     ("nanar", "start"): [
         "NANARLAND — UN FILM DE GÉRARD ZÉDÉ",
@@ -66,14 +66,14 @@ STORIES = {
 
 
 def _nbsp(text):
-    """Espaces insécables à la française : pas de « ni de » : ; ! ? orphelin en bord de ligne."""
+    """French-style non-breaking spaces: no « or » : ; ! ? left orphaned at a line edge."""
     return re.sub(r" ([»:;!?])", "\u00a0\\1", text.replace("« ", "«\u00a0"))
 
 
 def intro(scr, sound=None, pages=INTRO, guard=0.0, then="commencer"):
-    """Texte tapé à la machine (introduction, ou histoire d'un défi). Une touche affiche tout, la suivante
-    ferme. Le premier paragraphe est en gras. Les touches des guard premières secondes sont ignorées.
-    then : fin de l'invite « Appuie sur une touche pour … »."""
+    """Typewriter text (introduction, or a challenge story). One key shows everything, the next one
+    closes. The first paragraph is bold. Keys during the first guard seconds are ignored.
+    then: end of the prompt « Appuie sur une touche pour … »."""
     shown, start = 0.0, time.monotonic()
     opened = start
     scr.timeout(30)
@@ -84,7 +84,7 @@ def intro(scr, sound=None, pages=INTRO, guard=0.0, then="commencer"):
             lines = []
             for i, par in enumerate(pages):
                 lines += [(line, i == 0) for line in textwrap.wrap(_nbsp(par), bw)] + [("", False)]
-            lines = lines[:max(1, h - 3)]  # ce qui dépasse n'est ni tapé ni attendu
+            lines = lines[:max(1, h - 3)]  # overflow is neither typed nor waited for
             total = sum(len(line) for line, _ in lines)
             before, shown = int(shown), min(total, (time.monotonic() - start) * INTRO_SPEED)
             if sound and int(shown) // 6 != before // 6 and shown < total:
@@ -115,7 +115,7 @@ def intro(scr, sound=None, pages=INTRO, guard=0.0, then="commencer"):
         scr.nodelay(True)
 
 
-# --- Menu de démarrage -----------------------------------------------------------
+# --- Start menu ------------------------------------------------------------------
 
 def _number_or_zero(v):
     return v if isinstance(v, (int, float)) and not isinstance(v, bool) else 0
@@ -130,7 +130,7 @@ def _ago(wall):
 
 
 def _menu_put(scr, y, x, text, attr=0):
-    """addnstr tolérant : coupe au bord et ignore les erreurs (coin bas-droit, fenêtre minuscule)."""
+    """Lenient addnstr: clips at the edge and ignores errors (bottom-right corner, tiny window)."""
     h, w = scr.getmaxyx()
     if 0 <= y < h and 0 <= x < w - 1 and text:
         try:
@@ -140,7 +140,7 @@ def _menu_put(scr, y, x, text, attr=0):
 
 
 def save_menu(scr, slots, sound=None):
-    """Choix de la partie au lancement. Renvoie le chemin de sauvegarde, ou None pour quitter."""
+    """Game selection at launch. Returns the save path, or None to quit."""
     entries = []
     for n, path, d in slots:
         name = "Partie principale" if n == 1 else f"Partie {n}"
@@ -160,7 +160,7 @@ def save_menu(scr, slots, sound=None):
         while True:
             h, w = scr.getmaxyx()
             scr.erase()
-            # En-tête (4 lignes), liste défilante (2 lignes par partie), aide sur la dernière ligne.
+            # Header (4 lines), scrolling list (2 lines per game), help on the last line.
             visible = max(1, (h - 6) // 2)
             y = max(0, min(h // 2 - len(entries) - 3, h - 6 - 2 * min(len(entries), visible)))
             top = max(min(top, sel), sel - visible + 1)

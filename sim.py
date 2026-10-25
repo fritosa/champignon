@@ -1,6 +1,6 @@
-"""Simulation sans affichage pour vérifier l'équilibrage.
+"""Headless simulation to check the game balance.
 
-Usage : python3 champignon/sim.py [nombre_de_runs] [appuis_par_seconde]
+Usage: python3 champignon/sim.py [number_of_runs] [presses_per_second]
 """
 
 import random
@@ -25,7 +25,7 @@ def buy_units(g):
 
 
 def play_qte(g, rng):
-    """Lance la masse critique et appuie à `miss` du centre : 40 % dans le vert, 40 % dans le jaune, 20 % raté."""
+    """Starts the critical mass and presses at `miss` from the center: 40% in the green, 40% in the yellow, 20% missed."""
     events.crit_press(g)
     qte = g.qte
     r = rng.random()
@@ -68,11 +68,11 @@ def run_once(g, rng, cps):
 
 
 def spend_isotopes(g):
-    """Achète les talents de prestige, l'expansion du cœur d'abord. Renvoie les identifiants achetés."""
+    """Buys prestige talents, core expansion first. Returns the ids bought."""
     bought = []
     if g.buy_ptalent("p_cap"):
         bought.append("p_cap")
-    # On garde de quoi viser la prochaine expansion du cœur.
+    # Keep enough to aim for the next core expansion.
     reserve = g.ptalent_cost("p_cap") * 0.6 if g.pr("p_cap") < 4 else 0
     for pid in PRESTIGE_ORDER[1:] * 40:
         if g.isotopes - g.ptalent_cost(pid) >= reserve and g.buy_ptalent(pid):

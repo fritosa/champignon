@@ -59,7 +59,7 @@ class ChestTest(unittest.TestCase):
         g = exploded_game()
         g.units["soldier"] = 48
         self.open_with("army", g)
-        self.assertIn("milestone", g.sfx)  # 48 → 52 franchit le palier 50
+        self.assertIn("milestone", g.sfx)  # 48 → 52 crosses the 50 milestone
 
     def test_shield(self):
         g = exploded_game()
@@ -75,7 +75,7 @@ class ChestTest(unittest.TestCase):
         g.crit_gauge, g.challenge = 1.0, "watched"
         allowed = [k for k in events.CHEST_REWARDS if events._chest_allowed(g, k)]
         self.assertNotIn("gauge", allowed)
-        self.assertNotIn("army", allowed)  # aucune unité
+        self.assertNotIn("army", allowed)  # no units
         self.assertNotIn("shield", allowed)
 
     def test_texts_and_drop_power(self):
@@ -89,7 +89,7 @@ class ChestTest(unittest.TestCase):
     def test_choice_rechecked_when_opened(self):
         g = exploded_game()
         g.pending_chest = ["gauge", "frenzy", "pt"]
-        g.crit_gauge = 1.0  # remplie toute seule entre-temps
+        g.crit_gauge = 1.0  # filled up on its own meanwhile
         self.assertFalse(events.choose_chest(g, 0))
         self.assertEqual(g.pending_chest, ["gauge", "frenzy", "pt"])
         self.assertTrue(events.choose_chest(g, 1))
@@ -99,7 +99,7 @@ class ChestTest(unittest.TestCase):
         g.pending_chest = ["bogus"]
         before = g.next_inspector
         self.assertFalse(events.choose_chest(g, 0))
-        self.assertEqual(g.next_inspector, before)  # pas de Pots-de-vin appliqués par défaut
+        self.assertEqual(g.next_inspector, before)  # no Bribes applied by default
         self.assertNotIn("chest", g.sfx)
 
     def test_no_second_plane_while_chest_pending(self):
@@ -232,7 +232,7 @@ class NewChallengesTest(unittest.TestCase):
         g.next_inspector = g.time
         events.tick(g, 0.1)
         self.assertIsNotNone(g.inspector)
-        g.inspector["start"] = g.time - 10  # au-delà des 30 % où les gardes interviendraient
+        g.inspector["start"] = g.time - 10  # past the 30 % where the guards would step in
         events.tick(g, 0.1)
         self.assertIsNotNone(g.inspector)
 
@@ -385,7 +385,7 @@ class SynergyTest(unittest.TestCase):
         g.mutations = ["spores"]
         base = g.unit_prod("soldier")
         g.mutations.append("mitosis")
-        self.assertAlmostEqual(g.unit_prod("soldier"), base * 3 / 2)  # ×(1+2) au lieu de ×(1+1)
+        self.assertAlmostEqual(g.unit_prod("soldier"), base * 3 / 2)  # ×(1+2) instead of ×(1+1)
         g = exploded_game()
         g.mutations = ["acid"]
         halved = g.click_value(False)
@@ -452,7 +452,7 @@ class EnemyTest(unittest.TestCase):
         g = self.g
         g.level, g.next_enemy = 5, g.time
         g.tick(0.1)
-        self.assertEqual(g.enemies, [])  # trop tôt : aucun ennemi disponible, on reprogramme
+        self.assertEqual(g.enemies, [])  # too early: no enemy available, reschedule
         self.assertGreater(g.next_enemy, g.time)
         g.level, g.next_enemy = 15, g.time
         g.tick(0.1)
@@ -469,7 +469,7 @@ class EnemyTest(unittest.TestCase):
             events.chase(g)
         self.assertEqual(g.enemies, [])
         self.assertEqual(g.stats["enemies"], 1)
-        self.assertGreater(g.radiation, 0)  # butin
+        self.assertGreater(g.radiation, 0)  # loot
 
     def test_saboteur_steals(self):
         g = self.spawn("saboteur")
@@ -522,7 +522,7 @@ class EnemyTest(unittest.TestCase):
         self.assertTrue(15 <= g.next_enemy - g.time <= 30)
         g.level, g.next_enemy = 1, g.time
         g.tick(0.1)
-        self.assertTrue(g.enemies)  # tous les types dès le début
+        self.assertTrue(g.enemies)  # every type from the start
         g.challenges_done.add("invasion")
         self.assertEqual(events.enemy_duration(g, "saboteur"), events.ENEMIES["saboteur"]["dur"] * 1.5)
 
@@ -538,7 +538,7 @@ class EnemyTest(unittest.TestCase):
         self.assertEqual(sizes, [1, 2, 2, 3, 3])
         self.assertEqual(g.wave, 5)
         starts = [e["start"] - g.enemies[0]["start"] for e in g.enemies]
-        self.assertEqual(starts, [0, events.WAVE_GAP, 2 * events.WAVE_GAP])  # entrées échelonnées
+        self.assertEqual(starts, [0, events.WAVE_GAP, 2 * events.WAVE_GAP])  # staggered entries
 
     def test_chase_hits_most_advanced_and_next_wave_waits(self):
         g = self.g
@@ -548,14 +548,14 @@ class EnemyTest(unittest.TestCase):
         g.enemies = [late, early]
         for _ in range(3):
             events.chase(g)
-        self.assertEqual(g.enemies, [late])  # le plus avancé est tombé en premier
-        g.next_enemy = g.time  # échéance dépassée, mais un ennemi est encore là : pas de nouvel ennemi
+        self.assertEqual(g.enemies, [late])  # the most advanced one fell first
+        g.next_enemy = g.time  # deadline passed, but an enemy is still there: no new enemy
         g.tick(0.01)
         self.assertEqual(len(g.enemies), 1)
         for _ in range(3):
             events.chase(g)
         self.assertEqual(g.enemies, [])
-        self.assertGreater(g.next_enemy, g.time)  # le suivant est programmé quand le terrain est dégagé
+        self.assertGreater(g.next_enemy, g.time)  # the next one is scheduled once the field is clear
 
     def test_two_hippies_do_not_stack(self):
         g = self.spawn("hippies")
@@ -580,7 +580,7 @@ class ExtraChallengesTest(unittest.TestCase):
         g.challenge, g.pt = "ascete", 50
         self.assertFalse(g.buy_talent("t_click"))
         self.assertTrue(g.buy_talent("u_soldier"))
-        g.auto_talents()  # ne boucle pas à l'infini sur les talents interdits
+        g.auto_talents()  # doesn't loop forever on forbidden talents
         self.assertEqual(g.tr("t_click"), 0)
         g.challenges_done.add("ascete")
         g.challenge = None
@@ -623,7 +623,7 @@ class ExtraChallengesTest(unittest.TestCase):
         self.assertAlmostEqual(g.crit_chance(), 0.35)
 
     def test_nanar_fizzles_and_halves_production(self):
-        g = exploded_game(FixedRandom(0.2))  # 0.2 < 1/3 : pschitt
+        g = exploded_game(FixedRandom(0.2))  # 0.2 < 1/3: fizzle
         g.units["soldier"] = 10
         full = g.production()
         g.challenge = "nanar"
@@ -633,7 +633,7 @@ class ExtraChallengesTest(unittest.TestCase):
         self.assertEqual(g.radiation + g.progress, before)
         self.assertIn("fizzle", g.sfx)
         g.sfx.clear()
-        g.click(manual=False)  # l'auto-détonateur rate aussi, mais en silence
+        g.click(manual=False)  # the auto-detonator misfires too, but silently
         self.assertNotIn("fizzle", g.sfx)
         g.rng = FixedRandom(0.5)
         g.click()

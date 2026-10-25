@@ -63,7 +63,7 @@ class SlotTest(unittest.TestCase):
     def test_obsolete_purged(self):
         self.write(1, '{"version": 1}')
         self.write(2, '{"version": 1, "level": 3}')
-        self.write(3, '{"level": 3}')  # sans version : antérieur au versionnage
+        self.write(3, '{"level": 3}')  # no version: predates versioning
         self.write(4, '{"version": "2"}')
         self.write(5, "corrompu")
         with open(saves.slot_path(2) + ".tmp", "w") as f:
@@ -75,14 +75,14 @@ class SlotTest(unittest.TestCase):
         for n in (1, 2, 3, 4):
             self.assertFalse(os.path.exists(saves.slot_path(n)), n)
         self.assertFalse(os.path.exists(saves.slot_path(2) + ".tmp"))
-        self.assertTrue(os.path.exists(saves.slot_path(5)))  # illisible : jamais supprimé
+        self.assertTrue(os.path.exists(saves.slot_path(5)))  # unreadable: never deleted
         self.assertEqual(saves.free_slot(), 1)
 
     def test_newer_version_kept(self):
         self.write(1, '{"version": 99}')
         self.assertEqual(saves.purge_obsolete(), [])
         self.assertTrue(os.path.exists(saves.slot_path(1)))
-        # Ni proposée, ni chargée, ni réutilisée : elle n'est jamais réécrite avec une version plus basse.
+        # Not offered, loaded or reused: it is never rewritten with a lower version.
         self.assertEqual(saves.save_slots(), [])
         self.assertIsNone(Game.load(saves.slot_path(1)))
         self.assertEqual(saves.free_slot(), 2)
@@ -106,7 +106,7 @@ class SlotTest(unittest.TestCase):
             f.write("{}")
         files = saves.all_files()
         self.assertEqual(files, [saves.slot_path(1), saves.slot_path(2) + ".tmp", saves.slot_path(3)])
-        self.assertEqual(saves.delete(files + [saves.slot_path(9)]), [])  # fichier absent : ignoré
+        self.assertEqual(saves.delete(files + [saves.slot_path(9)]), [])  # missing file: ignored
         self.assertEqual(saves.all_files(), [])
 
 

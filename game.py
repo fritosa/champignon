@@ -1,4 +1,4 @@
-"""État du jeu et logique pure (aucune dépendance à curses)."""
+"""Game state and pure logic (no dependency on curses)."""
 
 import math
 import random
@@ -13,15 +13,15 @@ SUFFIXES = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"]
 OFFLINE_MAX = 2 * 3600
 OFFLINE_MIN = 60
 OFFLINE_SHARE = 0.25
-MAX_BULK = 1000  # au-delà, 1.15**n déborde
-AUDIO_MODES = ("all", "sfx", "off")  # musique + effets, effets seuls, muet
+MAX_BULK = 1000  # beyond that, 1.15**n overflows
+AUDIO_MODES = ("all", "sfx", "off")  # music + effects, effects only, muted
 NANAR_FIZZLE = 1 / 3
-VOLUME_STEP = 5  # en %
+VOLUME_STEP = 5  # in %
 COMBO_STEP = 0.08
 COMBO_GRACE = 0.4
 CLICK_PITCHES = 8
 PT_BONUS_EVERY = 10
-PT_LEVEL_GROWTH = 1.04  # au-delà de data.BASE_CAP, un PT tous les +4 % de niveau
+PT_LEVEL_GROWTH = 1.04  # beyond data.BASE_CAP, one PT every +4% of level
 
 
 def fmt(n):
@@ -51,13 +51,13 @@ def _is_str_list(v):
 
 
 def _valid_report(r):
-    """Résumé de partie exploitable par l'UI (sinon on l'oublie au chargement)."""
+    """Game summary usable by the UI (otherwise it is dropped on load)."""
     return (isinstance(r, dict) and r.get("kind") in ("prestige", "supernova")
             and all(_is_num(r.get(k)) for k in REPORT_NUMBERS) and all(_is_str_list(r.get(k)) for k in REPORT_LISTS))
 
 
 def _clean_run_stats(rs):
-    """Statistiques de la partie en cours : valeurs par défaut pour tout ce qui est absent ou mal typé."""
+    """Stats of the current run: defaults for anything missing or of the wrong type."""
     clean = dict(clicks=0, best_click=0.0, crits=0, earned=0.0, chests=[], inspectors=0, perfects=0)
     if isinstance(rs, dict):
         for k, default in clean.items():
@@ -67,7 +67,7 @@ def _clean_run_stats(rs):
     return clean
 
 
-THREAT_MAX = 3600  # durée maximale relue dans une sauvegarde (secondes)
+THREAT_MAX = 3600  # maximum duration read back from a save (seconds)
 
 
 def _is_delay(v):
@@ -75,8 +75,8 @@ def _is_delay(v):
 
 
 def _load_walker(d, max_hits):
-    """Inspecteur ou ennemi sauvegardé {elapsed, dur, hits} → dict de jeu sans `start` (None si invalide).
-    elapsed peut être un peu négatif : ennemi d'une vague pas encore entré."""
+    """Saved inspector or enemy {elapsed, dur, hits} → game dict without `start` (None if invalid).
+    elapsed may be slightly negative: an enemy of a wave that hasn't entered yet."""
     if not isinstance(d, dict):
         return None
     elapsed, dur, hits = d.get("elapsed"), d.get("dur"), d.get("hits")
@@ -87,24 +87,24 @@ def _load_walker(d, max_hits):
 
 
 def _rank_cost(talent, rank):
-    """Coût du rang suivant d'un talent de prestige ou de supernova (liste fixe ou croissance géométrique)."""
+    """Cost of the next rank of a prestige or supernova talent (fixed list or geometric growth)."""
     return talent["costs"][rank] if talent["costs"] else round(talent["base"] * talent["growth"] ** rank)
 
 
 def need(level):
-    """Radiation nécessaire pour passer du niveau `level` au suivant."""
+    """Radiation needed to go from level `level` to the next one."""
     return 25 * level ** 2.4
 
 
 class Game:
     def fmt(self, n):
-        """Nombre formaté pour les messages, masqué pendant le défi Brouillard de guerre."""
+        """Number formatted for messages, hidden during the Brouillard de guerre challenge."""
         return "???" if self.challenge == "blind" else fmt(n)
 
     def __init__(self, rng=None):
         self.rng = rng or random.Random()
         self.time = 0.0
-        # Permanent (survit au prestige)
+        # Permanent (survives prestige)
         self.isotopes = 0
         self.ptalents = {}
         self.prestige_count = 0
@@ -113,9 +113,9 @@ class Game:
         self.supernova_count = 0
         self.achievements = set()
         self.synergies_found = set()
-        self.last_run = None  # résumé de la dernière partie terminée (écran de fin, onglet Infos)
-        self.report_ready = False  # l'UI affiche l'écran de fin puis remet à False
-        self.pending_story = None  # (id du défi, "start" ou "end") : l'UI affiche l'histoire puis remet à None
+        self.last_run = None  # summary of the last finished run (end screen, Infos tab)
+        self.report_ready = False  # the UI shows the end screen then resets it to False
+        self.pending_story = None  # (challenge id, "start" or "end"): the UI shows the story then resets it to None
         self.challenges_done = set()
         self.skins = {"classic"}
         self.skin = "classic"
@@ -128,13 +128,13 @@ class Game:
         self.messages = deque(maxlen=8)
         self.qte_result = None
         self.flash_until = 0.0
-        self.sfx = deque(maxlen=16)  # sons à jouer, vidés par l'UI
+        self.sfx = deque(maxlen=16)  # sounds to play, drained by the UI
         self.reset_run()
 
     # --- Run ---------------------------------------------------------------------
 
     def _kept_talents(self):
-        """Talents gardés par « p_keep » (aucun au premier appel, depuis __init__ : ptalents est encore vide)."""
+        """Talents kept by "p_keep" (none on the first call, from __init__: ptalents is still empty)."""
         if not self.pr("p_keep"):
             return {}
         return {t: self.talents.get(t, 0) for t in data.KEPT_TALENTS}
@@ -169,13 +169,13 @@ class Game:
         self.last_crit = -10.0
         self.buffs = []
         self.freeze_until = 0.0
-        self.bribe_until = 0.0  # pots-de-vin : aucun inspecteur avant cette date
+        self.bribe_until = 0.0  # bribes: no inspector before this time
         self.crit_gauge = 0.0
         self.qte = None
         self.plane = None
         self.inspector = None
         self.enemies = []
-        self.wave = 0  # numéro de la dernière vague (défi Invasion)
+        self.wave = 0  # number of the last wave (Invasion challenge)
         self.schedule_enemy(first=True)
         self.next_plane = self.time + self.rng.uniform(40, 90)
         self.schedule_inspector(first=True)
@@ -198,8 +198,8 @@ class Game:
         self.next_enemy = self.time + delay
 
     def log(self, msg, kind="info", title=None):
-        """kind : info, good, bad, loot, star ou epic (couleur du bandeau dans l'UI) ;
-        title : titre court affiché en grosses lettres au-dessus du bandeau."""
+        """kind: info, good, bad, loot, star or epic (banner color in the UI);
+        title: short title shown in big letters above the banner."""
         if self.messages and self.messages[-1][0] == msg:
             self.messages.pop()
         self.messages.append((msg, self.time, kind, title))
@@ -234,7 +234,7 @@ class Game:
     def overheated(self):
         return self.time < self.overheat_until
 
-    # --- Multiplicateurs ---------------------------------------------------------
+    # --- Multipliers -------------------------------------------------------------
 
     def buff_mult(self, kind):
         m = 1.0
@@ -287,7 +287,7 @@ class Game:
         return next((m for m in data.UNIT_MILESTONES if self.units[uid] < m), None)
 
     def unit_prod(self, uid):
-        """Production d'une unité de ce type (multiplicateurs compris, hors gel)."""
+        """Production of one unit of this type (multipliers included, freeze excluded)."""
         p = data.UNIT_BY_ID[uid]["prod"] * 2 ** self.tr(f"m_{uid}") * data.MILESTONE_MULT ** self.unit_milestones(uid)
         if self.has_mut("spores"):
             p *= 1 + (0.02 if self.has_syn("proliferation") else 0.01) * self.units["soldier"]
@@ -335,7 +335,7 @@ class Game:
                 self.log("Défi Manchot : ESPACE est interdit !", "bad", title="NON !")
                 return
             if self.overheated:
-                self.sfx.append("jam")  # appui refusé, mais audible : sinon le spam semble couper le son
+                self.sfx.append("jam")  # press rejected, but audible: otherwise spamming seems to cut the sound
                 return
             if self._press_overheats():
                 self._overheat()
@@ -369,7 +369,7 @@ class Game:
         self.gain(v)
 
     def _press_overheats(self):
-        """Enregistre l'appui ; vrai s'il dépasse le seuil d'appuis sur la dernière seconde."""
+        """Records the press; true if it exceeds the press threshold over the last second."""
         self.click_times.append(self.time)
         while self.click_times and self.click_times[0] < self.time - 1:
             self.click_times.popleft()
@@ -452,7 +452,7 @@ class Game:
         return self.buy_unit_n(uid, 1) == 1
 
     def add_units(self, uid, k):
-        """Ajoute k unités et annonce chaque palier franchi."""
+        """Adds k units and announces each milestone crossed."""
         before = self.units[uid]
         self.units[uid] += k
         for m in data.UNIT_MILESTONES:
@@ -461,12 +461,12 @@ class Game:
                 self.log(f"Palier : {m} {data.UNIT_BY_ID[uid]['name']}s, production ×2 !", "good", title="PALIER")
 
     def unit_cost_n(self, uid, k):
-        """Coût total des k prochaines unités."""
+        """Total cost of the next k units."""
         n = self.units[uid]
         return sum(self.unit_cost(uid, n + i) for i in range(k))
 
     def affordable(self, uid):
-        """Nombre d'unités achetables d'un coup avec la radiation actuelle (borné à MAX_BULK)."""
+        """Number of units affordable at once with the current radiation (capped at MAX_BULK)."""
         if not self.can_buy_unit(uid):
             return 0
         k, total, n = 0, 0.0, self.units[uid]
@@ -476,11 +476,11 @@ class Game:
         return k
 
     def buy_unit_n(self, uid, k):
-        """Achète exactement k unités (tout ou rien) ; renvoie le nombre acheté."""
+        """Buys exactly k units (all or nothing); returns the number bought."""
         total = self.unit_cost_n(uid, k)
         if k <= 0 or not self.can_buy_unit(uid) or self.radiation < total:
             return 0
-        self.radiation = max(0.0, self.radiation - total)  # en un bloc : pas d'écart d'arrondi en cours de route
+        self.radiation = max(0.0, self.radiation - total)  # in one go: no rounding drift along the way
         self.add_units(uid, k)
         return k
 
@@ -492,7 +492,7 @@ class Game:
         return t["cost"][0] + t["cost"][1] * self.tr(tid)
 
     def talent_allowed(self, tid):
-        """Défi Ascète : seuls les déblocages d'unités."""
+        """Ascète challenge: unit unlocks only."""
         return self.challenge != "ascete" or tid.startswith("u_")
 
     def talent_available(self, tid):
@@ -541,7 +541,7 @@ class Game:
         return int(g * 2 ** self.sr("s_iso"))
 
     def make_report(self, kind, gain):
-        """Résumé de la partie qui se termine (prestige ou supernova)."""
+        """Summary of the run that is ending (prestige or supernova)."""
         rs = self.run_stats
         self.last_run = dict(kind=kind, gain=gain, time=self.run_time, level=self.level, cap=self.cap,
                              earned=rs["earned"], clicks=rs["clicks"], best_click=rs["best_click"], crits=rs["crits"],
@@ -552,7 +552,7 @@ class Game:
         self.report_ready = True
 
     def prestige(self, challenge=None):
-        """Prestige normal (au niveau max) ou démarrage d'un défi (toujours possible après un 1er prestige)."""
+        """Normal prestige (at max level) or start of a challenge (always possible after a 1st prestige)."""
         if self.can_prestige():
             gain = self.prestige_gain()
             self.isotopes += gain
@@ -575,7 +575,7 @@ class Game:
         self.reset_run()
         return True
 
-    # --- Supernova (2e niveau de prestige) -------------------------------------
+    # --- Supernova (2nd prestige tier) -----------------------------------------
 
     @property
     def supernova_unlocked(self):
@@ -585,12 +585,12 @@ class Game:
         return self.pr("p_cap") >= data.PTALENT_BY_ID["p_cap"]["max"] and self.level >= self.cap
 
     def supernova_gain(self):
-        """Étoiles : racine des isotopes gagnés depuis la dernière supernova (prestige en cours compris)."""
+        """Stars: square root of the isotopes earned since the last supernova (current prestige included)."""
         earned = self.stats["iso_earned"] + (self.prestige_gain() if self.can_prestige() else 0)
         return max(1, int(math.sqrt(earned / data.SUPERNOVA_DIVISOR)))
 
     def supernova(self):
-        """Remet à zéro isotopes et arbre de prestige ; garde succès, skins, défis et compteur de prestiges."""
+        """Resets isotopes and the prestige tree; keeps achievements, skins, challenges and the prestige count."""
         if not self.can_supernova():
             return False
         gain = self.supernova_gain()
@@ -607,7 +607,7 @@ class Game:
         return True
 
     def isotopes_invested(self):
-        """Isotopes possédés + dépensés dans l'arbre de prestige (estimation de ce qui a été gagné)."""
+        """Isotopes owned + spent in the prestige tree (estimate of what was earned)."""
         total = self.isotopes
         for p in data.PTALENTS:
             for r in range(self.pr(p["id"])):
@@ -629,7 +629,7 @@ class Game:
         return True
 
     def auto_talents(self):
-        """Dépense les PT : déblocages d'unités d'abord, sinon le talent le moins cher."""
+        """Spends PT: unit unlocks first, otherwise the cheapest talent."""
         while True:
             avail = [t["id"] for t in data.TALENTS if self.talent_available(t["id"]) and self.talent_allowed(t["id"])
                      and self.pt >= self.talent_cost(t["id"])]
@@ -639,7 +639,7 @@ class Game:
             self.buy_talent(unlocks[0] if unlocks else min(avail, key=self.talent_cost))
 
     def change_volume(self, step):
-        """+1 / -1 palier ; renvoie True si le volume a changé."""
+        """+1 / -1 step; returns True if the volume changed."""
         old = self.volume
         self.volume = max(0, min(100, old + step * VOLUME_STEP))
         return self.volume != old
@@ -652,7 +652,7 @@ class Game:
             if was_watched:
                 self.schedule_inspector()
 
-    # --- Boucle ------------------------------------------------------------------
+    # --- Loop --------------------------------------------------------------------
 
     def tick(self, dt):
         self.time += dt
@@ -716,7 +716,7 @@ class Game:
                 self.sfx.append("achievement")
                 self.log(f"★ Succès : {name} (+2 % de production)", "star", title="SUCCÈS")
 
-    # --- Sauvegarde --------------------------------------------------------------
+    # --- Saving ------------------------------------------------------------------
 
     SAVED = ("isotopes", "ptalents", "prestige_count", "skin", "challenge", "stats", "exploded", "level",
              "progress", "radiation", "pt", "units", "talents", "mutations", "pending_mutation", "pending_chest", "mut_index",
@@ -724,7 +724,7 @@ class Game:
              "supernova_count", "run_stats", "last_run")
 
     def threats_dict(self):
-        """Menaces en cours et échéances, en temps relatif (g.time repart de 0 au chargement)."""
+        """Current threats and deadlines, in relative time (g.time restarts from 0 on load)."""
         def walker(w):
             return dict(elapsed=self.time - w["start"], dur=w["dur"], hits=w["hits"])
 
@@ -736,7 +736,7 @@ class Game:
                     bribe=left(self.bribe_until), freeze=left(self.freeze_until))
 
     def load_threats(self, t):
-        """Restaure threats_dict ; chaque valeur invalide est ignorée (on garde celle de reset_run)."""
+        """Restores threats_dict; each invalid value is ignored (the one from reset_run is kept)."""
         if not isinstance(t, dict):
             return
         for key, attr in (("next_inspector", "next_inspector"), ("next_enemy", "next_enemy"),
@@ -782,7 +782,7 @@ class Game:
                 else:
                     setattr(g, k, v)
         if "audio" not in d and d.get("muted"):
-            g.audio = "off"  # sauvegardes d'avant la musique
+            g.audio = "off"  # saves from before the music
         if g.audio not in AUDIO_MODES:
             g.audio = "all"
         if not (_is_num(g.volume) and 0 <= g.volume <= 100):
@@ -803,12 +803,12 @@ class Game:
             chest = []
         g.pending_chest = [k for k in chest if k in events.CHEST_REWARDS] or None
         if g.challenge == "watched" and not g.inspector:
-            g.schedule_inspector(first=True)  # reset_run a tourné avant que le défi soit chargé
+            g.schedule_inspector(first=True)  # reset_run ran before the challenge was loaded
         if g.challenge == "invasion":
             g.schedule_enemy()
-        g.load_threats(d.get("threats"))  # après les échéances par défaut : la sauvegarde l'emporte
+        g.load_threats(d.get("threats"))  # after the default deadlines: the save wins
         if "iso_earned" not in d.get("stats", {}):
-            g.stats["iso_earned"] = g.isotopes_invested()  # sauvegardes d'avant la supernova
+            g.stats["iso_earned"] = g.isotopes_invested()  # saves from before the supernova
         wall = d.get("wall_time")
         g.apply_offline(time.time() - wall if isinstance(wall, (int, float)) else 0)
         return g

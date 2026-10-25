@@ -1,7 +1,7 @@
-"""Effets sonores synthétisés à la volée, joués via PulseAudio (libpulse-simple, sans dépendance Python).
+"""Sound effects synthesized on the fly, played through PulseAudio (libpulse-simple, no Python dependency).
 
-Les sons sont générés une fois au démarrage (stdlib seulement) puis mixés dans un thread qui écrit
-des petits blocs dans un flux PulseAudio. Sans PulseAudio, tout est silencieusement désactivé.
+Sounds are generated once at startup (stdlib only), then mixed in a thread that writes small blocks
+to a PulseAudio stream. Without PulseAudio, everything is silently disabled.
 """
 
 import ctypes
@@ -14,17 +14,17 @@ from array import array
 RATE = 22050
 CHUNK = 441  # 20 ms
 MAX_VOICES = 10
-MAX_MINOR = 4  # bruitages courts (appuis, tics...) joués en même temps au maximum
-DUCK = 0.5  # volume des bruitages pendant un jingle
-# Priorité des sons. À partir de JINGLE, ce sont des jingles exclusifs : un seul à la fois, un jingle
-# plus important coupe le précédent, un jingle moins (ou aussi) important est ignoré.
-# Les autres (1 par défaut) sont des bruitages, limités à MAX_MINOR voix.
+MAX_MINOR = 4  # max short sound effects (presses, ticks...) playing at once
+DUCK = 0.5  # sound effect volume while a jingle plays
+# Sound priorities. From JINGLE up, they are exclusive jingles: one at a time, a more important jingle
+# cuts off the current one, a less (or equally) important one is dropped.
+# The others (1 by default) are sound effects, capped at MAX_MINOR voices.
 JINGLE = 2
 PRIORITY = dict(supernova=6, prestige=6, boom=5, perfect=5, fanfare=4, synergy=4, achievement=4,
                 mutation=3, alarm=3, freeze=3, chased=3, milestone=3, chest=3, enemy=3,
                 talent=2, drop=2, partial=2, fizzle=2, level=2, buy=2)
 MUSIC_VOL = 0.25
-# Crête visée par effet après normalisation (DEFAULT_LEVEL sinon) : les bruitages fréquents restent plus discrets.
+# Target peak per effect after normalization (DEFAULT_LEVEL otherwise): frequent effects stay quieter.
 LEVEL = dict(tick=0.3, click=0.45, jam=0.45, plane=0.5, charge=0.5, alarm=0.6)
 DEFAULT_LEVEL = 0.8
 MUSIC_PEAK = 0.9
@@ -32,7 +32,7 @@ MUSIC_FADE_SECONDS = 1.0
 FADE_PER_CHUNK = CHUNK / RATE / MUSIC_FADE_SECONDS
 
 
-# --- Synthèse ------------------------------------------------------------------------
+# --- Synthesis -----------------------------------------------------------------------
 
 def _osc(kind, phase):
     p = phase % 1.0
@@ -46,7 +46,7 @@ def _osc(kind, phase):
 
 
 def tone(f0, f1, dur, kind="square", vol=0.3, attack=0.005, decay=None, vibrato=(0, 0)):
-    """Note avec glissando exponentiel f0 → f1, enveloppe attaque + décroissance."""
+    """Note with an exponential glide f0 → f1, attack + decay envelope."""
     length = int(dur * RATE)
     out, phase = [], 0.0
     vibrato_freq, vibrato_depth = vibrato
@@ -63,7 +63,7 @@ def tone(f0, f1, dur, kind="square", vol=0.3, attack=0.005, decay=None, vibrato=
 
 
 def noise(dur, vol=0.3, decay=0.2, cutoff=0.2, seed=0):
-    """Bruit blanc filtré passe-bas (un pôle) avec décroissance exponentielle."""
+    """Low-pass filtered (one-pole) white noise with exponential decay."""
     rng = random.Random(seed)
     out, filtered = [], 0.0
     for i in range(int(dur * RATE)):
@@ -73,7 +73,7 @@ def noise(dur, vol=0.3, decay=0.2, cutoff=0.2, seed=0):
 
 
 def mix(*parts):
-    """Superpose des (décalage en s, échantillons)."""
+    """Overlays (offset in s, samples) pairs."""
     out = [0.0] * max(int(offset * RATE) + len(samples) for offset, samples in parts)
     for offset, samples in parts:
         start = int(offset * RATE)
@@ -83,7 +83,7 @@ def mix(*parts):
 
 
 def seq(*notes, gap=0.0):
-    """Enchaîne des sons les uns après les autres."""
+    """Plays sounds one after another."""
     parts, t = [], 0.0
     for samples in notes:
         parts.append((t, samples))
@@ -107,7 +107,7 @@ def _build():
                     (0, noise(0.08, 0.5, 0.03, 0.7, 3)))
     s["overheat"] = mix((0, tone(700, 120, 0.5, "saw", 0.22)), (0, noise(0.6, 0.15, 0.3, 0.8, 4)))
     s["nope"] = tone(110, 100, 0.12, "square", 0.15)
-    s["jam"] = tone(140, 90, 0.08, "square", 0.15)  # appui refusé pendant la surchauffe
+    s["jam"] = tone(140, 90, 0.08, "square", 0.15)  # press refused during overheat
     s["buy"] = seq(tone(988, 988, 0.06, "square", 0.15), tone(1319, 1319, 0.22, "square", 0.15, decay=0.08))
     s["milestone"] = mix((0, seq(*(tone(f, f, 0.06, "square", 0.12) for f in (784, 988, 1175, 1568)))),
                          (0.24, tone(2093, 2093, 0.3, "tri", 0.2, decay=0.1)))
@@ -135,47 +135,47 @@ def _build():
     s["synergy"] = mix((0, s["mutation"]), (0.35, seq(*(tone(f, f, 0.08, "tri", 0.3) for f in (659, 831, 988, 1319)))))
     s["fanfare"] = seq(*(tone(f, f, d, "square", 0.15) for f, d in
                          ((392, 0.1), (392, 0.1), (392, 0.1), (523, 0.5))), gap=0.03)
-    # Ramène chaque son à sa crête visée : les couches superposées ne saturent pas, les sons ténus s'entendent.
+    # Bring each sound to its target peak: stacked layers don't clip, faint sounds stay audible.
     return {name: _normalize(samples, LEVEL.get(name.rstrip("0123456789"), DEFAULT_LEVEL))
             for name, samples in s.items()}
 
 
-# --- Musique ---------------------------------------------------------------------------
+# --- Music -----------------------------------------------------------------------------
 
 BEAT = 0.5  # 120 bpm
 BEATS_PER_BAR = 4
 BARS = 8
-SWING = 2 / 3  # la croche du temps faible tombe aux deux tiers du temps (swing ternaire)
+SWING = 2 / 3  # the off-beat eighth lands two thirds into the beat (triplet swing)
 C3, D3, E2, F2, G2, A2, B2 = 130.8, 146.8, 82.4, 87.3, 98.0, 110.0, 123.5
-# Accords en demi-tons au-dessus de la fondamentale : sixte et septièmes du jazz des années 40.
+# Chords in semitones above the root: sixths and sevenths of 1940s jazz.
 MAJ6, MIN6, MIN7, DOM7 = (0, 4, 7, 9), (0, 3, 7, 9), (0, 3, 7, 10), (0, 4, 7, 10)
-# Un accord (fondamentale, accord) par mesure, façon radio d'abri antiatomique : crooner, film noir, big band.
+# One (root, chord) per bar, fallout-shelter radio style: crooner, film noir, big band.
 PROGRESSIONS = {
     "calm": [(C3, MAJ6), (A2, DOM7), (D3, MIN7), (G2, DOM7), (C3, MAJ6), (E2, DOM7), (F2, MAJ6), (G2, DOM7)],
     "tension": [(A2, MIN6), (A2, MIN6), (D3, MIN6), (E2, DOM7), (A2, MIN6), (F2, DOM7), (B2, MIN7), (E2, DOM7)],
     "epic": [(C3, MAJ6), (C3, MAJ6), (F2, MAJ6), (F2, MAJ6), (C3, MAJ6), (A2, DOM7), (D3, MIN7), (G2, DOM7)],
 }
-# Rythmes du thème (débuts de note en temps, durée en temps), tirés au hasard mesure par mesure.
+# Theme rhythms (note start in beats, length in beats), picked at random bar by bar.
 PHRASES = [((0, 1.5), (1.5, 0.5), (2, 2)), ((0, SWING), (SWING, 1 - SWING), (1, 1), (3, 1)),
            ((1, 1), (2, 1), (3, 1)), ((0, 3),), ((0.5 + SWING / 2, 1), (2, 0.5), (2 + SWING, 1.3))]
-# Arrangement de chaque piste, en temps de la mesure. Contrebasse : temps joués parmi fondamentale, tierce,
-# quinte, approche ; thème : joué une mesure sur theme_every.
+# Arrangement of each track, in beats of the bar. Bass: beats played among root, third, fifth, approach;
+# theme: played one bar out of theme_every.
 STYLES = {
-    "calm": dict(bass=(0, 2), piano=(1, 3), kick=(), theme_every=1),  # ballade de crooner
-    "tension": dict(bass=(0, 1, 2, 3), piano=(1, 3), kick=(), theme_every=2),  # thème en suspens
+    "calm": dict(bass=(0, 2), piano=(1, 3), kick=(), theme_every=1),  # crooner ballad
+    "tension": dict(bass=(0, 1, 2, 3), piano=(1, 3), kick=(), theme_every=2),  # suspended theme
     "epic": dict(bass=(0, 1, 2, 3), piano=(1, 3, 2 + SWING, 3 + SWING), kick=(0, 2), theme_every=1),  # big band
 }
-RIDE = (0, 1, 1 + SWING, 2, 3, 3 + SWING)  # « ding, ding-a ding » sur la cymbale
-BRUSH = (1, 3)  # balais frottés
-RADIO_LOW_CUT = 0.93  # passe-haut à un pôle (~250 Hz) : pas de grave, comme un petit haut-parleur
-RADIO_HIGH_CUT = 0.45  # passe-bas à un pôle, appliqué deux fois (~3 kHz)
+RIDE = (0, 1, 1 + SWING, 2, 3, 3 + SWING)  # "ding, ding-a ding" on the ride cymbal
+BRUSH = (1, 3)  # swept brushes
+RADIO_LOW_CUT = 0.93  # one-pole high-pass (~250 Hz): no bass, like a small speaker
+RADIO_HIGH_CUT = 0.45  # one-pole low-pass, applied twice (~3 kHz)
 CRACKLES_PER_SECOND = 7
-CRACKLE_LENGTH, CRACKLE_DECAY = 12, 0.6  # échantillons, décroissance par échantillon
-NOTE_RELEASE = 0.01  # fondu final des notes (s) : une note coupée net claque
+CRACKLE_LENGTH, CRACKLE_DECAY = 12, 0.6  # samples, decay per sample
+NOTE_RELEASE = 0.01  # note fade-out (s): a note cut dead clicks
 
 
 def _note(*args, **kwargs):
-    """tone() terminé par un court fondu à zéro, pour les notes de la musique."""
+    """tone() ending with a short fade to zero, for music notes."""
     samples = tone(*args, **kwargs)
     n = min(len(samples), int(NOTE_RELEASE * RATE))
     for i in range(n):
@@ -184,7 +184,7 @@ def _note(*args, **kwargs):
 
 
 def _add_at(out, t, samples):
-    """Ajoute les échantillons à partir de t secondes, repliés au début de out (la piste boucle)."""
+    """Adds samples starting at t seconds, wrapping to the start of out (the track loops)."""
     start, n = int(t * RATE), len(out)
     for i, x in enumerate(samples):
         out[(start + i) % n] += x
@@ -195,15 +195,15 @@ def _semitones(n):
 
 
 def _radio(track, seed):
-    """Vieux poste : bande passante étroite, souffle et craquements de vinyle. Les filtres tournent deux fois
-    sur la boucle pour que leur état à la fin rejoigne le début (pas de clic au bouclage)."""
+    """Old radio set: narrow bandwidth, hiss and vinyl crackle. The filters run twice over the loop so
+    their state at the end matches the start (no click at the loop point)."""
     rng = random.Random(f"{seed}-craquements")
     n = len(track)
     for _ in range(int(n / RATE * CRACKLES_PER_SECOND)):
         pos, amp = rng.randrange(n), rng.uniform(0.05, 0.3) * rng.choice((-1, 1))
         for i in range(CRACKLE_LENGTH):
             track[(pos + i) % n] += amp * CRACKLE_DECAY ** i
-    hiss = noise((n + 1) / RATE, 0.012, 1e9, 0.9, f"{seed}-souffle")[:n]  # +1 : jamais plus court que la piste
+    hiss = noise((n + 1) / RATE, 0.012, 1e9, 0.9, f"{seed}-souffle")[:n]  # +1: never shorter than the track
     track = [x + h for x, h in zip(track, hiss)]
     out = [0.0] * n
     prev_x = high = low1 = low2 = 0.0
@@ -224,7 +224,7 @@ def _play(out, bar_start, beats, samples):
 
 
 def _bass(out, bar_start, root, chord, next_root, beats):
-    """Contrebasse qui marche : fondamentale, tierce, quinte, puis une note chromatique vers l'accord suivant."""
+    """Walking bass: root, third, fifth, then a chromatic approach note to the next chord."""
     approach = next_root * _semitones(-1 if next_root > root else 1)
     walk = [root, root * _semitones(chord[1]), root * _semitones(chord[2]), approach]
     for beat in beats:
@@ -233,7 +233,7 @@ def _bass(out, bar_start, root, chord, next_root, beats):
 
 
 def _theme(out, bar_start, root, chord, rng):
-    """Notes de l'accord deux octaves au-dessus, légèrement vibrées comme un vibraphone."""
+    """Chord notes two octaves up, with slight vibrato like a vibraphone."""
     for start, length in rng.choice(PHRASES):
         f = root * 4 * _semitones(rng.choice(chord))
         note = _note(f, f, length * BEAT, "sine", 0.16, attack=0.01, decay=length * BEAT * 0.6, vibrato=(5, 0.006))
@@ -241,13 +241,13 @@ def _theme(out, bar_start, root, chord, rng):
 
 
 def _track(name):
-    """Boucle de BARS mesures en swing (contrebasse, piano, balais, thème de vibraphone) passée à la radio."""
+    """Swing loop of BARS bars (bass, piano, brushes, vibraphone theme) run through the radio."""
     out = [0.0] * int(BARS * BEATS_PER_BAR * BEAT * RATE)
     style = STYLES[name]
     rng = random.Random(name)
     ride = noise(0.18, 0.1, 0.06, 0.95, 21)
     brush = noise(0.25, 0.12, 0.1, 0.4, 22)
-    # Sous le passe-haut de la radio, seul le claquement de la grosse caisse passe : on le lui donne.
+    # Under the radio's high-pass only the kick's click gets through, so give it one.
     kick = mix((0, _note(180, 70, 0.15, "sine", 0.5, decay=0.06)), (0, noise(0.03, 0.4, 0.01, 0.5, 23)))
     progression = PROGRESSIONS[name]
     for bar, (root, chord) in enumerate(progression):
@@ -267,42 +267,42 @@ def _build_music():
     return {name: _track(name) for name in STYLES}
 
 
-CEIL = 0.95  # crête maximale en sortie
-RELEASE = 0.02  # remontée du gain du limiteur par bloc de CHUNK échantillons
+CEIL = 0.95  # max output peak
+RELEASE = 0.02  # limiter gain recovery per block of CHUNK samples
 
 
 def _limiter(buf, gain, vol=1.0):
-    """Limiteur à gain : si la crête du bloc (× vol) dépasse CEIL, le gain descend en rampe jusqu'au premier
-    échantillon trop fort, puis remonte de RELEASE par bloc. L'onde n'est jamais déformée (une saturation
-    échantillon par échantillon fait craquer la musique dès qu'un effet fort s'y ajoute).
-    Renvoie (échantillons, gain final) ; le gain est continu d'un échantillon et d'un bloc à l'autre."""
+    """Gain limiter: if the block peak (× vol) exceeds CEIL, the gain ramps down until the first sample
+    that is too loud, then recovers by RELEASE per block. The waveform is never distorted (per-sample
+    clipping makes the music crackle as soon as a loud effect is added on top).
+    Returns (samples, final gain); the gain is continuous across samples and blocks."""
     peak = max(map(abs, buf), default=0.0) * vol
     safe_gain = CEIL / peak if peak > CEIL else 1.0
     if safe_gain < gain:
-        # Les échantillons avant le premier trop fort restent sous CEIL avec un gain ≤ gain : on a jusqu'à lui
-        # pour descendre.
+        # Samples before the first loud one stay under CEIL with any gain ≤ gain: we have until it
+        # to ramp down.
         first_loud = next(i for i, x in enumerate(buf) if abs(x) * vol * gain > CEIL)
         return [x * vol * (gain + (safe_gain - gain) * min(1.0, (i + 1) / (first_loud + 1)))
                 for i, x in enumerate(buf)], safe_gain
     released = min(safe_gain, gain + RELEASE)
-    if released == gain == 1.0:  # cas courant : rien à limiter, recopie seulement si le volume est réduit
+    if released == gain == 1.0:  # common case: nothing to limit, copy only if the volume is reduced
         return ([x * vol for x in buf] if vol != 1.0 else buf), released
     n = len(buf)
     return [x * vol * (gain + (released - gain) * (i + 1) / n) for i, x in enumerate(buf)], released
 
 
-# --- Sortie PulseAudio -------------------------------------------------------------
+# --- PulseAudio output -------------------------------------------------------------
 
 PA_SAMPLE_S16LE = 3
 MONO = 1
 PA_STREAM_PLAYBACK = 1
-PA_DEFAULT = 0xFFFFFFFF  # (uint32_t) -1 : valeur choisie par le serveur
+PA_DEFAULT = 0xFFFFFFFF  # (uint32_t) -1: value chosen by the server
 BYTES_PER_SAMPLE = 2
 LATENCY_CHUNKS = 4  # ~80 ms
-PCM_SCALE = 32000  # un peu sous 32767, la crête des entiers 16 bits
-# Souffle de fond inaudible (±2 pas sur 32 000, ~-84 dB) ajouté en sortie : la sortie audio de WSLg (bureau à
-# distance de Windows) coupe un flux de silence pur et met du temps à le relancer, les effets arrivent alors en
-# retard et hachés dès que la musique est éteinte.
+PCM_SCALE = 32000  # slightly under 32767, the 16-bit integer peak
+# Inaudible background hiss (±2 steps out of 32,000, ~-84 dB) added to the output: WSLg's audio output (Windows
+# Remote Desktop) cuts a stream of pure silence and is slow to restart it, so effects come late and choppy
+# whenever the music is off.
 KEEPALIVE_LSB = 2
 _rng = random.Random(0)
 _KEEPALIVE = array("h", (_rng.randint(-KEEPALIVE_LSB, KEEPALIVE_LSB) for _ in range(RATE)))
@@ -310,7 +310,7 @@ del _rng
 
 
 def _keep_alive(pcm, pos):
-    """Ajoute au bloc PCM le souffle de fond, à partir de l'échantillon pos de sa boucle d'une seconde."""
+    """Adds the background hiss to the PCM block, starting at sample pos of its one-second loop."""
     samples = array("h", pcm)
     n = len(_KEEPALIVE)
     for i in range(len(samples)):
@@ -349,9 +349,9 @@ class Sound:
     def __init__(self, enabled=True):
         self.muted = False
         self.music_on = True
-        self.volume = 1.0  # volume général (effets et musique), 0..1
+        self.volume = 1.0  # master volume (effects and music), 0..1
         self.ok = False
-        self.voices = []  # [échantillons, position, volume, priorité, en fondu de sortie]
+        self.voices = []  # [samples, position, volume, priority, fading out]
         self.tracks = {}
         self.music = self.wanted_music = None
         self.music_gain = 0.0
@@ -392,7 +392,7 @@ class Sound:
             return
         self.ok = True
         err = ctypes.c_int()
-        # La musique (~2 s de calcul) est générée à côté pour ne pas retarder les effets.
+        # Music (~2 s to compute) is generated alongside so it doesn't delay the effects.
         threading.Thread(target=lambda: setattr(self, "tracks", _build_music()), daemon=True).start()
         floor_pos = 0
         while True:
@@ -403,7 +403,7 @@ class Sound:
                 return
 
     def _mix(self):
-        """Mélange les voix actives sur un bloc de CHUNK échantillons, renvoie le PCM 16 bits."""
+        """Mixes the active voices over a block of CHUNK samples, returns 16-bit PCM."""
         buf = [0.0] * CHUNK
         with self.lock:
             if self.muted:
@@ -425,7 +425,7 @@ class Sound:
         return array("h", (int(x * PCM_SCALE) for x in out)).tobytes()
 
     def _mix_music(self, buf):
-        """Ajoute la piste en boucle, avec fondu sortant puis entrant quand la piste voulue change."""
+        """Adds the looping track, fading out then in when the wanted track changes."""
         if self.muted:
             self.music, self.music_gain = None, 0.0
         wanted = self.wanted_music if self.music_on and not self.muted else None

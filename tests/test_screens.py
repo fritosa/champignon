@@ -1,4 +1,4 @@
-"""Tests des écrans hors partie (introduction, histoires des défis, menu des parties) sur un écran factice."""
+"""Tests for the out-of-game screens (intro, challenge stories, save menu) on a fake screen."""
 
 import curses
 import os
@@ -42,14 +42,14 @@ class SaveMenuTest(unittest.TestCase):
     def test_enter_continues_main(self):
         path, scr = self.menu([10])
         self.assertEqual(path, saves.slot_path(1))
-        self.assertEqual(scr.delay, [False, True])  # mode bloquant restauré
+        self.assertEqual(scr.delay, [False, True])  # blocking mode restored
 
     def test_navigate_to_second(self):
         path, _ = self.menu([curses.KEY_DOWN, ord("z"), 10])
         self.assertEqual(path, saves.slot_path(2))
 
     def test_new_game_uses_free_slot(self):
-        path, scr = self.menu([curses.KEY_UP, 10])  # remonte en boucle sur « Nouvelle partie »
+        path, scr = self.menu([curses.KEY_UP, 10])  # wraps up to "Nouvelle partie"
         self.assertEqual(path, saves.slot_path(3))
         self.assertTrue(any("Nouvelle partie" in t for t in scr.text))
         self.assertTrue(any("Continuer : Partie 2" in t for t in scr.text))
@@ -75,7 +75,7 @@ class SaveMenuTest(unittest.TestCase):
         path, scr = self.menu([curses.KEY_UP] + [10], size=(24, 80))
         self.assertEqual(path, saves.slot_path(16))
         self.assertTrue(any("Nouvelle partie" in t for t in scr.text))
-        self.assertFalse(any("Partie principale" in t for t in scr.text))  # défilé hors écran
+        self.assertFalse(any("Partie principale" in t for t in scr.text))  # scrolled off screen
 
     def test_bad_field_types(self):
         self.slots = [(1, saves.slot_path(1), {"level": "5", "isotopes": None, "prestige_count": [],
@@ -108,7 +108,7 @@ class IntroTest(unittest.TestCase):
         screens.intro(scr)
 
     def test_texts_fit_80x24(self):
-        # Le terminal par défaut : le dernier paragraphe (introduction ou histoire) doit rester visible.
+        # The default terminal: the last paragraph (intro or story) must stay visible.
         for pages in [screens.INTRO] + list(screens.STORIES.values()):
             scr = FakeScreen([ord("a"), ord("b")], size=(24, 80))
             scr.timeout = lambda ms: None
@@ -117,14 +117,14 @@ class IntroTest(unittest.TestCase):
             self.assertTrue(any(last in t for t in scr.text), pages[0])
 
     def test_story_ignores_keys_at_first(self):
-        # Le joueur martèle encore ESPACE quand l'histoire s'ouvre : ces appuis ne la ferment pas.
+        # The player is still hammering SPACE when the story opens: those presses don't close it.
         clock = iter(i * 0.3 for i in range(1000))
         scr = FakeScreen([ord(" ")] * 4)
         scr.timeout = lambda ms: None
         with mock.patch.object(screens.time, "monotonic", lambda: next(clock)), self.assertRaises(IndexError):
-            screens.intro(scr, None, screens.STORIES[("nanar", "end")], guard=60)  # toujours ouverte quand les touches s'épuisent
-        self.assertEqual(scr.keys, [])  # les 4 appuis ont été lus (et ignorés), l'IndexError vient de getch
-        self.assertFalse(any("continuer" in t or "commencer" in t for t in scr.text))  # texte pas encore affiché en entier
+            screens.intro(scr, None, screens.STORIES[("nanar", "end")], guard=60)  # still open when the keys run out
+        self.assertEqual(scr.keys, [])  # all 4 presses were read (and ignored), the IndexError comes from getch
+        self.assertFalse(any("continuer" in t or "commencer" in t for t in scr.text))  # text not fully shown yet
 
     def test_stories_match_challenges(self):
         for cid, part in screens.STORIES:

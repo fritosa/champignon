@@ -67,7 +67,7 @@ class ClickTest(unittest.TestCase):
         g.sfx.clear()
         g.click()
         self.assertEqual(g.radiation, before)
-        self.assertEqual(list(g.sfx), ["jam"])  # appui refusé mais audible
+        self.assertEqual(list(g.sfx), ["jam"])  # press refused but audible
 
     def test_crit_sound_only_when_manual(self):
         g = exploded_game(FixedRandom(0.0))
@@ -86,7 +86,7 @@ class ClickTest(unittest.TestCase):
         g.click()
         self.assertEqual(g.stats["clicks"], 0)
         self.assertIn("nope", g.sfx)
-        self.assertEqual(len(g.messages), 1)  # message répété → dédoublonné
+        self.assertEqual(len(g.messages), 1)  # repeated message → deduplicated
 
 
 class LevelTest(unittest.TestCase):
@@ -174,7 +174,7 @@ class ShopTest(unittest.TestCase):
         g.units["soldier"] = 45
         g.radiation = 1e30
         g.buy_unit_n("soldier", 60)
-        self.assertEqual(g.sfx.count("milestone"), 2)  # 50 et 100
+        self.assertEqual(g.sfx.count("milestone"), 2)  # 50 and 100
 
     def test_affordable_bounded(self):
         g = exploded_game()
@@ -186,7 +186,7 @@ class ShopTest(unittest.TestCase):
     def test_talent_cost_and_requirements(self):
         g = exploded_game()
         g.pt = 10
-        self.assertFalse(g.buy_talent("t_crit"))  # demande t_click
+        self.assertFalse(g.buy_talent("t_crit"))  # requires t_click
         self.assertTrue(g.buy_talent("t_click"))
         self.assertEqual(g.pt, 9)
         self.assertEqual(g.talent_cost("t_click"), 2)
@@ -334,16 +334,16 @@ class SupernovaTest(unittest.TestCase):
         g.buy_stalent("s_core")
         self.assertEqual(g.ptalent_cost("p_cap"), round(full * 0.8))
         g.supernova_count = 1
-        self.assertEqual(g.cap, data.BASE_CAP)  # ne touche pas au niveau max de départ
+        self.assertEqual(g.cap, data.BASE_CAP)  # leaves the starting max level alone
 
     def test_auto_talents(self):
         g = exploded_game()
         g.stalents["s_auto"] = 1
         g.pt = 3
         g.tick(1.0)
-        self.assertEqual(g.tr("u_soldier"), 1)  # déblocage acheté en priorité
+        self.assertEqual(g.tr("u_soldier"), 1)  # unlock bought first
         self.assertFalse(any(g.talent_available(t["id"]) and g.pt >= g.talent_cost(t["id"])
-                             for t in data.TALENTS))  # puis tout ce qui est abordable
+                             for t in data.TALENTS))  # then everything affordable
 
     def test_star_cost_and_max(self):
         g = exploded_game()
@@ -370,7 +370,7 @@ class RunReportTest(unittest.TestCase):
         g.click()
         g.click(manual=False)
         rs = g.run_stats
-        self.assertEqual((rs["clicks"], rs["crits"]), (1, 1))  # l'appui automatique ne compte pas
+        self.assertEqual((rs["clicks"], rs["crits"]), (1, 1))  # the automatic press doesn't count
         self.assertAlmostEqual(rs["best_click"], 10 * 1.08)
         self.assertAlmostEqual(rs["earned"], g.radiation)
 
@@ -388,7 +388,7 @@ class RunReportTest(unittest.TestCase):
                          ("prestige", gain, data.BASE_CAP, 300, 12, 1))
         self.assertEqual(r["synergies"], ["Prolifération"])
         self.assertEqual(r["chests"], ["Frénésie"])
-        self.assertEqual(g.run_stats["chests"], [])  # remis à zéro pour la partie suivante
+        self.assertEqual(g.run_stats["chests"], [])  # reset for the next run
 
     def test_challenge_start_without_gain_has_no_report(self):
         g = exploded_game()
@@ -435,9 +435,9 @@ class RunReportTest(unittest.TestCase):
             g.click()
             g.pending_chest = ["frenzy"]
             import events
-            events.choose_chest(g, 0)  # ne plante plus
+            events.choose_chest(g, 0)  # no longer crashes
             self.assertEqual(g.run_stats["chests"], ["Frénésie"])
-        self.assertEqual(g.run_stats["clicks"], 5)  # la valeur valide (4) est gardée
+        self.assertEqual(g.run_stats["clicks"], 5)  # the valid value (4) is kept
 
     def test_unknown_mutations_filtered(self):
         d = exploded_game().to_dict()
@@ -445,7 +445,7 @@ class RunReportTest(unittest.TestCase):
         g = self.write(d)
         self.assertEqual((g.mutations, g.pending_mutation), (["spores"], None))
         g.level = g.cap
-        self.assertTrue(g.prestige())  # plus de KeyError dans le résumé
+        self.assertTrue(g.prestige())  # no more KeyError in the summary
 
     def test_report_and_synergies_saved(self):
         g = exploded_game()
@@ -457,7 +457,7 @@ class RunReportTest(unittest.TestCase):
             g.save(path)
             h = Game.load(path)
         self.assertEqual(h.last_run["kind"], "prestige")
-        self.assertFalse(h.report_ready)  # l'écran ne revient pas au rechargement
+        self.assertFalse(h.report_ready)  # the screen doesn't come back on reload
         self.assertEqual(h.synergies_found, {"storm"})
 
 
@@ -612,7 +612,7 @@ class SaveTest(unittest.TestCase):
         g = exploded_game()
         g.challenge = "watched"
         d = g.to_dict()
-        del d["threats"]  # sauvegarde d'avant l'enregistrement des menaces
+        del d["threats"]  # save from before threats were recorded
         with open(self.path, "w") as f:
             json.dump(d, f)
         h = Game.load(self.path)
@@ -621,7 +621,7 @@ class SaveTest(unittest.TestCase):
     def test_volume_saved_and_validated(self):
         g = exploded_game()
         self.assertEqual(g.volume, 100)
-        self.assertFalse(g.change_volume(1))  # déjà au maximum
+        self.assertFalse(g.change_volume(1))  # already at max
         self.assertTrue(g.change_volume(-1))
         g.save(self.path)
         self.assertEqual(Game.load(self.path).volume, 95)
@@ -637,10 +637,10 @@ class SaveTest(unittest.TestCase):
 
     def test_threats_survive_reload(self):
         g = exploded_game()
-        g.time += 500  # le temps de jeu repart de 0 au chargement : tout doit être relatif
+        g.time += 500  # game time restarts at 0 on load: everything must be relative
         g.inspector = dict(start=g.time - 5, dur=20.0, hits=2)
         g.enemies = [dict(kind="commando", start=g.time - 3, dur=20.0, hits=4),
-                     dict(kind="drone", start=g.time + 1.5, dur=15.0, hits=0)]  # pas encore entré
+                     dict(kind="drone", start=g.time + 1.5, dur=15.0, hits=0)]  # not entered yet
         g.wave = 7
         g.next_inspector, g.next_enemy = g.time + 40, g.time + 70
         g.bribe_until, g.freeze_until = g.time + 100, g.time + 8

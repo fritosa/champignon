@@ -1,11 +1,11 @@
-"""Événements aléatoires, masse critique, mutations, succès et actualités (logique pure)."""
+"""Random events, critical mass, mutations, achievements and news (pure logic)."""
 
 import data
 
-# Lettres utilisables pour attraper un ravitaillement (aucune touche de contrôle).
+# Letters usable to catch a supply drop (no control keys).
 DROP_LETTERS = "abcdeghilnoprstuvwyz"
 
-# (id, nom, effet)
+# (id, name, effect)
 MUTATIONS = [
     ("spores", "Spores radioactives", "+1 % de production par soldat."),
     ("twin", "Champignon jumeau", "Détonation ×2 (et un deuxième chapeau !)."),
@@ -22,8 +22,8 @@ MUTATIONS = [
 ]
 MUTATION_BY_ID = {m[0]: m for m in MUTATIONS}
 
-# (id, nom, (mutation, mutation), effet) : deux mutations précises débloquent un bonus caché.
-# Chaque mutation n'est que dans une seule paire.
+# (id, name, (mutation, mutation), effect): two specific mutations unlock a hidden bonus.
+# Each mutation belongs to only one pair.
 SYNERGIES = [
     ("proliferation", "Prolifération", ("spores", "mitosis"), "Spores : +2 % de production par soldat au lieu de 1 %."),
     ("chain", "Fission en cascade", ("unstable", "glow"), "Chaque détonation critique charge 3 % de la masse critique."),
@@ -36,7 +36,7 @@ SYNERGY_BY_ID = {s[0]: s for s in SYNERGIES}
 
 
 def synergy_completed_by(g, mid):
-    """Synergie qu'apporterait la mutation mid avec les mutations déjà possédées (ou None)."""
+    """Synergy that mutation mid would complete with the mutations already owned (or None)."""
     for syn in SYNERGIES:
         pair = syn[2]
         if mid in pair:
@@ -50,7 +50,7 @@ _FIRST_MUTATION_LEVELS = (25, 50, 75, 100)
 
 
 def mutation_milestone(i):
-    """Niveaux déclenchant une mutation : 25, 50, 75, 100, puis 200, 400, 800..."""
+    """Levels that trigger a mutation: 25, 50, 75, 100, then 200, 400, 800..."""
     if i < len(_FIRST_MUTATION_LEVELS):
         return _FIRST_MUTATION_LEVELS[i]
     return 100 * 2 ** (i - 3)
@@ -60,7 +60,7 @@ def _unit_count(g):
     return sum(g.units.values())
 
 
-# (id, nom, condition affichée, test sur la partie)
+# (id, name, displayed condition, test on the game)
 ACHIEVEMENTS = [
     ("boom", "Premier boom", "Déclenche l'explosion.", lambda g: g.exploded),
     ("lvl10", "Ça chauffe", "Niveau 10.", lambda g: g.stats["max_level"] >= 10),
@@ -109,7 +109,7 @@ ACHIEVEMENTS = [
 ]
 ACHIEVEMENT_BY_ID = {a[0]: a for a in ACHIEVEMENTS}
 
-# (niveau minimum, titre). Le bandeau tire au hasard parmi ceux débloqués.
+# (minimum level, headline). The banner picks at random among the unlocked ones.
 NEWS = [
     (0, "Un militaire distrait a laissé une bombe dans le jardin. Rien d'inquiétant."),
     (0, "Les autorités recommandent de ne PAS appuyer sur la barre d'espace."),
@@ -180,11 +180,11 @@ def pick_news(g):
     if g.prestige_count:
         pool += NEWS_PRESTIGE
     if g.challenge == "nanar":
-        pool += NEWS_NANAR * 3  # le défi impose son ambiance
+        pool += NEWS_NANAR * 3  # the challenge sets the mood
     return g.rng.choice(pool)
 
 
-# --- Ravitaillements -----------------------------------------------------------
+# --- Supply drops --------------------------------------------------------------
 
 def _radar_bonus(g):
     return 1 + 0.3 * g.tr("l_radar")
@@ -199,7 +199,7 @@ CHEST_REWARDS = ("frenzy", "clickfrenzy", "lump", "pt", "gauge", "army", "shield
 
 
 def catch(g, letter):
-    """Attraper le colis ouvre un coffre : 3 bonus au choix (choose_chest)."""
+    """Catching the parcel opens a chest: a choice of 3 bonuses (choose_chest)."""
     plane = g.plane
     if not plane or letter != plane["letter"] or g.pending_chest:
         return False
@@ -228,7 +228,7 @@ def _drop_power(g):
 
 
 def chest_text(g, kind):
-    """(nom, description) d'un bonus de coffre, chiffres compris."""
+    """(name, description) of a chest bonus, numbers included."""
     power = _drop_power(g)
     if kind == "frenzy":
         return "Frénésie", f"Production ×7 pendant {30 * power:.0f} s."
@@ -254,7 +254,7 @@ def _chest_points(g):
 
 
 def choose_chest(g, idx):
-    """Applique le bonus choisi ; False si le choix est invalide ou n'a plus d'effet (la jauge s'est remplie)."""
+    """Applies the chosen bonus; False if the choice is invalid or no longer has an effect (the gauge filled up)."""
     if not g.pending_chest or idx >= len(g.pending_chest) or not _chest_allowed(g, g.pending_chest[idx]):
         return False
     kind = g.pending_chest[idx]
@@ -291,19 +291,19 @@ def choose_chest(g, idx):
     return True
 
 
-# --- Inspecteurs de l'ONU ---------------------------------------------------
+# --- UN inspectors ----------------------------------------------------------
 
 INSPECTOR_HITS = 5
 _INSPECTOR_LEVEL = 10
 
 
 def _inspector_can_come(g):
-    """Le brouillard cache le champignon aux inspecteurs, sauf pendant le défi Sous surveillance."""
+    """The fog hides the mushroom from inspectors, except during the Sous surveillance challenge."""
     return g.level >= _INSPECTOR_LEVEL and (g.challenge == "watched" or not g.has_mut("fog"))
 
 
 def chase(g):
-    """X frappe l'inspecteur s'il y en a un, sinon l'autre ennemi présent."""
+    """X hits the inspector if there is one, otherwise the other enemy present."""
     inspector = g.inspector
     if inspector:
         inspector["hits"] += 1
@@ -331,13 +331,13 @@ def _inspector_gone(g, chased):
         g.log(f"L'inspecteur s'enfuit en courant ! (+{g.fmt(bonus)} ☢ de matériel abandonné)", "good", title="OUSTE !")
 
 
-# --- Autres ennemis -----------------------------------------------------------
-# g.enemies : un seul à la fois en temps normal, des vagues de 1 à 3 pendant le défi Invasion (ils arrivent
-# à WAVE_GAP s d'écart). X les chasse aussi : l'inspecteur d'abord, puis l'ennemi le plus avancé.
-# Effet à l'arrivée sur le champignon : _enemy_arrives. Les manifestants, eux, agissent pendant toute leur présence.
+# --- Other enemies ------------------------------------------------------------
+# g.enemies: only one at a time normally, waves of 1 to 3 during the Invasion challenge (arriving
+# WAVE_GAP s apart). X chases them too: the inspector first, then the most advanced enemy.
+# Effect on reaching the mushroom: _enemy_arrives. Protesters, however, act for as long as they are present.
 
-# level : niveau d'apparition, hits : coups de X pour le chasser, dur : secondes pour atteindre le champignon,
-# sky : vole (dessiné dans le ciel), desc : effet annoncé.
+# level: level it appears at, hits: X presses to chase it, dur: seconds to reach the mushroom,
+# sky: flies (drawn in the sky), desc: announced effect.
 ENEMIES = {
     "saboteur": dict(name="Saboteur", level=15, hits=3, dur=12.0, sky=False,
                      desc="vole 15 % de la radiation s'il atteint le champignon"),
@@ -355,7 +355,7 @@ WAVE_MAX = 3
 
 
 def wave_size(wave):
-    """Vagues 1 : 1 ennemi, 2-3 : 2 ennemis, puis 3."""
+    """Wave 1: 1 enemy, 2-3: 2 enemies, then 3."""
     return min(WAVE_MAX, 1 + wave // 2)
 
 
@@ -412,7 +412,7 @@ def _enemy_arrives(g, e):
         g.log(f"Le saboteur s'enfuit avec {g.fmt(stolen)} ☢ !", "bad", title="VOLÉ !")
     elif kind == "drone":
         g.crit_gauge = 0.0
-        # Le drone n'outrepasse ni les pots-de-vin ni le brouillard.
+        # The drone overrides neither bribes nor the fog.
         bribed = g.time < g.bribe_until
         calls_inspector = not g.inspector and not bribed and _inspector_can_come(g)
         if calls_inspector:
@@ -431,7 +431,7 @@ def _enemy_arrives(g, e):
     _enemy_gone(g, e, chased=False)
 
 
-# --- Masse critique ----------------------------------------------------------
+# --- Critical mass -----------------------------------------------------------
 
 _QTE_TIMEOUT = 6
 _PERFECT_MULT = 300
@@ -449,7 +449,7 @@ def crit_press(g):
 
 
 def qte_pos(q):
-    """Position du curseur (0..1), en aller-retour."""
+    """Cursor position (0..1), going back and forth."""
     x = (q["t"] * q["speed"]) % 2
     return x if x <= 1 else 2 - x
 

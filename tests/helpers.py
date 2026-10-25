@@ -5,7 +5,7 @@ from game import Game
 
 
 class FixedRandom(random.Random):
-    """random() renvoie toujours la même valeur (0 → tous les tirages « réussissent »)."""
+    """random() always returns the same value (0 → every roll "succeeds")."""
 
     def __init__(self, value):
         super().__init__(0)
@@ -52,7 +52,7 @@ class FakeScreen:
         self.text = []
 
     def addnstr(self, y, x, s, n, attr=0):
-        # Mêmes refus que curses : hors écran, n <= 0, ou écriture jusqu'au coin bas-droit.
+        # Same refusals as curses: off screen, n <= 0, or writing up to the bottom-right corner.
         h, w = self.size
         s = s[:n]
         if n <= 0 or not (0 <= y < h and 0 <= x < w) or x + len(s) > w or (y == h - 1 and x + len(s) >= w):
