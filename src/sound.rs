@@ -1216,7 +1216,7 @@ mod tests {
         }
     }
 
-    /// Sound names emitted in the code (g.sfx.push_back("x") / .play("x")), outside this file whose
+    /// Sound names emitted in the code (g.sfx.push_back("x") / .play("x") / self.sfx("x")), outside this file whose
     /// tests play fake sounds.
     fn used_sound_names() -> Vec<String> {
         let mut files = Vec::new();
@@ -1227,7 +1227,7 @@ mod tests {
         let mut names = Vec::new();
         for file in files.iter().filter(|f| !f.ends_with("src/sound.rs")) {
             let text = std::fs::read_to_string(file).expect("readable source");
-            for pattern in ["sfx.push_back(\"", ".play(\""] {
+            for pattern in ["sfx.push_back(\"", ".play(\"", "self.sfx(\""] {
                 for (at, _) in text.match_indices(pattern) {
                     let rest = &text[at + pattern.len()..];
                     let name: String = rest

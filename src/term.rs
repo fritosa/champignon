@@ -101,7 +101,7 @@ pub enum Color {
 }
 
 impl Color {
-    /// Names as in ui.py: "red"…"grey", "flash", "alert", "msg_<kind>".
+    /// Names used by the interface: "red"…"grey", "flash", "alert", "msg_<kind>".
     pub fn from_name(name: &str) -> Option<Color> {
         match name {
             "flash" => Some(Color::Flash),
@@ -175,7 +175,7 @@ impl Style {
         }
     }
 
-    /// Like `Style::of`, by name (ui.py's `c(name)`); an unknown name gives the plain style.
+    /// Like `Style::of`, by name (`Color::from_name`); an unknown name gives the plain style.
     pub fn named(name: &str) -> Style {
         Color::from_name(name).map_or(Style::PLAIN, Style::of)
     }
@@ -299,7 +299,7 @@ fn blank_grid(h: i32, w: i32) -> Grid {
 // --- In-memory screen ------------------------------------------------------------
 
 /// Grid of (char, Style) with scripted keys: the test screen and the preview's canvas.
-/// Refuses (panics on) any write off screen, like `PutScreen` in the Python tests.
+/// Refuses (panics on) any write off screen, so tests catch drawing that overflows.
 pub struct BufferScreen {
     h: i32,
     w: i32,

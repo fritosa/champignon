@@ -8,7 +8,8 @@ historique : ce qui a changé et pourquoi va dans les messages de commit.
 
 ## Process après chaque changement
 
-1. `python3 -m unittest` (et `python3 sim.py` si l'équilibrage change).
+1. `cargo test`, `cargo clippy --all-targets -- -D warnings` et `cargo fmt --check` (et
+   `cargo run --release --bin sim` si l'équilibrage change).
 2. Commit du changement.
 3. Revue automatique du commit puis correction : `/code-review HEAD~1..HEAD --fix`, sans attendre qu'on la
    demande.

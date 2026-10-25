@@ -2274,7 +2274,11 @@ impl<S: Screen> UI<S> {
                     Qty::Max => g.buy_unit_max(uid),
                     Qty::N(k) => g.buy_unit_n(uid, k),
                 };
-                self.sfx(if bought > 0 { "buy" } else { "nope" });
+                if bought > 0 {
+                    self.sfx("buy");
+                } else {
+                    self.sfx("nope");
+                }
             }
             Action::Talent(id) | Action::PTalent(id) | Action::STalent(id) => {
                 let buy: fn(&mut Game, &str) -> bool = match action {
@@ -2290,7 +2294,11 @@ impl<S: Screen> UI<S> {
                 while n < limit && buy(g, id) {
                     n += 1;
                 }
-                self.sfx(if n > 0 { "talent" } else { "nope" });
+                if n > 0 {
+                    self.sfx("talent");
+                } else {
+                    self.sfx("nope");
+                }
             }
             Action::Abandon => g.abandon_challenge(),
             Action::Intro => {

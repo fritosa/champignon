@@ -6,8 +6,8 @@
 > *Et rien… RIEN… ne pourra l'arrêter.*\
 > *(sauf peut-être l'inspecteur de l'ONU)*
 
-**UNE PRODUCTION TERMINAL 60×20 FILMS** — en Python 3, curses et stdlib uniquement. Zéro dépendance, zéro
-budget, 100 % ASCII. Tourné intégralement en mode texte, sans cascadeur ni fichier audio.
+**UNE PRODUCTION TERMINAL 60×20 FILMS** — en Rust, forgé d'un seul bloc dans un binaire. Zéro budget, 100 %
+ASCII, toute la musique synthétisée au vol. Tourné intégralement en mode texte, sans cascadeur ni fichier audio.
 
 **AVEC, DANS LES RÔLES PRINCIPAUX :**
 
@@ -34,15 +34,17 @@ un avion de ravitaillement passe) :
 champignon                 # lance le jeu de n'importe où (menu des parties s'il en existe)
 champignon --mute          # sans son
 champignon --reset         # efface toutes les parties (après confirmation)
-python3 -m unittest        # tests (depuis la racine du projet)
-python3 sim.py [runs] [appuis/s]   # simulation sans affichage pour l'équilibrage
-python3 apercu.py          # régénère apercu.svg, la capture du README
+cargo test                 # tests (depuis la racine du projet)
+cargo run --release --bin sim -- [runs] [appuis/s]   # simulation sans affichage pour l'équilibrage
+cargo run --release --bin apercu                     # régénère apercu.svg, la capture du README
 ```
 
-Installation, une fois, depuis le dossier du projet : `./install.sh`. Il crée la commande `champignon` (un
-lien vers `main.py` dans `~/.local/bin`, ou le dossier passé en argument) et indique la ligne à ajouter si ce
-dossier n'est pas dans le PATH. Seul python3 est requis. `./install.sh --desinstaller` retire la commande
-sans toucher aux parties. Sans installer : `./main.py` ou `python3 main.py` depuis le dossier du projet.
+Installation, une fois, depuis le dossier du projet : `./install.sh`. Il compile le jeu avec cargo (Rust
+requis : [rustup.rs](https://rustup.rs)), crée la commande `champignon` (un lien vers
+`target/release/champignon` dans `~/.local/bin`, ou le dossier passé en argument) et indique la ligne à
+ajouter si ce dossier n'est pas dans le PATH. Après une mise à jour du code, relancer `./install.sh` pour
+recompiler. `./install.sh --desinstaller` retire la commande sans toucher aux parties. Sans installer :
+`cargo run --release` depuis le dossier du projet.
 Fermer le terminal sauvegarde la partie (SIGHUP/SIGTERM traités comme Ctrl+C).
 
 ## 🎮 Le mode d'emploi du détonateur
@@ -58,7 +60,7 @@ Fermer le terminal sauvegarde la partie (SIGHUP/SIGTERM traités comme Ctrl+C).
 | `0`, `+` / `-` | Mode son (musique + effets → effets seuls → muet), volume |
 | `Q` | Sauvegarde et quitte |
 
-L'aide complète est dans le jeu (touche 5), c'est la liste `ui.KEY_HELP`.
+L'aide complète est dans le jeu (touche 5), c'est la liste `ui::key_help()`.
 
 ---
 

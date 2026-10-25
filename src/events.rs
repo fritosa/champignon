@@ -1970,5 +1970,8 @@ mod tests {
             let clicks = source.matches("sfx.push_back(CLICK_SOUNDS[").count();
             assert_eq!(pushes, literal + clicks);
         }
+        let ui = include_str!("ui.rs").split("#[cfg(test)]").next().unwrap();
+        let calls = ui.matches("self.sfx(").count();
+        assert_eq!(calls, ui.matches("self.sfx(\"").count());
     }
 }

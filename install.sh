@@ -1,5 +1,6 @@
 #!/bin/sh
-# Installs the "champignon" command: a link to main.py in ~/.local/bin (or the given directory).
+# Builds the game (cargo build --release) and installs the "champignon" command: a link to the binary in
+# ~/.local/bin (or the given directory).
 # Usage: ./install.sh [dir]   |   ./install.sh --desinstaller [dir]
 set -e
 
@@ -9,7 +10,7 @@ usage() {
 }
 
 project=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-target="$project/main.py"
+target="$project/target/release/champignon"
 
 uninstall=
 if [ "$1" = "--desinstaller" ]; then
@@ -22,7 +23,8 @@ dir="${1:-$HOME/.local/bin}"
 
 if [ -n "$uninstall" ]; then
     link="${dir%/}/champignon"
-    if [ -L "$link" ] && [ "$(readlink "$link")" = "$target" ]; then
+    # main.py: link left by an install of the former Python version.
+    if [ -L "$link" ] && { [ "$(readlink "$link")" = "$target" ] || [ "$(readlink "$link")" = "$project/main.py" ]; }; then
         rm "$link"
         echo "Commande supprimée : $link (les parties sauvegardées sont conservées)."
     elif [ -L "$link" ]; then
@@ -34,8 +36,9 @@ if [ -n "$uninstall" ]; then
     exit 0
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-    echo "python3 est introuvable : installez-le d'abord (par exemple : sudo apt install python3)." >&2
+cargo=$(command -v cargo || echo "$HOME/.cargo/bin/cargo")
+if [ ! -x "$cargo" ]; then
+    echo "cargo est introuvable : installez Rust d'abord (https://rustup.rs)." >&2
     exit 1
 fi
 
@@ -47,7 +50,8 @@ if [ -e "$link" ] && [ ! -L "$link" ]; then
     exit 1
 fi
 
-chmod +x "$target"
+# --target-dir: the link points to $target even if CARGO_TARGET_DIR or build.target-dir says otherwise.
+"$cargo" build --release --quiet --manifest-path "$project/Cargo.toml" --target-dir "$project/target"
 ln -sfn "$target" "$link"
 echo "Installé : $link -> $target"
 
