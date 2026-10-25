@@ -6,8 +6,8 @@
 
 use std::collections::VecDeque;
 use std::io::{self, BufWriter, IsTerminal, Stdout, Write};
-use std::sync::Once;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Once, OnceLock};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -421,6 +421,15 @@ impl Screen for BufferScreen {
 const PUSH_TITLE: &str = "\x1b[22;0t";
 const RESTORE_TITLE: &str = "\x1b]0;\x07\x1b[23;0t";
 
+/// How often a blocking `read_key` looks at `interrupt_flag`.
+const SIGNAL_CHECK: Duration = Duration::from_millis(100);
+
+/// Set by the signals (main registers it): `TermScreen::read_key` then returns `Key::Interrupt`.
+pub fn interrupt_flag() -> &'static Arc<AtomicBool> {
+    static FLAG: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+    FLAG.get_or_init(|| Arc::new(AtomicBool::new(false)))
+}
+
 /// Terminal set up (raw mode…) and not restored yet; shared with the panic hook.
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 static TITLE_PUSHED: AtomicBool = AtomicBool::new(false);
@@ -649,17 +658,26 @@ impl Screen for TermScreen {
         }
     }
 
+    /// A signal (`interrupt_flag`) or a terminal that can no longer be read gives `Key::Interrupt`, so that
+    /// every screen, even a blocking one, quits like with Ctrl+C.
     fn read_key(&mut self, timeout: Option<Duration>) -> Option<Key> {
         let deadline = timeout.map(|t| Instant::now() + t);
         loop {
-            if let Some(deadline) = deadline {
-                let left = deadline.saturating_duration_since(Instant::now());
-                if !event::poll(left).unwrap_or(false) {
-                    return None;
-                }
+            if interrupt_flag().load(Ordering::SeqCst) {
+                return Some(Key::Interrupt);
+            }
+            let left = deadline.map_or(SIGNAL_CHECK, |d| {
+                d.saturating_duration_since(Instant::now())
+                    .min(SIGNAL_CHECK)
+            });
+            match event::poll(left) {
+                Ok(true) => {}
+                Ok(false) if deadline.is_some_and(|d| Instant::now() >= d) => return None,
+                Ok(false) => continue,
+                Err(_) => return Some(Key::Interrupt),
             }
             let Ok(ev) = event::read() else {
-                return None;
+                return Some(Key::Interrupt);
             };
             if let Some(key) = key_from_event(&ev) {
                 if key == Key::Resize {

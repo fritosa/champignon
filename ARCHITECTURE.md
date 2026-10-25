@@ -29,7 +29,7 @@ fichier, nouvelle convention).
 ### 🦀 Portage Rust (en cours)
 
 Le Python reste la version jouable ; le crate Rust (`Cargo.toml`, `src/`) reprend les mêmes règles et textes,
-module par module. `src/main.rs` est encore vide. Tests : `cargo test` ; équilibrage : `cargo run --release
+module par module ; le binaire se lance par `cargo run --release`. Tests : `cargo test` ; équilibrage : `cargo run --release
 --bin sim` (progression du même ordre que `sim.py`, pas identique : autre générateur aléatoire).
 
 | Fichier | Rôle (équivalent Python) |
@@ -39,7 +39,11 @@ module par module. `src/main.rs` est encore vide. Tests : `cargo test` ; équili
 | `src/saves.rs` | `saves.py`. Dossier `~/.champignon/save_<n>.json` (`CHAMPIGNON_SAVE_DIR` pour le déplacer), version 1, indépendant des sauvegardes Python. |
 | `src/art.rs` | `art.py`, rendu identique cellule par cellule. |
 | `src/sound.rs` | `sound.py` : même synthèse et musique, `libpulse-simple` chargée à l'exécution (`libloading`). |
-| `src/term.rs` | Remplace curses : styles, touches, trait `Screen`, terminal réel `TermScreen` (crossterm, double tampon) et `BufferScreen` en mémoire pour les tests. |
+| `src/term.rs` | Remplace curses : styles, touches, trait `Screen`, terminal réel `TermScreen` (crossterm, double tampon) et `BufferScreen` en mémoire pour les tests. Un signal (`interrupt_flag`) ou un terminal illisible fait renvoyer `Key::Interrupt` à `TermScreen::read_key` : tous les écrans, même bloquants, quittent comme sur Ctrl+C. |
+| `src/ui.rs` | `ui.py` : `UI<S: Screen>` (panneaux, onglets, overlays, bandeaux, particules, sons de l'interface), `handle` renvoie `Flow::Quit` sur Q ou Ctrl+C. |
+| `src/screens.rs` | `screens.py` : intro et histoires tapées à la machine (`Err(Interrupted)` sur Ctrl+C), menu des parties ; aides de texte (`wrap` façon `textwrap`, `center`, `head`, `slice`). |
+| `src/main.rs` | `main.py` : menu des parties, intro, boucle à 20 images/s, autosauvegarde, `--reset`, `--mute`. SIGHUP, SIGTERM et SIGINT passent par `interrupt_flag` ; la partie est sauvegardée aussi après une panique. |
+| `src/bin/apercu.rs` | `apercu.py` (`cargo run --bin apercu`) : même scène, seules les positions tirées au hasard changent. |
 | `src/bin/sim.rs` | `sim.py`. |
 
 ### 📏 Règles d'architecture
