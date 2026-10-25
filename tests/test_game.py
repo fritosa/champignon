@@ -656,6 +656,13 @@ class SaveTest(unittest.TestCase):
             self.assertAlmostEqual(getattr(h, attr) - h.time, left, msg=attr)
         self.assertTrue(h.frozen)
 
+    def test_late_threat_hits_survive_reload(self):
+        g = exploded_game()
+        g.ptalents["p_cap"], g.level = 2, 10_000
+        g.inspector = dict(start=g.time, dur=20.0, hits=7)  # above the base INSPECTOR_HITS
+        g.save(self.path)
+        self.assertEqual(Game.load(self.path).inspector["hits"], 7)
+
     def test_bad_threats_ignored(self):
         g = exploded_game()
         for bad in (None, [1], {"inspector": {"elapsed": 30, "dur": 20, "hits": 0}},

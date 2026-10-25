@@ -14,7 +14,7 @@ budget, 100 % ASCII. Tourné intégralement en mode texte, sans cascadeur ni fic
 - 🍄 **LE CHAMPIGNON**, qui grossit à chaque coup de détonateur (ESPACE)… jusqu'à la *surchauffe* !
 - 🪖 **L'ARMÉE**, du simple soldat au trou noir de poche, qui crache de la radiation ☢ pendant que tu dors.
 - 🧬 **LES MUTATIONS**, spores radioactives, retombées massives et autres horreurs. Réunis la bonne paire et c'est la *synergie*.
-- 🕵️ **L'INSPECTEUR DE L'ONU**, venu « vérifier ». Avec ses complices : saboteur, drone, manifestants, commando. Martèle X !
+- 🕵️ **L'INSPECTEUR DE L'ONU**, venu « vérifier ». Avec ses complices : saboteur, drone, manifestants, commando. Plus le champignon grossit, plus ils viennent souvent et plus ils sont coriaces. Martèle X !
 - ✈️ **L'AVION DE RAVITAILLEMENT**, qui ne fait que passer. Tape sa lettre ou adieu le coffre.
 - 💥 **LE PRESTIGE ⚛ ET LA SUPERNOVA ✦** : tu meurs, tu recommences, tu reviens *plus fort*. Comme dans toute bonne suite.
 - 🎵 **LA BANDE ORIGINALE**, synthétisée en direct, en trois ambiances : calme, tension, épique.

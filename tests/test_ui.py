@@ -622,7 +622,7 @@ class FieldDrawTest(unittest.TestCase):
                 u.h, u.w = 24, W
                 u.scr = PutScreen(24, W)
                 g = u.g
-                g.level = 50
+                g.level = 1_000_000  # longest hit counters
                 for uid in g.units:
                     g.units[uid] = 150
                 g.enemies = [dict(kind=kind, start=g.time - 3, dur=10.0, hits=1),

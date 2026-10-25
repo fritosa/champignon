@@ -187,14 +187,14 @@ class Game:
         if self.challenge == "watched":
             delay = self.rng.uniform(30, 60)
         else:
-            delay = self.rng.uniform(120, 240) if first else self.rng.uniform(150, 300)
+            delay = (self.rng.uniform(120, 240) if first else self.rng.uniform(150, 300)) / events.threat_pressure(self)
         self.next_inspector = self.time + delay
 
     def schedule_enemy(self, first=False):
         if self.challenge == "invasion":
             delay = self.rng.uniform(15, 30)
         else:
-            delay = self.rng.uniform(60, 120) if first else self.rng.uniform(90, 180)
+            delay = (self.rng.uniform(60, 120) if first else self.rng.uniform(90, 180)) / events.threat_pressure(self)
         self.next_enemy = self.time + delay
 
     def log(self, msg, kind="info", title=None):
@@ -743,13 +743,13 @@ class Game:
                           ("bribe", "bribe_until"), ("freeze", "freeze_until")):
             if _is_delay(t.get(key)):
                 setattr(self, attr, self.time + t[key])
-        inspector = _load_walker(t.get("inspector"), events.INSPECTOR_HITS)
+        inspector = _load_walker(t.get("inspector"), events.inspector_hits(self))
         if inspector:
             self.inspector = dict(start=self.time - inspector.pop("elapsed"), **inspector)
         enemies = t.get("enemies")
         for e in enemies if isinstance(enemies, list) else []:
             kind = e.get("kind") if isinstance(e, dict) else None
-            w = _load_walker(e, events.ENEMIES[kind]["hits"]) if kind in events.ENEMIES else None
+            w = _load_walker(e, events.enemy_hits(self, kind)) if kind in events.ENEMIES else None
             if w and len(self.enemies) < events.WAVE_MAX:
                 self.enemies.append(dict(kind=kind, start=self.time - w.pop("elapsed"), **w))
         wave = t.get("wave")

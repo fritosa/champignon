@@ -1,5 +1,7 @@
 """Random events, critical mass, mutations, achievements and news (pure logic)."""
 
+import math
+
 import data
 
 # Letters usable to catch a supply drop (no control keys).
@@ -295,6 +297,25 @@ def choose_chest(g, idx):
 
 INSPECTOR_HITS = 5
 _INSPECTOR_LEVEL = 10
+MAX_HITS_MULT = 2
+
+
+def threat_pressure(g):
+    """Threats grow with the mushroom: 1 up to level 100, +0.5 per ×10 beyond (3 at level 1 000 000)."""
+    return 1 + 0.5 * math.log10(max(1, g.level / data.BASE_CAP))
+
+
+def _hits_needed(g, base):
+    # Half up, not round(): banker's rounding would give 3×1.5 → 4 but 5×1.5 → 8.
+    return math.floor(base * min(MAX_HITS_MULT, threat_pressure(g)) + 0.5)
+
+
+def inspector_hits(g):
+    return _hits_needed(g, INSPECTOR_HITS)
+
+
+def enemy_hits(g, kind):
+    return _hits_needed(g, ENEMIES[kind]["hits"])
 
 
 def _inspector_can_come(g):
@@ -308,13 +329,13 @@ def chase(g):
     if inspector:
         inspector["hits"] += 1
         g.sfx.append("hit")
-        if inspector["hits"] >= INSPECTOR_HITS:
+        if inspector["hits"] >= inspector_hits(g):
             _inspector_gone(g, chased=True)
     elif g.enemies:
         closest = max(g.enemies, key=lambda e: enemy_progress(g, e))
         closest["hits"] += 1
         g.sfx.append("hit")
-        if closest["hits"] >= ENEMIES[closest["kind"]]["hits"]:
+        if closest["hits"] >= enemy_hits(g, closest["kind"]):
             _enemy_gone(g, closest, chased=True)
 
 
@@ -336,8 +357,8 @@ def _inspector_gone(g, chased):
 # WAVE_GAP s apart). X chases them too: the inspector first, then the most advanced enemy.
 # Effect on reaching the mushroom: _enemy_arrives. Protesters, however, act for as long as they are present.
 
-# level: level it appears at, hits: X presses to chase it, dur: seconds to reach the mushroom,
-# sky: flies (drawn in the sky), desc: announced effect.
+# level: level it appears at, hits: X presses to chase it (base, scaled by enemy_hits),
+# dur: seconds to reach the mushroom, sky: flies (drawn in the sky), desc: announced effect.
 ENEMIES = {
     "saboteur": dict(name="Saboteur", level=15, hits=3, dur=12.0, sky=False,
                      desc="vole 15 % de la radiation s'il atteint le champignon"),

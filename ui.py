@@ -446,7 +446,7 @@ class UI:
         x = max(0, min(IW - 5, x))
         self.put(iy + ground - 2, ix + x + 1, " o/" if self.blink(0.3) else "\\o ", self.c("magenta") | curses.A_BOLD)
         self.put(iy + ground - 1, ix + x, "[ONU]", self.c("magenta") | curses.A_BOLD)
-        hits = "x" * ins["hits"] + "·" * (events.INSPECTOR_HITS - ins["hits"])
+        hits = "x" * ins["hits"] + "·" * (events.inspector_hits(self.g) - ins["hits"])
         self.put(iy + ground - 3, ix + x, hits, self.c("red"))
 
     def draw_enemy(self, iy, ix, IW, ground, gap):
@@ -457,7 +457,6 @@ class UI:
             target = IW // 2 - gap
             for en in sorted((e for e in g.enemies if events.ENEMIES[e["kind"]]["sky"] == sky),
                              key=lambda e: -events.enemy_progress(g, e)):
-                e = events.ENEMIES[en["kind"]]
                 frames = art.ENEMY_ART[en["kind"]]
                 w = art.sprite_width(frames)
                 target = max(0, target - w)
@@ -470,7 +469,7 @@ class UI:
                 bottom = 2 + len(rows) if sky else ground - 1
                 self.draw_sprite(iy, ix, IW, bottom, x, rows, self.c("red") | curses.A_BOLD, opaque=True)
                 if x + w > 0:
-                    hits = "x" * en["hits"] + "·" * (e["hits"] - en["hits"])
+                    hits = "x" * en["hits"] + "·" * (events.enemy_hits(g, en["kind"]) - en["hits"])
                     self.put(iy + bottom - len(rows), ix + max(0, x), hits, self.c("yellow"))
 
     def num(self, x):

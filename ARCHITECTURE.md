@@ -71,6 +71,10 @@ fichier, nouvelle convention).
   que quand le terrain est dégagé. X les chasse aussi : l'inspecteur en priorité, puis l'ennemi le plus
   avancé (`enemy_progress`). Effet à l'arrivée dans `_enemy_arrives`, sauf les manifestants (production ÷2
   dans `Game.production` tant qu'il y en a, sans cumul).
+- **Escalade des menaces** (`events.threat_pressure`) : 1 jusqu'au niveau 100, +0,5 par ×10 au-delà (3 au
+  niveau 1 000 000). Hors défis Sous surveillance et Invasion, les délais de l'inspecteur et des ennemis sont
+  divisés par cette pression ; les appuis sur X nécessaires (`inspector_hits`, `enemy_hits`) sont multipliés
+  par elle, au plus ×`MAX_HITS_MULT`. Calculé sur le niveau actuel, donc rien à sauvegarder.
 - **Défis** (`data.CHALLENGES`) : contraintes codées en dur là où elles s'appliquent (chercher
   `self.challenge == "<id>"` / `g.challenge == "<id>"`), récompense via `"<id>" in challenges_done`.
 - **Histoires de défis** (`screens.STORIES`, clés `(id, "start" | "end")`) : `Game` pose `pending_story` au lancement

@@ -515,6 +515,31 @@ class EnemyTest(unittest.TestCase):
         g.schedule_enemy()
         self.assertTrue(90 <= g.next_enemy - g.time <= 180)
 
+    def test_threats_grow_beyond_level_100(self):
+        g = self.g
+        pressures = []
+        for g.level in (50, 100, 1_000, 10_000, 1_000_000):
+            pressures.append(events.threat_pressure(g))
+        self.assertEqual([round(p, 6) for p in pressures], [1, 1, 1.5, 2, 3])
+        g.schedule_enemy()
+        self.assertTrue(30 <= g.next_enemy - g.time <= 60)
+        g.schedule_inspector()
+        self.assertTrue(50 <= g.next_inspector - g.time <= 100)
+        # Hits grow too, but no more than ×2 so the counter stays readable.
+        self.assertEqual(events.enemy_hits(g, "commando"), 20)
+        self.assertEqual(events.inspector_hits(g), 10)
+        g.level = 1_000
+        self.assertEqual(events.enemy_hits(g, "commando"), 15)
+
+    def test_chase_needs_more_hits_late(self):
+        g = self.spawn("saboteur", level=10_000)
+        for _ in range(events.ENEMIES["saboteur"]["hits"]):
+            events.chase(g)
+        self.assertEqual(len(g.enemies), 1)
+        for _ in range(events.ENEMIES["saboteur"]["hits"]):
+            events.chase(g)
+        self.assertEqual(g.enemies, [])
+
     def test_invasion(self):
         g = self.g
         g.challenge = "invasion"
