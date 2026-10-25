@@ -1,6 +1,6 @@
 """Headless simulation to check the game balance.
 
-Usage: python3 champignon/sim.py [number_of_runs] [presses_per_second]
+Usage: python3 sim.py [number_of_runs] [presses_per_second]
 """
 
 import random
@@ -88,23 +88,23 @@ def main():
     for r in range(runs):
         marks = run_once(g, rng, cps)
         txt = "  ".join(f"L{fmt(m)}:{t / 60:.1f}m" for m, t in marks.items())
-        print(f"run {r + 1:2d} cap {fmt(g.cap):>5}  niveau {fmt(g.level):>5}  {txt}")
-        print(f"        prod {fmt(g.production())}/s  détonation {fmt(g.click_value())}  PT restants {g.pt}  "
-              f"unités {sum(g.units.values())}  mutations {len(g.mutations)}  succès {len(g.achievements)}")
+        print(f"run {r + 1:2d} cap {fmt(g.cap):>5}  level {fmt(g.level):>5}  {txt}")
+        print(f"        prod {fmt(g.production())}/s  detonation {fmt(g.click_value())}  PT left {g.pt}  "
+              f"units {sum(g.units.values())}  mutations {len(g.mutations)}  achievements {len(g.achievements)}")
         if not g.can_prestige():
-            print("  -> bloqué, fin de la simulation")
+            print("  -> stuck, simulation over")
             break
         if g.can_supernova():
             stars = g.supernova_gain()
             g.supernova()
             while any(g.buy_stalent(s["id"]) for s in data.STALENTS):
                 pass
-            print(f"        SUPERNOVA n°{g.supernova_count} +{stars} ✦ -> talents {g.stalents}  reste {g.stars} ✦")
+            print(f"        SUPERNOVA #{g.supernova_count} +{stars} ✦ -> talents {g.stalents}  left {g.stars} ✦")
             continue
         gain = g.prestige_gain()
         g.prestige()
         bought = spend_isotopes(g)
-        print(f"        prestige +{gain} ⚛ -> achats {', '.join(sorted(set(bought)))}  reste {g.isotopes}")
+        print(f"        prestige +{gain} ⚛ -> bought {', '.join(sorted(set(bought)))}  left {g.isotopes}")
 
 
 if __name__ == "__main__":
