@@ -11,7 +11,8 @@ générés) + un sprite dans `art.UNIT_ART` (2 images, lignes alignées en bas, 
 est automatique pour le côté droit) ; le même sprite s'affiche dans l'onglet Unités à côté de la
 description, en silhouette grise tant que l'unité n'est pas débloquée.
 
-**Nouvel ennemi** : entrée dans `events.ENEMIES` (`level`, `hits`, `dur`, `sky`, `desc`) + effet dans
+**Nouvel ennemi** : entrée dans `events.ENEMIES` (`level`, `hits`, `dur`, `sky`, `desc`, avec `{}` pour la force
+de l'effet si elle grandit avec la pression des menaces : la renseigner dans `enemy_desc`) + effet dans
 `_enemy_arrives` (ou un effet continu là où il s'applique) + sprite dans `art.ENEMY_ART` + phrase dans
 `events.NEWS_ENEMY`. Le test `test_every_enemy_has_art_and_news` le vérifie.
 

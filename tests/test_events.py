@@ -531,6 +531,41 @@ class EnemyTest(unittest.TestCase):
         g.level = 1_000
         self.assertEqual(events.enemy_hits(g, "commando"), 15)
 
+    def test_effects_grow_beyond_level_100(self):
+        g = self.g
+        effects = []
+        for g.level in (100, 1_000, 10_000, 1_000_000):
+            effects.append((events.stolen_percent(g), events.sabotaged_percent(g), events.protest_divisor(g),
+                            events.inspector_freeze(g)))
+        self.assertEqual(effects, [(15, 10, 2, 20), (23, 15, 3, 30), (30, 20, 4, 40), (45, 30, 6, 60)])
+        g.level = 10_000
+        self.assertIn("vole 30 %", events.enemy_desc(g, "saboteur"))
+        g.level = 3_162  # pressure ≈ 1.75
+        self.assertIn("divisée par 3,5 ", events.enemy_desc(g, "hippies"))
+        g.level = 100
+        self.assertIn("divisée par 2 ", events.enemy_desc(g, "hippies"))
+
+    def test_late_saboteur_and_commando_hit_harder(self):
+        g = self.spawn("saboteur", level=10_000)
+        g.radiation = 1000
+        g.tick(events.ENEMIES["saboteur"]["dur"] + 0.1)
+        self.assertGreaterEqual(g.radiation, 700)
+        self.assertLess(g.radiation, 701)
+        g = self.spawn("commando", level=10_000)
+        g.units["soldier"] = 100
+        g.tick(events.ENEMIES["commando"]["dur"] + 0.1)
+        self.assertEqual(g.units["soldier"], 80)
+
+    def test_late_protesters_and_inspector(self):
+        g = self.spawn("hippies", level=10_000)
+        g.units["soldier"] = 10
+        with_them = g.production()
+        g.enemies = []
+        self.assertAlmostEqual(with_them, g.production() / 4)
+        g.inspector = dict(start=g.time - 20, dur=20.0, hits=0)
+        events.tick(g, 0.1)
+        self.assertAlmostEqual(g.freeze_until - g.time, 40)
+
     def test_chase_needs_more_hits_late(self):
         g = self.spawn("saboteur", level=10_000)
         for _ in range(events.ENEMIES["saboteur"]["hits"]):

@@ -305,17 +305,38 @@ def threat_pressure(g):
     return 1 + 0.5 * math.log10(max(1, g.level / data.BASE_CAP))
 
 
-def _hits_needed(g, base):
-    # Half up, not round(): banker's rounding would give 3×1.5 → 4 but 5×1.5 → 8.
-    return math.floor(base * min(MAX_HITS_MULT, threat_pressure(g)) + 0.5)
+def _scaled(g, base, max_mult=math.inf):
+    """base × threat pressure (at most ×max_mult), rounded half up: banker's rounding would give 3×1.5 → 4
+    but 5×1.5 → 8."""
+    return math.floor(base * min(max_mult, threat_pressure(g)) + 0.5)
 
 
 def inspector_hits(g):
-    return _hits_needed(g, INSPECTOR_HITS)
+    return _scaled(g, INSPECTOR_HITS, MAX_HITS_MULT)
 
 
 def enemy_hits(g, kind):
-    return _hits_needed(g, ENEMIES[kind]["hits"])
+    return _scaled(g, ENEMIES[kind]["hits"], MAX_HITS_MULT)
+
+
+def inspector_freeze(g):
+    """Seconds of frozen production if the inspector reaches the mushroom."""
+    return _scaled(g, 20) * (2 if g.has_mut("gamble") else 1)
+
+
+def stolen_percent(g):
+    """Share of the radiation the saboteur steals."""
+    return _scaled(g, 15)
+
+
+def sabotaged_percent(g):
+    """Share of each unit type the commando destroys."""
+    return _scaled(g, 10)
+
+
+def protest_divisor(g):
+    """Production divisor while protesters are present (to the tenth, as announced)."""
+    return _scaled(g, 20) / 10
 
 
 def _inspector_can_come(g):
@@ -358,16 +379,17 @@ def _inspector_gone(g, chased):
 # Effect on reaching the mushroom: _enemy_arrives. Protesters, however, act for as long as they are present.
 
 # level: level it appears at, hits: X presses to chase it (base, scaled by enemy_hits),
-# dur: seconds to reach the mushroom, sky: flies (drawn in the sky), desc: announced effect.
+# dur: seconds to reach the mushroom, sky: flies (drawn in the sky), desc: announced effect ({}: its current
+# strength, see enemy_desc).
 ENEMIES = {
     "saboteur": dict(name="Saboteur", level=15, hits=3, dur=12.0, sky=False,
-                     desc="vole 15 % de la radiation s'il atteint le champignon"),
+                     desc="vole {} % de la radiation s'il atteint le champignon"),
     "drone": dict(name="Drone espion", level=25, hits=4, dur=15.0, sky=True,
                   desc="vide la masse critique et appelle un inspecteur"),
     "hippies": dict(name="Manifestants", level=40, hits=8, dur=25.0, sky=False,
-                    desc="production divisée par 2 tant qu'ils sont là"),
+                    desc="production divisée par {} tant qu'ils sont là"),
     "commando": dict(name="Commando", level=60, hits=10, dur=20.0, sky=False,
-                     desc="détruit 10 % de chaque type d'unité s'il arrive"),
+                     desc="détruit {} % de chaque type d'unité s'il arrive"),
 }
 
 
@@ -378,6 +400,18 @@ WAVE_MAX = 3
 def wave_size(wave):
     """Wave 1: 1 enemy, 2-3: 2 enemies, then 3."""
     return min(WAVE_MAX, 1 + wave // 2)
+
+
+_EFFECT_STRENGTH = dict(saboteur=stolen_percent, commando=sabotaged_percent, hippies=protest_divisor)
+
+
+def enemy_desc(g, kind):
+    """Announced effect, with its current strength (it grows with the threat pressure)."""
+    strength = _EFFECT_STRENGTH.get(kind)
+    value = strength(g) if strength else None
+    if isinstance(value, float):
+        value = f"{value:g}".replace(".", ",")
+    return ENEMIES[kind]["desc"].format(value)
 
 
 def enemy_progress(g, e):
@@ -403,7 +437,7 @@ def spawn_enemy(g):
         kind = g.rng.choice(pool)
         g.enemies = [_new_enemy(g, kind, g.time)]
         spec = ENEMIES[kind]
-        g.log(f"{spec['name']} en approche : {spec['desc']} ! Martèle X.", "bad", title="ALERTE")
+        g.log(f"{spec['name']} en approche : {enemy_desc(g, kind)} ! Martèle X.", "bad", title="ALERTE")
         return
     g.wave += 1
     kinds = [g.rng.choice(pool) for _ in range(wave_size(g.wave))]
@@ -428,7 +462,7 @@ def _enemy_gone(g, e, chased):
 def _enemy_arrives(g, e):
     kind = e["kind"]
     if kind == "saboteur":
-        stolen = g.radiation * 0.15
+        stolen = g.radiation * stolen_percent(g) / 100
         g.radiation -= stolen
         g.log(f"Le saboteur s'enfuit avec {g.fmt(stolen)} ☢ !", "bad", title="VOLÉ !")
     elif kind == "drone":
@@ -443,9 +477,10 @@ def _enemy_arrives(g, e):
             outcome = " et vidé ta masse critique !"
         g.log("Le drone a photographié le site" + outcome, "bad", title="REPÉRÉ")
     elif kind == "commando":
+        percent = sabotaged_percent(g)
         for uid, n in g.units.items():
-            g.units[uid] = n - n // 10
-        g.log("Le commando a saboté 10 % de ton armée !", "bad", title="SABOTAGE")
+            g.units[uid] = n - n * percent // 100
+        g.log(f"Le commando a saboté {percent} % de ton armée !", "bad", title="SABOTAGE")
     else:
         g.log("Les manifestants rentrent chez eux.", "info", title="FIN DU SIT-IN")
     g.sfx.append("freeze" if kind != "hippies" else "tick")
@@ -574,7 +609,7 @@ def _tick_inspector(g):
             g.log("Tes gardes escortent l'inspecteur vers la sortie.", "good", title="GARDES")
             _inspector_gone(g, chased=True)
         elif progress >= 1:
-            freeze = 20 * (2 if g.has_mut("gamble") else 1)
+            freeze = inspector_freeze(g)
             g.freeze_until = g.time + freeze
             g.stats["frozen"] += 1
             g.sfx.append("freeze")

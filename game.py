@@ -300,7 +300,7 @@ class Game:
         if self.challenge == "nanar":
             p *= 0.5
         protesters = any(e["kind"] == "hippies" for e in self.enemies)
-        return p * 0.5 if protesters else p
+        return p / events.protest_divisor(self) if protesters else p
 
     def click_value(self, manual=True):
         m = 2 ** self.pr("p_click") * self.buff_mult("click")
