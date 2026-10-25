@@ -133,7 +133,7 @@ fichier, nouvelle convention).
 - Les tests UI construisent `UI` sans `__init__` (`bare_ui` dans `tests/test_ui.py`) : un nouvel attribut
   utilisé au rendu doit y être ajouté, ou initialisé paresseusement.
 - Noms de classes de test uniques par fichier (un doublon masque silencieusement l'autre).
-- Textes, commentaires et messages en français.
+- Code en anglais (identifiants, commentaires, docstrings) ; textes affichés au joueur en français.
 
 ## 🔮 Pistes d'évolution
 

@@ -12,5 +12,6 @@ historique : ce qui a changé et pourquoi va dans les messages de commit.
 2. Commit du changement.
 3. Revue automatique du commit puis correction : `/code-review HEAD~1..HEAD --fix`, sans attendre qu'on la
    demande.
-4. Relancer les tests, puis commit séparé des corrections issues de la revue (ou rien si la revue ne trouve rien).
+4. Relancer les tests, puis intégrer les corrections issues de la revue au commit du changement
+   (`git commit --amend`), sans commit séparé.
 5. Ne jamais pousser sans accord explicite.
