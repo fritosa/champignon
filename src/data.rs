@@ -243,7 +243,7 @@ const fn perk_costs(id: &'static str, name: &'static str, max: u32, desc: &'stat
 #[rustfmt::skip]
 pub const PTALENTS: [Perk; 10] = [
     perk_costs("p_cap", "Expansion du cœur", 4, "Niveau max ×10 (100 → 1 000 000).", &[20, 150, 1_200, 9_000]),
-    perk("p_prod", "Uranium appauvri", 25, "Production ×1,5 par rang (multiplicatif).", 2.0, 1.45),
+    perk("p_prod", "Uranium appauvri", 25, "Production ×1,5 par rang (multiplicatif).", 2.0, 2.0),
     perk("p_click", "Doigt nucléaire", 15, "Puissance de détonation ×2 par rang.", 1.0, 1.5),
     perk("p_pt", "Mémoire génétique", 10, "Commence chaque run avec +5 PT par rang.", 3.0, 1.6),
     perk("p_vets", "Vétérans", 5, "Commence avec la Conscription et 10 soldats par rang.", 4.0, 2.0),
@@ -267,7 +267,7 @@ pub fn ptalent(id: &str) -> &'static Perk {
 /// Supernova talents, paid in stars (✦). Never reset.
 #[rustfmt::skip]
 pub const STALENTS: [Perk; 5] = [
-    perk("s_prod", "Fusion stellaire", 10, "Production ×3 par rang.", 1.0, 2.0),
+    perk("s_prod", "Fusion stellaire", 10, "Production ×2 par rang.", 1.0, 2.0),
     perk("s_iso", "Nucléosynthèse", 10, "Isotopes gagnés ×2 par rang.", 1.0, 2.0),
     perk_costs("s_core", "Cœur dense", 4, "Expansion du cœur coûte 20 % de moins par rang.", &[2, 5, 10, 20]),
     perk("s_crit", "Pulsar", 3, "La masse critique se charge 2× plus vite par rang.", 3.0, 2.0),

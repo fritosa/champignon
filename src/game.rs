@@ -875,7 +875,7 @@ impl Game {
     pub fn global_mult(&self) -> f64 {
         let mut m = (1.0 + 0.1 * self.tr("l_global") as f64)
             * 1.5f64.powi(self.pr("p_prod") as i32)
-            * 3f64.powi(self.sr("s_prod") as i32);
+            * 2f64.powi(self.sr("s_prod") as i32);
         m *= 1.0 + 0.02 * self.achievements.len() as f64;
         m *= 1.0 + 0.001 * self.tr("l_synergy") as f64 * self.units.total() as f64;
         if self.has_mut("fallout") {
@@ -2327,7 +2327,7 @@ pub(crate) mod tests {
         g.stars = 100;
         assert!(g.buy_stalent("s_prod"));
         assert!(g.buy_stalent("s_iso"));
-        assert!(approx(g.production(), prod * 3.0));
+        assert!(approx(g.production(), prod * 2.0));
         assert_eq!(g.prestige_gain(), iso * 2);
         assert_eq!(g.stars, 100 - 1 - 1);
     }
@@ -2385,14 +2385,14 @@ pub(crate) mod tests {
     #[test]
     fn rank_costs() {
         let mut g = exploded_game();
-        // round() rounds half to even, like Python: 2 × 1.45² = 4.205 → 4.
+        // Costs round half to even: 5 × 1.7 = 8.5 → 8.
         let costs: Vec<f64> = (0..4)
             .map(|r| {
-                g.ptalents.insert("p_prod", r);
-                g.ptalent_cost("p_prod")
+                g.ptalents.insert("p_iso", r);
+                g.ptalent_cost("p_iso")
             })
             .collect();
-        assert_eq!(costs, [2.0, 3.0, 4.0, 6.0]);
+        assert_eq!(costs, [5.0, 8.0, 14.0, 25.0]);
         g.ptalents = BTreeMap::from([("p_cap", 2), ("p_prod", 1)]);
         g.isotopes = 100;
         assert_eq!(g.isotopes_invested(), 100 + 20 + 150 + 2);
