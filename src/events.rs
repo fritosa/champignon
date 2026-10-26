@@ -1,6 +1,8 @@
 //! Random events, critical mass, mutations, achievements and news (pure logic).
 
-use crate::data;
+use std::sync::LazyLock;
+
+use crate::data::{self, Desc, fr_num, percent};
 use crate::game::{BuffKind, Enemy, Game, Inspector, MsgKind, Plane, Qte, QteResult};
 use crate::rng::RandomExt;
 
@@ -13,25 +15,52 @@ pub struct Mutation {
     pub effect: &'static str,
 }
 
-const fn mutation_def(id: &'static str, name: &'static str, effect: &'static str) -> Mutation {
+fn mutation_def(id: &'static str, name: &'static str, effect: String) -> Mutation {
+    let effect = data::leak(effect);
     Mutation { id, name, effect }
 }
 
+// Mutation effects (shares are fractions: 0.01 = +1 %).
+/// Production per soldier owned.
+pub const SPORES_PER_SOLDIER: f64 = 0.01;
+pub const TWIN_CLICK_MULT: f64 = 2.0;
+pub const ACID_COST_MULT: f64 = 0.7;
+pub const ACID_CLICK_MULT: f64 = 0.5;
+/// Critical mass charging speed multiplier.
+pub const UNSTABLE_CRIT_SPEED: f64 = 2.0;
+pub const FALLOUT_PROD_MULT: f64 = 1.5;
+/// Supply drops frequency multiplier.
+pub const MAGNET_DROP_FREQ: f64 = 2.0;
+pub const BERSERK_COMBO: u32 = 2;
+/// PT per level up.
+pub const MITOSIS_PT: i64 = 1;
+pub const GLOW_CRIT_CHANCE: f64 = 0.15;
+pub const GAMBLE_PROD_MULT: f64 = 3.0;
+/// Inspector freeze multiplier.
+pub const GAMBLE_FREEZE_MULT: u32 = 2;
+
 #[rustfmt::skip]
-pub const MUTATIONS: [Mutation; 12] = [
-    mutation_def("spores", "Spores radioactives", "+1 % de production par soldat."),
-    mutation_def("twin", "Champignon jumeau", "Détonation ×2 (et un deuxième chapeau !)."),
-    mutation_def("acid", "Pluie acide", "Unités -30 % de coût, mais détonation ÷2."),
-    mutation_def("unstable", "Cœur instable", "La masse critique se charge 2× plus vite."),
-    mutation_def("fallout", "Retombées massives", "Production ×1,5."),
-    mutation_def("magnet", "Aimant à colis", "Ravitaillements 2× plus fréquents."),
-    mutation_def("berserk", "Rage atomique", "Combo max +2."),
-    mutation_def("fog", "Brouillard radioactif", "Les inspecteurs ne trouvent plus le champignon."),
-    mutation_def("mitosis", "Mitose", "+1 PT supplémentaire par niveau."),
-    mutation_def("asbestos", "Doigts d'amiante", "Plus jamais de surchauffe."),
-    mutation_def("glow", "Lueur verte", "+15 % de chance de détonation critique."),
-    mutation_def("gamble", "Roulette russe", "Production ×3, mais les inspecteurs gèlent 2× plus longtemps."),
-];
+pub static MUTATIONS: LazyLock<[Mutation; 12]> = LazyLock::new(|| [
+    mutation_def("spores", "Spores radioactives",
+                 format!("+{} % de production par soldat.", fr_num(percent(SPORES_PER_SOLDIER)))),
+    mutation_def("twin", "Champignon jumeau",
+                 format!("Détonation ×{} (et un deuxième chapeau !).", fr_num(TWIN_CLICK_MULT))),
+    mutation_def("acid", "Pluie acide", format!("Unités -{} % de coût, mais détonation ÷{}.",
+                 fr_num(percent(1.0 - ACID_COST_MULT)), fr_num(1.0 / ACID_CLICK_MULT))),
+    mutation_def("unstable", "Cœur instable",
+                 format!("La masse critique se charge {}× plus vite.", fr_num(UNSTABLE_CRIT_SPEED))),
+    mutation_def("fallout", "Retombées massives", format!("Production ×{}.", fr_num(FALLOUT_PROD_MULT))),
+    mutation_def("magnet", "Aimant à colis",
+                 format!("Ravitaillements {}× plus fréquents.", fr_num(MAGNET_DROP_FREQ))),
+    mutation_def("berserk", "Rage atomique", format!("Combo max +{BERSERK_COMBO}.")),
+    mutation_def("fog", "Brouillard radioactif", "Les inspecteurs ne trouvent plus le champignon.".to_string()),
+    mutation_def("mitosis", "Mitose", format!("+{MITOSIS_PT} PT supplémentaire par niveau.")),
+    mutation_def("asbestos", "Doigts d'amiante", "Plus jamais de surchauffe.".to_string()),
+    mutation_def("glow", "Lueur verte",
+                 format!("+{} % de chance de détonation critique.", fr_num(percent(GLOW_CRIT_CHANCE)))),
+    mutation_def("gamble", "Roulette russe", format!("Production ×{}, mais les inspecteurs gèlent {}× plus longtemps.",
+                 fr_num(GAMBLE_PROD_MULT), GAMBLE_FREEZE_MULT)),
+]);
 
 pub fn find_mutation(id: &str) -> Option<&'static Mutation> {
     MUTATIONS.iter().find(|m| m.id == id)
@@ -46,14 +75,14 @@ pub struct Synergy {
     pub id: &'static str,
     pub name: &'static str,
     pub pair: (&'static str, &'static str),
-    pub effect: &'static str,
+    pub effect: Desc,
 }
 
 const fn synergy_def(
     id: &'static str,
     name: &'static str,
     pair: (&'static str, &'static str),
-    effect: &'static str,
+    effect: Desc,
 ) -> Synergy {
     Synergy {
         id,
@@ -63,17 +92,35 @@ const fn synergy_def(
     }
 }
 
+// Synergy effects.
+/// Production per soldier owned with Spores (instead of SPORES_PER_SOLDIER).
+pub const PROLIFERATION_PER_SOLDIER: f64 = 0.02;
+/// Critical mass charged by each critical press.
+pub const CHAIN_CRIT_CHARGE: f64 = 0.03;
+/// Combo lost per second, normally and with Berserker.
+pub const COMBO_DECAY: f64 = 1.2;
+pub const BERSERKER_COMBO_DECAY: f64 = 0.4;
+/// Bonuses offered by a chest, normally and with Réseau de contrebande.
+pub const CHEST_CHOICES: usize = 3;
+pub const SMUGGLING_CHEST_CHOICES: usize = 4;
+pub const TWINS_PROD_MULT: f64 = 1.5;
+
 #[rustfmt::skip]
 pub const SYNERGIES: [Synergy; 6] = [
     synergy_def("proliferation", "Prolifération", ("spores", "mitosis"),
-                "Spores : +2 % de production par soldat au lieu de 1 %."),
+                Desc::new("Spores : +{} % de production par soldat au lieu de {} %.",
+                          &[percent(PROLIFERATION_PER_SOLDIER), percent(SPORES_PER_SOLDIER)])),
     synergy_def("chain", "Fission en cascade", ("unstable", "glow"),
-                "Chaque détonation critique charge 3 % de la masse critique."),
-    synergy_def("storm", "Orage acide", ("acid", "fallout"), "La pluie acide ne divise plus la détonation."),
-    synergy_def("berserker", "Berserker", ("berserk", "asbestos"), "Le combo retombe 3 fois moins vite."),
+                Desc::new("Chaque détonation critique charge {} % de la masse critique.", &[percent(CHAIN_CRIT_CHARGE)])),
+    synergy_def("storm", "Orage acide", ("acid", "fallout"),
+                Desc::new("La pluie acide ne divise plus la détonation.", &[])),
+    synergy_def("berserker", "Berserker", ("berserk", "asbestos"),
+                Desc::new("Le combo retombe {} fois moins vite.", &[COMBO_DECAY / BERSERKER_COMBO_DECAY])),
     synergy_def("smuggling", "Réseau de contrebande", ("magnet", "fog"),
-                "Les coffres proposent 4 choix au lieu de 3."),
-    synergy_def("twins", "Jumeaux maudits", ("twin", "gamble"), "Production ×1,5 supplémentaire."),
+                Desc::new("Les coffres proposent {} choix au lieu de {}.",
+                          &[SMUGGLING_CHEST_CHOICES as f64, CHEST_CHOICES as f64])),
+    synergy_def("twins", "Jumeaux maudits", ("twin", "gamble"),
+                Desc::new("Production ×{} supplémentaire.", &[TWINS_PROD_MULT])),
 ];
 
 pub fn find_synergy(id: &str) -> Option<&'static Synergy> {
@@ -105,7 +152,11 @@ const FIRST_MUTATION_LEVELS: [u64; 4] = [25, 50, 75, 100];
 pub fn mutation_milestone(i: u32) -> u64 {
     match FIRST_MUTATION_LEVELS.get(i as usize) {
         Some(&level) => level,
-        None => 100u64.saturating_mul(1u64.checked_shl(i - 3).unwrap_or(u64::MAX)),
+        None => {
+            let last = FIRST_MUTATION_LEVELS.len() - 1;
+            let doublings = 1u64.checked_shl(i - last as u32).unwrap_or(u64::MAX);
+            FIRST_MUTATION_LEVELS[last].saturating_mul(doublings)
+        }
     }
 }
 
@@ -131,6 +182,10 @@ const fn achievement(
     }
 }
 
+/// Production bonus of each achievement (0.02 = +2 %).
+pub const ACHIEVEMENT_BONUS: f64 = 0.02;
+
+/// Thresholds are written in each entry, with the condition that quotes them.
 #[rustfmt::skip]
 pub const ACHIEVEMENTS: [Achievement; 41] = [
     achievement("boom", "Premier boom", "Déclenche l'explosion.", |g| g.exploded),
@@ -238,6 +293,8 @@ pub const NEWS_NANAR: [&str; 4] = [
     "Le budget effets spéciaux est épuisé. Les explosions seront désormais bruitées à la bouche.",
 ];
 pub const NEWS_INSPECTOR: &str = "ALERTE : un inspecteur de l'ONU approche du site !";
+/// During the Nanarland challenge, each NEWS_NANAR headline weighs as much as this many others.
+const NANAR_NEWS_WEIGHT: usize = 3;
 
 pub fn pick_news(g: &mut Game) -> &'static str {
     if g.inspector.is_some() {
@@ -255,7 +312,7 @@ pub fn pick_news(g: &mut Game) -> &'static str {
         pool.extend(NEWS_PRESTIGE);
     }
     if g.challenge == Some("nanar") {
-        for _ in 0..3 {
+        for _ in 0..NANAR_NEWS_WEIGHT {
             pool.extend(NEWS_NANAR); // the challenge sets the mood
         }
     }
@@ -264,13 +321,26 @@ pub fn pick_news(g: &mut Game) -> &'static str {
 
 // --- Supply drops --------------------------------------------------------------
 
+/// Delay before the first plane of a run, then between two planes (min, max), in seconds.
+pub const FIRST_PLANE_DELAY: (f64, f64) = (40.0, 90.0);
+const PLANE_DELAY: (f64, f64) = (60.0, 150.0);
+/// Seconds a plane takes to cross the sky (before the radar bonus).
+pub const PLANE_DURATION: f64 = 10.0;
+/// Planes fly from this level on.
+const PLANE_LEVEL: u32 = 3;
+
 fn radar_bonus(g: &Game) -> f64 {
-    1.0 + 0.3 * g.tr("l_radar") as f64
+    1.0 + data::L_RADAR_FREQ * g.tr("l_radar") as f64
 }
 
 fn drop_interval(g: &mut Game) -> f64 {
-    let frequency = radar_bonus(g) * if g.has_mut("magnet") { 2.0 } else { 1.0 };
-    g.rng.uniform(60.0, 150.0) / frequency
+    let frequency = radar_bonus(g)
+        * if g.has_mut("magnet") {
+            MAGNET_DROP_FREQ
+        } else {
+            1.0
+        };
+    g.rng.uniform(PLANE_DELAY.0, PLANE_DELAY.1) / frequency
 }
 
 pub const CHEST_REWARDS: [&str; 7] = [
@@ -297,7 +367,11 @@ pub fn catch(g: &mut Game, letter: char) -> bool {
         .into_iter()
         .filter(|k| chest_allowed(g, k))
         .collect();
-    let choices = if g.has_syn("smuggling") { 4 } else { 3 };
+    let choices = if g.has_syn("smuggling") {
+        SMUGGLING_CHEST_CHOICES
+    } else {
+        CHEST_CHOICES
+    };
     g.pending_chest = Some(g.rng.sample(&pool, choices.min(pool.len())));
     true
 }
@@ -307,13 +381,36 @@ pub fn chest_allowed(g: &Game, kind: &str) -> bool {
     match kind {
         "gauge" => g.qte.is_none() && g.crit_gauge < 1.0,
         "army" => g.challenge != Some("pacifist") && g.units.any(),
-        "shield" => g.challenge != Some("watched") && g.level >= 10 && !g.has_mut("fog"),
+        "shield" => {
+            g.challenge != Some("watched") && g.level >= INSPECTOR_LEVEL && !g.has_mut("fog")
+        }
         _ => CHEST_REWARDS.contains(&kind),
     }
 }
 
+// Chest bonuses (durations and amounts are multiplied by drop_power).
+const FRENZY_MULT: f64 = 7.0;
+const FRENZY_TIME: f64 = 30.0;
+const CLICK_FRENZY_MULT: f64 = 20.0;
+const CLICK_FRENZY_TIME: f64 = 15.0;
+/// Uranium lump: this many seconds of production, or of non-manual presses if more.
+const LUMP_PROD_SECONDS: f64 = 120.0;
+const LUMP_PRESSES: f64 = 100.0;
+/// Tactical manual: one PT per this many levels (at least one).
+const PT_CHEST_LEVELS: u32 = 25;
+/// Reinforcements: share of each unit type owned.
+const ARMY_SHARE: f64 = 0.1;
+/// Bribes: seconds without inspectors.
+const BRIBE_TIME: f64 = 300.0;
+
+/// Buff names, shown in the UI.
+static FRENZY_NAME: LazyLock<String> =
+    LazyLock::new(|| format!("Frénésie ×{}", fr_num(FRENZY_MULT)));
+static CLICK_FRENZY_NAME: LazyLock<String> =
+    LazyLock::new(|| format!("Détonation ×{}", fr_num(CLICK_FRENZY_MULT)));
+
 fn drop_power(g: &Game) -> f64 {
-    1.0 + 0.5 * g.pr("p_drop") as f64
+    1.0 + data::P_DROP_POWER * g.pr("p_drop") as f64
 }
 
 /// (name, description) of a chest bonus, numbers included.
@@ -322,11 +419,19 @@ pub fn chest_text(g: &Game, kind: &str) -> (&'static str, String) {
     match kind {
         "frenzy" => (
             "Frénésie",
-            format!("Production ×7 pendant {:.0} s.", 30.0 * power),
+            format!(
+                "Production ×{} pendant {:.0} s.",
+                fr_num(FRENZY_MULT),
+                FRENZY_TIME * power
+            ),
         ),
         "clickfrenzy" => (
             "Détonateur fou",
-            format!("Détonation ×20 pendant {:.0} s.", 15.0 * power),
+            format!(
+                "Détonation ×{} pendant {:.0} s.",
+                fr_num(CLICK_FRENZY_MULT),
+                CLICK_FRENZY_TIME * power
+            ),
         ),
         "lump" => (
             "Caisse d'uranium",
@@ -344,25 +449,25 @@ pub fn chest_text(g: &Game, kind: &str) -> (&'static str, String) {
             "Renforts",
             format!(
                 "+{:.0} % de chaque type d'unité possédé (au moins 1).",
-                10.0 * power
+                percent(ARMY_SHARE) * power
             ),
         ),
         _ => (
             "Pots-de-vin",
             format!(
                 "Aucun inspecteur pendant {:.0} min (l'actuel repart).",
-                5.0 * power
+                BRIBE_TIME / 60.0 * power
             ),
         ),
     }
 }
 
 fn uranium_lump(g: &Game) -> f64 {
-    (g.production() * 120.0).max(g.click_value(false) * 100.0) * drop_power(g)
+    (g.production() * LUMP_PROD_SECONDS).max(g.click_value(false) * LUMP_PRESSES) * drop_power(g)
 }
 
 fn chest_points(g: &Game) -> i64 {
-    (((g.level / 25) as f64 * drop_power(g)) as i64).max(1)
+    (((g.level / PT_CHEST_LEVELS) as f64 * drop_power(g)) as i64).max(1)
 }
 
 /// Applies the chosen bonus; false if the choice is invalid or no longer has an effect (the gauge filled up).
@@ -376,8 +481,18 @@ pub fn choose_chest(g: &mut Game, idx: usize) -> bool {
     let name = chest_text(g, kind).0;
     let mut message = name.to_string();
     match kind {
-        "frenzy" => g.add_buff(BuffKind::Prod, 7.0, 30.0 * power, "Frénésie ×7"),
-        "clickfrenzy" => g.add_buff(BuffKind::Click, 20.0, 15.0 * power, "Détonation ×20"),
+        "frenzy" => g.add_buff(
+            BuffKind::Prod,
+            FRENZY_MULT,
+            FRENZY_TIME * power,
+            FRENZY_NAME.as_str(),
+        ),
+        "clickfrenzy" => g.add_buff(
+            BuffKind::Click,
+            CLICK_FRENZY_MULT,
+            CLICK_FRENZY_TIME * power,
+            CLICK_FRENZY_NAME.as_str(),
+        ),
         "lump" => {
             let amount = uranium_lump(g);
             g.gain(amount);
@@ -392,7 +507,7 @@ pub fn choose_chest(g: &mut Game, idx: usize) -> bool {
         "army" => {
             let owned: Vec<(&'static str, u64)> = g.units.iter().filter(|&(_, n)| n > 0).collect();
             for (uid, n) in owned {
-                g.add_units(uid, ((n as f64 * 0.1 * power) as u64).max(1));
+                g.add_units(uid, ((n as f64 * ARMY_SHARE * power) as u64).max(1));
             }
         }
         _ => {
@@ -400,7 +515,7 @@ pub fn choose_chest(g: &mut Game, idx: usize) -> bool {
             if g.inspector.is_some() {
                 inspector_gone(g, false);
             }
-            g.bribe_until = g.time + 300.0 * power;
+            g.bribe_until = g.time + BRIBE_TIME * power;
             g.next_inspector = g.next_inspector.max(g.bribe_until);
         }
     }
@@ -419,10 +534,30 @@ pub fn choose_chest(g: &mut Game, idx: usize) -> bool {
 pub const INSPECTOR_HITS: u32 = 5;
 const INSPECTOR_LEVEL: u32 = 10;
 pub const MAX_HITS_MULT: f64 = 2.0;
+/// Seconds the inspector takes to reach the mushroom.
+const INSPECTOR_DURATION: f64 = 20.0;
+/// Delay before the first inspector of a run, then between two (min, max), in seconds, before the threat
+/// pressure (Sous surveillance challenge: data::WATCHED_INSPECTOR_DELAY).
+pub const FIRST_INSPECTOR_DELAY: (f64, f64) = (120.0, 240.0);
+pub const INSPECTOR_DELAY: (f64, f64) = (150.0, 300.0);
+/// Base effects, scaled by the threat pressure: seconds of frozen production, percentage of the radiation
+/// stolen by the saboteur, of each unit type destroyed by the commando, production divisor of the
+/// protesters (in tenths).
+const INSPECTOR_FREEZE: u32 = 20;
+const SABOTEUR_STOLEN_PERCENT: u32 = 15;
+const COMMANDO_SABOTAGED_PERCENT: u32 = 10;
+const PROTEST_DIVISOR_TENTHS: u32 = 20;
+/// The guards escort the inspector out once he has walked this share of his way.
+const GUARD_PROGRESS: f64 = 0.3;
+/// Loot of a chased inspector: seconds of production, or non-manual presses if more.
+const INSPECTOR_LOOT_PROD_SECONDS: f64 = 30.0;
+const INSPECTOR_LOOT_PRESSES: f64 = 20.0;
+/// Threat pressure gained per ×10 of level beyond data::BASE_CAP.
+const THREAT_PER_DECADE: f64 = 0.5;
 
 /// Threats grow with the mushroom: 1 up to level 100, +0.5 per ×10 beyond (3 at level 1 000 000).
 pub fn threat_pressure(g: &Game) -> f64 {
-    1.0 + 0.5 * (g.level as f64 / data::BASE_CAP as f64).max(1.0).log10()
+    1.0 + THREAT_PER_DECADE * (g.level as f64 / data::BASE_CAP as f64).max(1.0).log10()
 }
 
 /// base × threat pressure (at most ×max_mult), rounded half up: banker's rounding would give 3×1.5 → 4
@@ -441,22 +576,27 @@ pub fn enemy_hits(g: &Game, kind: EnemyKind) -> u32 {
 
 /// Seconds of frozen production if the inspector reaches the mushroom.
 pub fn inspector_freeze(g: &Game) -> u32 {
-    scaled(g, 20, f64::INFINITY) * if g.has_mut("gamble") { 2 } else { 1 }
+    scaled(g, INSPECTOR_FREEZE, f64::INFINITY)
+        * if g.has_mut("gamble") {
+            GAMBLE_FREEZE_MULT
+        } else {
+            1
+        }
 }
 
 /// Share of the radiation the saboteur steals.
 pub fn stolen_percent(g: &Game) -> u32 {
-    scaled(g, 15, f64::INFINITY)
+    scaled(g, SABOTEUR_STOLEN_PERCENT, f64::INFINITY)
 }
 
 /// Share of each unit type the commando destroys.
 pub fn sabotaged_percent(g: &Game) -> u32 {
-    scaled(g, 10, f64::INFINITY)
+    scaled(g, COMMANDO_SABOTAGED_PERCENT, f64::INFINITY)
 }
 
 /// Production divisor while protesters are present (to the tenth, as announced).
 pub fn protest_divisor(g: &Game) -> f64 {
-    scaled(g, 20, f64::INFINITY) as f64 / 10.0
+    scaled(g, PROTEST_DIVISOR_TENTHS, f64::INFINITY) as f64 / 10.0
 }
 
 /// The fog hides the mushroom from inspectors, except during the Sous surveillance challenge.
@@ -498,11 +638,13 @@ fn inspector_gone(g: &mut Game, chased: bool) {
         g.run_stats.inspectors += 1;
         g.sfx.push_back("chased");
         let loot_mult = if g.challenges_done.contains("watched") {
-            3.0
+            data::WATCHED_LOOT_MULT
         } else {
             1.0
         };
-        let bonus = (g.production() * 30.0).max(g.click_value(false) * 20.0) * loot_mult;
+        let bonus = (g.production() * INSPECTOR_LOOT_PROD_SECONDS)
+            .max(g.click_value(false) * INSPECTOR_LOOT_PRESSES)
+            * loot_mult;
         g.gain(bonus);
         g.log(
             format!(
@@ -583,10 +725,23 @@ impl EnemyKind {
 
 pub const WAVE_GAP: f64 = 1.5;
 pub const WAVE_MAX: usize = 3;
+/// Waves between two increases of the wave size.
+const WAVES_PER_EXTRA_ENEMY: usize = 2;
+/// Delay before the first enemy of a run, then between two (min, max), in seconds, before the threat
+/// pressure (Invasion challenge: data::INVASION_ENEMY_DELAY).
+pub const FIRST_ENEMY_DELAY: (f64, f64) = (60.0, 120.0);
+pub const ENEMY_DELAY: (f64, f64) = (90.0, 180.0);
+/// Loot of a chased enemy: seconds of production, or non-manual presses if more.
+const ENEMY_LOOT_PROD_SECONDS: f64 = 20.0;
+const ENEMY_LOOT_PRESSES: f64 = 15.0;
+/// The drone empties this share of the critical mass per second while it is there, and calls the
+/// inspector within DRONE_INSPECTOR_DELAY seconds when it arrives.
+const DRONE_GAUGE_DRAIN: f64 = 0.03;
+const DRONE_INSPECTOR_DELAY: f64 = 5.0;
 
 /// Wave 1: 1 enemy, 2-3: 2 enemies, then 3.
 pub fn wave_size(wave: u32) -> usize {
-    WAVE_MAX.min(1 + wave as usize / 2)
+    WAVE_MAX.min(1 + wave as usize / WAVES_PER_EXTRA_ENEMY)
 }
 
 /// Current strength of an enemy's effect, as announced (None: no number).
@@ -594,7 +749,7 @@ fn effect_strength(g: &Game, kind: EnemyKind) -> Option<String> {
     match kind {
         EnemyKind::Saboteur => Some(stolen_percent(g).to_string()),
         EnemyKind::Commando => Some(sabotaged_percent(g).to_string()),
-        EnemyKind::Hippies => Some(protest_divisor(g).to_string().replace('.', ",")),
+        EnemyKind::Hippies => Some(fr_num(protest_divisor(g))),
         EnemyKind::Drone => None,
     }
 }
@@ -615,7 +770,7 @@ pub fn enemy_progress(g: &Game, e: &Enemy) -> f64 {
 pub fn enemy_duration(g: &Game, kind: EnemyKind) -> f64 {
     kind.spec().dur
         * if g.challenges_done.contains("invasion") {
-            1.5
+            data::INVASION_ENEMY_SLOWDOWN
         } else {
             1.0
         }
@@ -679,7 +834,8 @@ fn enemy_gone(g: &mut Game, idx: usize, chased: bool) {
     if chased {
         g.stats.enemies += 1;
         g.sfx.push_back("chased");
-        let bonus = (g.production() * 20.0).max(g.click_value(false) * 15.0);
+        let bonus = (g.production() * ENEMY_LOOT_PROD_SECONDS)
+            .max(g.click_value(false) * ENEMY_LOOT_PRESSES);
         g.gain(bonus);
         g.log(
             format!(
@@ -711,7 +867,7 @@ fn enemy_arrives(g: &mut Game, idx: usize) {
             let bribed = g.time < g.bribe_until;
             let calls_inspector = g.inspector.is_none() && !bribed && inspector_can_come(g);
             let outcome = if calls_inspector {
-                g.next_inspector = g.next_inspector.min(g.time + 5.0);
+                g.next_inspector = g.next_inspector.min(g.time + DRONE_INSPECTOR_DELAY);
                 " : un inspecteur arrive bientôt !"
             } else {
                 " et vidé ta masse critique !"
@@ -755,19 +911,31 @@ const QTE_TIMEOUT: f64 = 6.0;
 const PERFECT_MULT: f64 = 300.0;
 const PARTIAL_MULT: f64 = 60.0;
 const CRIT_CHARGE_TIME: f64 = 90.0;
+/// Range of the target center on the bar (0..1), half-widths of the green and yellow zones.
+const QTE_CENTER: (f64, f64) = (0.2, 0.8);
+const QTE_GREEN: f64 = 0.06;
+const QTE_YELLOW: f64 = 0.17;
+/// Cursor speed (bars per second): QTE_MIN_SPEED plus up to QTE_SPEED_SPREAD at random.
+const QTE_MIN_SPEED: f64 = 0.9;
+const QTE_SPEED_SPREAD: f64 = 0.1;
+/// Reward base: the production per second, or this many non-manual presses if more.
+const QTE_MIN_PRESSES: f64 = 2.0;
+/// Seconds the result stays shown, and of the flash of a perfect fusion.
+const QTE_RESULT_TIME: f64 = 2.0;
+const PERFECT_FLASH: f64 = 0.5;
 
 pub fn crit_press(g: &mut Game) {
     if g.qte.is_some() {
         qte_resolve(g, false);
     } else if g.crit_gauge >= 1.0 && g.exploded {
-        let center = g.rng.uniform(0.2, 0.8);
+        let center = g.rng.uniform(QTE_CENTER.0, QTE_CENTER.1);
         g.sfx.push_back("charge");
-        let speed = 0.9 + 0.1 * g.rng.random();
+        let speed = QTE_MIN_SPEED + QTE_SPEED_SPREAD * g.rng.random();
         g.qte = Some(Qte {
             t: 0.0,
             center,
-            green: 0.06,
-            yellow: 0.17,
+            green: QTE_GREEN,
+            yellow: QTE_YELLOW,
             speed,
         });
     }
@@ -783,15 +951,15 @@ fn qte_resolve(g: &mut Game, timeout: bool) {
     let Some(q) = g.qte.take() else { return };
     g.crit_gauge = 0.0;
     let distance = (qte_pos(&q) - q.center).abs();
-    let base = g.production().max(g.click_value(false) * 2.0);
-    let shown_until = g.time + 2.0;
+    let base = g.production().max(g.click_value(false) * QTE_MIN_PRESSES);
+    let shown_until = g.time + QTE_RESULT_TIME;
     let (text, color) = if !timeout && distance <= q.green {
         let reward = base * PERFECT_MULT;
         g.stats.perfects += 1;
         g.run_stats.perfects += 1;
         g.sfx.push_back("perfect");
         g.gain(reward);
-        g.flash_until = g.time + 0.5;
+        g.flash_until = g.time + PERFECT_FLASH;
         (format!("FUSION PARFAITE ! +{} ☢", g.fmt(reward)), "green")
     } else if !timeout && distance <= q.yellow {
         let reward = base * PARTIAL_MULT;
@@ -811,6 +979,9 @@ fn qte_resolve(g: &mut Game, timeout: bool) {
 
 // --- Mutations -----------------------------------------------------------------
 
+/// Mutations offered at each milestone (before p_dna and the Brouillard de guerre reward).
+const MUTATION_CHOICES: usize = 3;
+
 pub fn offer_mutation(g: &mut Game) {
     if g.challenge == Some("sterile") {
         g.mut_queue = 0;
@@ -826,7 +997,9 @@ pub fn offer_mutation(g: &mut Game) {
         return;
     }
     g.sfx.push_back("mutation");
-    let choices = 3 + g.pr("p_dna") as usize + usize::from(g.challenges_done.contains("blind"));
+    let choices = MUTATION_CHOICES
+        + data::P_DNA_CHOICES * g.pr("p_dna") as usize
+        + data::BLIND_CHOICES * usize::from(g.challenges_done.contains("blind"));
     g.pending_mutation = Some(g.rng.sample(&pool, pool.len().min(choices)));
 }
 
@@ -877,12 +1050,16 @@ fn tick_crit_mass(g: &mut Game, dt: f64) {
         }
         return;
     }
-    let mut rate = (1.0 + 0.25 * g.tr("l_enrich") as f64)
-        * if g.has_mut("unstable") { 2.0 } else { 1.0 }
-        * 2f64.powi(g.sr("s_crit") as i32)
+    let mut rate = (1.0 + data::L_ENRICH_SPEED * g.tr("l_enrich") as f64)
+        * if g.has_mut("unstable") {
+            UNSTABLE_CRIT_SPEED
+        } else {
+            1.0
+        }
+        * data::S_CRIT_MULT.powi(g.sr("s_crit") as i32)
         / CRIT_CHARGE_TIME;
     if g.challenges_done.contains("sterile") {
-        rate *= 1.5;
+        rate *= data::STERILE_CRIT_SPEED;
     }
     if g.challenge != Some("unlucky") {
         g.crit_gauge = (g.crit_gauge + rate * dt).min(1.0);
@@ -896,7 +1073,7 @@ fn tick_plane(g: &mut Game) {
             g.next_plane = g.time + drop_interval(g);
         }
     } else if g.time >= g.next_plane
-        && g.level >= 3
+        && g.level >= PLANE_LEVEL
         && g.pending_chest.is_none()
         && g.challenge != Some("unlucky")
     {
@@ -906,7 +1083,7 @@ fn tick_plane(g: &mut Game) {
         g.plane = Some(Plane {
             letter,
             start: g.time,
-            dur: 10.0 * radar_bonus(g),
+            dur: PLANE_DURATION * radar_bonus(g),
         });
     }
 }
@@ -914,7 +1091,7 @@ fn tick_plane(g: &mut Game) {
 fn tick_inspector(g: &mut Game) {
     if let Some(inspector) = g.inspector {
         let progress = (g.time - inspector.start) / inspector.dur;
-        if g.tr("l_guard") > 0 && g.challenge != Some("watched") && progress > 0.3 {
+        if g.tr("l_guard") > 0 && g.challenge != Some("watched") && progress > GUARD_PROGRESS {
             g.log(
                 "Tes gardes escortent l'inspecteur vers la sortie.",
                 MsgKind::Good,
@@ -937,7 +1114,7 @@ fn tick_inspector(g: &mut Game) {
         g.sfx.push_back("alarm");
         g.inspector = Some(Inspector {
             start: g.time,
-            dur: 20.0,
+            dur: INSPECTOR_DURATION,
             hits: 0,
         });
     }
@@ -946,7 +1123,7 @@ fn tick_inspector(g: &mut Game) {
 fn tick_enemies(g: &mut Game, dt: f64) {
     for e in g.enemies.clone() {
         if e.kind == EnemyKind::Drone && g.time >= e.start {
-            g.crit_gauge = (g.crit_gauge - 0.03 * dt).max(0.0);
+            g.crit_gauge = (g.crit_gauge - DRONE_GAUGE_DRAIN * dt).max(0.0);
         }
         if g.time - e.start >= e.dur
             && let Some(idx) = g.enemies.iter().position(|x| *x == e)

@@ -6,7 +6,9 @@ Pas à pas pour ajouter du contenu au jeu. L'architecture, les règles et les pi
 Chaque recette se termine par : `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`,
 et si l'équilibrage change, `cargo run --release --bin sim`. Puis revue automatique du commit et correction des
 problèmes trouvés (voir `CLAUDE.md`). Les tables sont des tableaux de taille fixe : ajuster la taille déclarée
-(`[Unit; 9]`…) à chaque ajout.
+(`[Unit; 9]`…) à chaque ajout. Toute valeur d'effet ou de réglage est une constante nommée près de sa table,
+et les textes la citent (`{}` dans un `data::Desc`, ou `format!` + `data::fr_num`) au lieu de recopier le
+nombre (voir « Pas de nombre magique » dans [ARCHITECTURE.md](ARCHITECTURE.md#-règles-darchitecture)).
 
 **Nouvelle unité** : ajouter un `unit_def(…)` dans `data::UNITS` (le talent de déblocage `u_<id>` et le
 multiplicateur `m_<id>` sont générés par `unit_talents`) + un sprite dans `art::UNIT_ART` (2 images, lignes
@@ -24,23 +26,27 @@ la liste `ENEMIES` des tests de `art.rs`. Les tests `every_enemy_has_spec_and_ne
 
 **Nouveau défi** : un `challenge_def(…)` dans `data::CHALLENGES` (avec `skin`) + skin dans `data::SKINS` +
 palette dans `art::PALETTES` (et dans la liste du test `known_skins`) + la contrainte
-(`challenge == Some("<id>")`) et la récompense (`challenges_done.contains("<id>")`) dans le code. Si le défi
+(`challenge == Some("<id>")`) et la récompense (`challenges_done.contains("<id>")`) dans le code, leurs valeurs en constantes
+`<DÉFI>_…` dans `data.rs` citées par `desc` et `reward`. Si le défi
 change une échéance de début de run, penser à la fin de `Game::from_save`. Le succès « Maître des défis » suit
 automatiquement `CHALLENGES.len()`. Optionnel : une histoire de lancement et de réussite dans
 `screens::STORIES` (clés `("<id>", "start")` / `("<id>", "end")`).
 
 **Nouveau talent** : un `talent_def(…)` dans `data::build_talents` (talents de run, `TALENTS`), ou une entrée
-dans `data::PTALENTS` / `STALENTS` + effet dans le multiplicateur concerné de `Game` (rang lu par `g.tr`,
-`g.pr` ou `g.sr`). Si un talent ne doit jamais être acheté par l'auto-achat, adapter `Game::auto_talents`.
+dans `data::PTALENTS` / `STALENTS` + la constante de son effet à côté (`T_…`, `P_…`, `S_…`), citée par sa
+description (`Desc`) + effet dans le multiplicateur concerné de `Game` (rang lu par `g.tr`, `g.pr` ou
+`g.sr`). Si un talent ne doit jamais être acheté par l'auto-achat, adapter `Game::auto_talents`.
 
 **Nouvelle mutation / synergie** : `events::MUTATIONS` / `events::SYNERGIES` (chaque mutation n'appartient
-qu'à une paire) + effet via `g.has_mut("id")` / `g.has_syn("id")`.
+qu'à une paire) + la constante de son effet dans `events.rs`, citée par son texte + effet via
+`g.has_mut("id")` / `g.has_syn("id")`.
 
 **Nouveau succès** : un `achievement(id, nom, condition, |g| …)` dans `events::ACHIEVEMENTS` (chaque succès
-donne +2 % de production). Un nouveau compteur va dans `game::Stats`, avec
+donne `events::ACHIEVEMENT_BONUS` de production). Un nouveau compteur va dans `game::Stats`, avec
 `#[serde(deserialize_with = "or_default")]` (absent d'une sauvegarde, il vaut 0).
 
-**Nouveau son** : l'ajouter dans `sound::build()` (`add("nom", …)`), lui donner une priorité dans
+**Nouveau son** : l'ajouter dans `sound::build()` (`add("nom", …)`, avec un `Timbre` ou un `Noise` et les
+notes nommées), lui donner une priorité dans
 `sound::PRIORITY` si c'est un jingle, une crête plus basse dans `sound::LEVEL` s'il est fréquent,
 éventuellement un espacement dans `ui::SFX_GAP`. L'émettre par un littéral `g.sfx.push_back("nom")` (`self.sfx("nom")`
 dans `ui.rs`) : le test `every_emitted_sound_exists` vérifie que tout nom émis ainsi (ou par `.play("nom")`)

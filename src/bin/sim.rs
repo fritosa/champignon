@@ -9,6 +9,29 @@ use champignon::rng::{Rng, StdRandom};
 
 const DT: f64 = 0.1;
 const MAX_RUN_SECONDS: f64 = 3600.0;
+const DEFAULT_RUNS: u32 = 8;
+const DEFAULT_PRESSES_PER_SECOND: f64 = 6.0;
+/// Fixed seeds: the bot's choices and the game's draws, so that two simulations print the same thing.
+const BOT_SEED: u64 = 1;
+const GAME_SEED: u64 = 2;
+/// Units bought at most per tick (the bot stops earlier when it can no longer afford any).
+const MAX_UNIT_BUYS: usize = 100;
+/// Critical mass presses: chance (cumulative) of landing in the green, then in the yellow, else missing;
+/// distance from the center of the green zone in each case.
+const QTE_GREEN_CHANCE: f64 = 0.4;
+const QTE_YELLOW_CHANCE: f64 = 0.8;
+const QTE_GREEN_MISS: f64 = 0.0;
+const QTE_YELLOW_MISS: f64 = 0.1;
+const QTE_MISSED_MISS: f64 = 0.4;
+/// Chance per tick of typing the letter of the plane flying by.
+const CATCH_CHANCE: f64 = 0.1;
+/// Under this core expansion rank, part of the isotopes is kept aside for the next one…
+const CAP_RANK_SAVED_FOR: u32 = 4;
+/// …this share of its price.
+const CAP_RESERVE_SHARE: f64 = 0.6;
+/// Passes over PRESTIGE_ORDER when spending isotopes (one rank per talent per pass).
+const PRESTIGE_BUY_PASSES: usize = 40;
+const SECONDS_PER_MINUTE: f64 = 60.0;
 const LEVEL_MARKS: [u32; 8] = [10, 25, 50, 100, 1_000, 10_000, 100_000, 1_000_000];
 const PRESTIGE_ORDER: [&str; 10] = [
     "p_cap",
@@ -24,7 +47,7 @@ const PRESTIGE_ORDER: [&str; 10] = [
 ];
 
 fn buy_units(g: &mut Game) {
-    for _ in 0..100 {
+    for _ in 0..MAX_UNIT_BUYS {
         // The best production per radiation spent (the first of them on a tie).
         let mut best: Option<(&str, f64)> = None;
         for u in data::UNITS.iter().filter(|u| g.can_buy_unit(u.id)) {
@@ -38,17 +61,18 @@ fn buy_units(g: &mut Game) {
     }
 }
 
-/// Starts the critical mass and presses at `miss` from the center: 40% in the green, 40% in the yellow, 20% missed.
+/// Starts the critical mass and presses at `miss` from the center: in the green, in the yellow or missed
+/// (QTE_* chances).
 fn play_qte(g: &mut Game, rng: &mut StdRandom) {
     events::crit_press(g);
     let Some(qte) = g.qte.as_mut() else { return };
     let r = rng.random();
-    let miss = if r < 0.4 {
-        0.0
-    } else if r < 0.8 {
-        0.1
+    let miss = if r < QTE_GREEN_CHANCE {
+        QTE_GREEN_MISS
+    } else if r < QTE_YELLOW_CHANCE {
+        QTE_YELLOW_MISS
     } else {
-        0.4
+        QTE_MISSED_MISS
     };
     let pos = if qte.center >= miss {
         qte.center - miss
@@ -87,7 +111,7 @@ impl Bot {
             play_qte(g, &mut self.rng);
         }
         if let Some(plane) = g.plane
-            && self.rng.random() < 0.1
+            && self.rng.random() < CATCH_CHANCE
         {
             events::catch(g, plane.letter);
         }
@@ -119,12 +143,12 @@ fn spend_isotopes(g: &mut Game) -> Vec<&'static str> {
         bought.push("p_cap");
     }
     // Keep enough to aim for the next core expansion.
-    let reserve = if g.pr("p_cap") < 4 {
-        g.ptalent_cost("p_cap") * 0.6
+    let reserve = if g.pr("p_cap") < CAP_RANK_SAVED_FOR {
+        g.ptalent_cost("p_cap") * CAP_RESERVE_SHARE
     } else {
         0.0
     };
-    for _ in 0..40 {
+    for _ in 0..PRESTIGE_BUY_PASSES {
         for pid in &PRESTIGE_ORDER[1..] {
             if g.isotopes as f64 - g.ptalent_cost(pid) >= reserve && g.buy_ptalent(pid) {
                 bought.push(pid);
@@ -148,21 +172,21 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let runs: u32 = args
         .get(1)
-        .map_or(8, |a| a.parse().expect("number of runs"));
-    let cps: f64 = args
-        .get(2)
-        .map_or(6.0, |a| a.parse().expect("presses per second"));
+        .map_or(DEFAULT_RUNS, |a| a.parse().expect("number of runs"));
+    let cps: f64 = args.get(2).map_or(DEFAULT_PRESSES_PER_SECOND, |a| {
+        a.parse().expect("presses per second")
+    });
     let mut bot = Bot {
-        rng: StdRandom::seeded(1),
+        rng: StdRandom::seeded(BOT_SEED),
         cps,
         presses: 0.0,
     };
-    let mut g = Game::new(Box::new(StdRandom::seeded(2)));
+    let mut g = Game::new(Box::new(StdRandom::seeded(GAME_SEED)));
     for r in 0..runs {
         let marks = bot.run_once(&mut g);
         let txt: Vec<String> = marks
             .iter()
-            .map(|&(m, t)| format!("L{}:{:.1}m", fmt(m as f64), t / 60.0))
+            .map(|&(m, t)| format!("L{}:{:.1}m", fmt(m as f64), t / SECONDS_PER_MINUTE))
             .collect();
         println!(
             "run {:2} cap {:>5}  level {:>5}  {}",

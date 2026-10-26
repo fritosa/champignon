@@ -15,6 +15,8 @@ use libloading::Library;
 use rand::rngs::StdRng;
 use rand::{RngExt, SeedableRng};
 
+use crate::game::CLICK_SOUNDS;
+
 pub const RATE: usize = 22050;
 const RATE_F: f64 = RATE as f64;
 pub const CHUNK: usize = 441; // 20 ms
@@ -79,10 +81,14 @@ pub fn level(name: &str) -> f64 {
         .map_or(DEFAULT_LEVEL, |&(_, l)| l)
 }
 
+/// 64-bit FNV-1a parameters.
+const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+const FNV_PRIME: u64 = 0x0100_0000_01b3;
+
 /// Stable 64-bit seed from a string (FNV-1a), for the RNGs seeded by name.
 fn seed_of(text: &str) -> u64 {
-    text.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| {
-        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    text.bytes().fold(FNV_OFFSET, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(FNV_PRIME)
     })
 }
 
@@ -213,15 +219,47 @@ pub fn seq(notes: Vec<Vec<f64>>, gap: f64) -> Vec<f64> {
     mix(parts)
 }
 
-/// Steady notes played one after another, all with the same shape.
-fn arpeggio(freqs: &[f64], dur: f64, kind: Wave, vol: f64, env: Env) -> Vec<f64> {
-    seq(
-        freqs
-            .iter()
-            .map(|&f| tone(f, f, dur, kind, vol, env))
-            .collect(),
-        0.0,
-    )
+/// Shape of a tone apart from its pitch: length (s), waveform, volume, envelope.
+#[derive(Clone, Copy, Debug)]
+struct Timbre {
+    secs: f64,
+    wave: Wave,
+    vol: f64,
+    env: Env,
+}
+
+impl Timbre {
+    /// Tone gliding (exponentially) from one frequency to another, in Hz.
+    fn glide(self, from: f64, to: f64) -> Vec<f64> {
+        tone(from, to, self.secs, self.wave, self.vol, self.env)
+    }
+
+    /// Tone held at one frequency, in Hz.
+    fn at(self, freq: f64) -> Vec<f64> {
+        self.glide(freq, freq)
+    }
+}
+
+/// Burst of filtered noise (see `noise`): length (s), volume, decay time constant (s), low-pass cutoff
+/// (0..1, higher is brighter), seed.
+#[derive(Clone, Copy, Debug)]
+struct Noise {
+    secs: f64,
+    vol: f64,
+    decay: f64,
+    cutoff: f64,
+    seed: u64,
+}
+
+impl Noise {
+    fn render(self) -> Vec<f64> {
+        noise(self.secs, self.vol, self.decay, self.cutoff, self.seed)
+    }
+}
+
+/// Steady notes played one after another, all with the same timbre.
+fn arpeggio(freqs: &[f64], timbre: Timbre) -> Vec<f64> {
+    seq(freqs.iter().map(|&f| timbre.at(f)).collect(), 0.0)
 }
 
 fn normalize(samples: &[f64], peak: f64) -> Arc<[f32]> {
@@ -232,48 +270,151 @@ fn normalize(samples: &[f64], peak: f64) -> Arc<[f32]> {
 /// Effect bank: name → samples normalized to their LEVEL.
 pub type Bank = HashMap<String, Arc<[f32]>>;
 
+// Pitches of the effects' melodies (Hz, rounded).
+const D4: f64 = 294.0;
+const G4: f64 = 392.0;
+const C5: f64 = 523.0;
+const E5: f64 = 659.0;
+const G5: f64 = 784.0;
+const GS5: f64 = 831.0; // G sharp
+const A5: f64 = 880.0;
+const B5: f64 = 988.0;
+const C6: f64 = 1047.0;
+const D6: f64 = 1175.0;
+const E6: f64 = 1319.0;
+const G6: f64 = 1568.0;
+const C7: f64 = 2093.0;
+
+/// Presses: one blip per `game::CLICK_SOUNDS` (combo steps), CLICK_STEPS_PER_OCTAVE steps per octave up
+/// from CLICK_BASE, each gliding down from CLICK_GLIDE times its pitch.
+const CLICK_BASE: f64 = 220.0;
+const CLICK_STEPS_PER_OCTAVE: f64 = 6.0;
+const CLICK_GLIDE: f64 = 1.5;
+const CLICK: Timbre = Timbre {
+    secs: 0.035,
+    wave: Square,
+    vol: 0.12,
+    env: PLAIN,
+};
+
+/// The sound design: each effect as tones (`Timbre`, glides in Hz) and noise bursts (`Noise`), layered by
+/// `mix` (offsets in s) or chained by `seq` (gap in s).
 pub fn build() -> Bank {
     let mut s: Vec<(String, Vec<f64>)> = Vec::new();
     let mut add = |name: &str, samples: Vec<f64>| s.push((name.to_string(), samples));
-    for i in 0..8 {
-        let pitch = 220.0 * 2f64.powf(f64::from(i) / 6.0);
-        add(
-            &format!("click{i}"),
-            tone(pitch * 1.5, pitch, 0.035, Square, 0.12, PLAIN),
-        );
+    for (i, name) in CLICK_SOUNDS.iter().enumerate() {
+        let pitch = CLICK_BASE * 2f64.powf(i as f64 / CLICK_STEPS_PER_OCTAVE);
+        add(name, CLICK.glide(pitch * CLICK_GLIDE, pitch));
     }
     add(
         "crit",
         mix(vec![
-            (0.0, tone(1400.0, 300.0, 0.15, Saw, 0.25, PLAIN)),
-            (0.0, noise(0.12, 0.25, 0.05, 0.6, 1)),
+            (
+                0.0,
+                Timbre {
+                    secs: 0.15,
+                    wave: Saw,
+                    vol: 0.25,
+                    env: PLAIN,
+                }
+                .glide(1400.0, 300.0),
+            ),
+            (
+                0.0,
+                Noise {
+                    secs: 0.12,
+                    vol: 0.25,
+                    decay: 0.05,
+                    cutoff: 0.6,
+                    seed: 1,
+                }
+                .render(),
+            ),
         ]),
     );
-    add(
-        "level",
-        arpeggio(&[523.0, 659.0, 784.0], 0.05, Square, 0.15, PLAIN),
-    );
+    let blip = Timbre {
+        secs: 0.05,
+        wave: Square,
+        vol: 0.15,
+        env: PLAIN,
+    };
+    add("level", arpeggio(&[C5, E5, G5], blip));
     let boom = mix(vec![
-        (0.0, noise(1.6, 0.8, 0.45, 0.06, 2)),
-        (0.0, tone(90.0, 30.0, 1.2, Sine, 0.55, decay(0.4))),
-        (0.0, noise(0.08, 0.5, 0.03, 0.7, 3)),
+        (
+            0.0,
+            Noise {
+                secs: 1.6,
+                vol: 0.8,
+                decay: 0.45,
+                cutoff: 0.06,
+                seed: 2,
+            }
+            .render(),
+        ),
+        (
+            0.0,
+            Timbre {
+                secs: 1.2,
+                wave: Sine,
+                vol: 0.55,
+                env: decay(0.4),
+            }
+            .glide(90.0, 30.0),
+        ),
+        (
+            0.0,
+            Noise {
+                secs: 0.08,
+                vol: 0.5,
+                decay: 0.03,
+                cutoff: 0.7,
+                seed: 3,
+            }
+            .render(),
+        ),
     ]);
     add("boom", boom.clone());
     add(
         "overheat",
         mix(vec![
-            (0.0, tone(700.0, 120.0, 0.5, Saw, 0.22, PLAIN)),
-            (0.0, noise(0.6, 0.15, 0.3, 0.8, 4)),
+            (
+                0.0,
+                Timbre {
+                    secs: 0.5,
+                    wave: Saw,
+                    vol: 0.22,
+                    env: PLAIN,
+                }
+                .glide(700.0, 120.0),
+            ),
+            (
+                0.0,
+                Noise {
+                    secs: 0.6,
+                    vol: 0.15,
+                    decay: 0.3,
+                    cutoff: 0.8,
+                    seed: 4,
+                }
+                .render(),
+            ),
         ]),
     );
-    add("nope", tone(110.0, 100.0, 0.12, Square, 0.15, PLAIN));
-    add("jam", tone(140.0, 90.0, 0.08, Square, 0.15, PLAIN)); // press refused during overheat
+    let buzz = Timbre { secs: 0.12, ..blip };
+    add("nope", buzz.glide(110.0, 100.0));
+    // press refused during overheat
+    add("jam", Timbre { secs: 0.08, ..buzz }.glide(140.0, 90.0));
     add(
         "buy",
         seq(
             vec![
-                tone(988.0, 988.0, 0.06, Square, 0.15, PLAIN),
-                tone(1319.0, 1319.0, 0.22, Square, 0.15, decay(0.08)),
+                Timbre { secs: 0.06, ..buzz }.at(B5),
+                Timbre {
+                    secs: 0.22,
+                    env: decay(0.08),
+                    ..buzz
+                }
+                .at(E6),
             ],
             0.0,
         ),
@@ -283,32 +424,88 @@ pub fn build() -> Bank {
         mix(vec![
             (
                 0.0,
-                arpeggio(&[784.0, 988.0, 1175.0, 1568.0], 0.06, Square, 0.12, PLAIN),
+                arpeggio(
+                    &[G5, B5, D6, G6],
+                    Timbre {
+                        secs: 0.06,
+                        vol: 0.12,
+                        ..blip
+                    },
+                ),
             ),
-            (0.24, tone(2093.0, 2093.0, 0.3, Tri, 0.2, decay(0.1))),
+            (
+                0.24,
+                Timbre {
+                    secs: 0.3,
+                    wave: Tri,
+                    vol: 0.2,
+                    env: decay(0.1),
+                }
+                .at(C7),
+            ),
         ]),
     );
+    let chime = Timbre {
+        secs: 0.05,
+        wave: Tri,
+        vol: 0.3,
+        env: PLAIN,
+    };
     add(
         "chest",
         mix(vec![
-            (0.0, tone(300.0, 300.0, 0.05, Square, 0.12, PLAIN)),
-            (0.06, noise(0.08, 0.2, 0.03, 0.5, 13)),
+            (0.0, Timbre { vol: 0.12, ..blip }.at(300.0)),
             (
-                0.12,
-                arpeggio(&[1047.0, 1319.0, 1568.0, 2093.0], 0.05, Tri, 0.3, PLAIN),
+                0.06,
+                Noise {
+                    secs: 0.08,
+                    vol: 0.2,
+                    decay: 0.03,
+                    cutoff: 0.5,
+                    seed: 13,
+                }
+                .render(),
             ),
+            (0.12, arpeggio(&[C6, E6, G6, C7], chime)),
         ]),
     );
     add(
         "talent",
-        arpeggio(&[392.0, 523.0, 784.0], 0.07, Tri, 0.3, PLAIN),
+        arpeggio(
+            &[G4, C5, G5],
+            Timbre {
+                secs: 0.07,
+                ..chime
+            },
+        ),
     );
-    add("tick", tone(1800.0, 1800.0, 0.008, Sine, 0.06, PLAIN));
+    add(
+        "tick",
+        Timbre {
+            secs: 0.008,
+            wave: Sine,
+            vol: 0.06,
+            env: PLAIN,
+        }
+        .at(1800.0),
+    );
+    let bell = |freq, secs| {
+        Timbre {
+            secs,
+            wave: Tri,
+            vol: 0.35,
+            env: decay(secs),
+        }
+        .at(freq)
+    };
+    let (beat, held) = (0.09, 0.45);
     let achievement = seq(
-        [(523.0, 0.09), (659.0, 0.09), (784.0, 0.09), (1047.0, 0.45)]
-            .iter()
-            .map(|&(f, d)| tone(f, f, d, Tri, 0.35, decay(d)))
-            .collect(),
+        vec![
+            bell(C5, beat),
+            bell(E5, beat),
+            bell(G5, beat),
+            bell(C6, held),
+        ],
         0.0,
     );
     add("achievement", achievement.clone());
@@ -317,68 +514,117 @@ pub fn build() -> Bank {
         mix(vec![
             (
                 0.0,
-                tone(
-                    110.0,
-                    95.0,
-                    1.6,
-                    Saw,
-                    0.12,
-                    Env {
+                Timbre {
+                    secs: 1.6,
+                    wave: Saw,
+                    vol: 0.12,
+                    env: Env {
                         vibrato: (7.0, 0.02),
                         ..attack(0.4)
                     },
-                ),
+                }
+                .glide(110.0, 95.0),
             ),
-            (0.0, noise(1.6, 0.12, 1.0, 0.05, 5)),
+            (
+                0.0,
+                Noise {
+                    secs: 1.6,
+                    vol: 0.12,
+                    decay: 1.0,
+                    cutoff: 0.05,
+                    seed: 5,
+                }
+                .render(),
+            ),
         ]),
     );
-    add("drop", tone(400.0, 1600.0, 0.16, Square, 0.15, PLAIN));
+    add("drop", Timbre { secs: 0.16, ..buzz }.glide(400.0, 1600.0));
+    let (siren_low, siren_high) = (660.0, 880.0);
     add(
         "alarm",
         arpeggio(
-            &[660.0, 880.0, 660.0, 880.0],
-            0.22,
-            Square,
-            0.12,
-            attack(0.02),
+            &[siren_low, siren_high, siren_low, siren_high],
+            Timbre {
+                secs: 0.22,
+                vol: 0.12,
+                env: attack(0.02),
+                ..blip
+            },
         ),
     );
     add(
         "hit",
         mix(vec![
-            (0.0, tone(160.0, 60.0, 0.1, Sine, 0.6, decay(0.04))),
-            (0.0, noise(0.06, 0.4, 0.02, 0.5, 6)),
+            (
+                0.0,
+                Timbre {
+                    secs: 0.1,
+                    wave: Sine,
+                    vol: 0.6,
+                    env: decay(0.04),
+                }
+                .glide(160.0, 60.0),
+            ),
+            (
+                0.0,
+                Noise {
+                    secs: 0.06,
+                    vol: 0.4,
+                    decay: 0.02,
+                    cutoff: 0.5,
+                    seed: 6,
+                }
+                .render(),
+            ),
         ]),
     );
     add(
         "enemy",
-        arpeggio(&[392.0, 294.0, 392.0, 294.0], 0.14, Saw, 0.15, attack(0.01)),
-    );
-    add(
-        "chased",
-        tone(
-            1300.0,
-            250.0,
-            0.5,
-            Sine,
-            0.3,
-            Env {
-                vibrato: (9.0, 0.03),
-                ..PLAIN
+        arpeggio(
+            &[G4, D4, G4, D4],
+            Timbre {
+                secs: 0.14,
+                wave: Saw,
+                vol: 0.15,
+                env: attack(0.01),
             },
         ),
     );
     add(
+        "chased",
+        Timbre {
+            secs: 0.5,
+            wave: Sine,
+            vol: 0.3,
+            env: Env {
+                vibrato: (9.0, 0.03),
+                ..PLAIN
+            },
+        }
+        .glide(1300.0, 250.0),
+    );
+    add(
         "freeze",
         arpeggio(
-            &[2093.0, 1568.0, 1047.0, 784.0],
-            0.12,
-            Tri,
-            0.25,
-            decay(0.1),
+            &[C7, G6, C6, G5],
+            Timbre {
+                secs: 0.12,
+                vol: 0.25,
+                env: decay(0.1),
+                ..chime
+            },
         ),
     );
-    add("charge", tone(200.0, 900.0, 0.45, Saw, 0.12, attack(0.05)));
+    add(
+        "charge",
+        Timbre {
+            secs: 0.45,
+            wave: Saw,
+            vol: 0.12,
+            env: attack(0.05),
+        }
+        .glide(200.0, 900.0),
+    );
     add(
         "perfect",
         mix(vec![(0.0, boom.clone()), (0.15, achievement)]),
@@ -387,8 +633,17 @@ pub fn build() -> Bank {
         "partial",
         seq(
             vec![
-                tone(659.0, 659.0, 0.08, Tri, 0.3, PLAIN),
-                tone(880.0, 880.0, 0.2, Tri, 0.3, decay(0.1)),
+                Timbre {
+                    secs: 0.08,
+                    ..chime
+                }
+                .at(E5),
+                Timbre {
+                    secs: 0.2,
+                    env: decay(0.1),
+                    ..chime
+                }
+                .at(A5),
             ],
             0.0,
         ),
@@ -396,33 +651,57 @@ pub fn build() -> Bank {
     add(
         "fizzle",
         mix(vec![
-            (0.0, noise(0.5, 0.35, 0.2, 0.3, 7)),
-            (0.0, tone(300.0, 80.0, 0.5, Sine, 0.2, PLAIN)),
+            (
+                0.0,
+                Noise {
+                    secs: 0.5,
+                    vol: 0.35,
+                    decay: 0.2,
+                    cutoff: 0.3,
+                    seed: 7,
+                }
+                .render(),
+            ),
+            (
+                0.0,
+                Timbre {
+                    secs: 0.5,
+                    wave: Sine,
+                    vol: 0.2,
+                    env: PLAIN,
+                }
+                .glide(300.0, 80.0),
+            ),
         ]),
     );
-    let mutation = tone(
-        300.0,
-        600.0,
-        0.7,
-        Sine,
-        0.35,
-        Env {
+    let mutation = Timbre {
+        secs: 0.7,
+        wave: Sine,
+        vol: 0.35,
+        env: Env {
             vibrato: (6.0, 0.15),
             ..attack(0.05)
         },
-    );
+    }
+    .glide(300.0, 600.0);
     add("mutation", mutation.clone());
+    let rise = |secs, attack_secs| Timbre {
+        secs,
+        wave: Saw,
+        vol: 0.15,
+        env: attack(attack_secs),
+    };
     add(
         "prestige",
         mix(vec![
-            (0.0, tone(100.0, 1600.0, 1.4, Saw, 0.15, attack(0.3))),
+            (0.0, rise(1.4, 0.3).glide(100.0, 1600.0)),
             (1.2, boom.clone()),
         ]),
     );
     add(
         "supernova",
         mix(vec![
-            (0.0, tone(80.0, 2400.0, 2.2, Saw, 0.15, attack(0.5))),
+            (0.0, rise(2.2, 0.5).glide(80.0, 2400.0)),
             (2.0, boom.clone()),
             (2.6, boom),
         ]),
@@ -433,18 +712,28 @@ pub fn build() -> Bank {
             (0.0, mutation),
             (
                 0.35,
-                arpeggio(&[659.0, 831.0, 988.0, 1319.0], 0.08, Tri, 0.3, PLAIN),
+                arpeggio(
+                    &[E5, GS5, B5, E6],
+                    Timbre {
+                        secs: 0.08,
+                        ..chime
+                    },
+                ),
             ),
         ]),
     );
+    let brass = Timbre { secs: 0.1, ..blip };
+    let gap = 0.03; // detached notes
     add(
         "fanfare",
         seq(
-            [(392.0, 0.1), (392.0, 0.1), (392.0, 0.1), (523.0, 0.5)]
-                .iter()
-                .map(|&(f, d)| tone(f, f, d, Square, 0.15, PLAIN))
-                .collect(),
-            0.03,
+            vec![
+                brass.at(G4),
+                brass.at(G4),
+                brass.at(G4),
+                Timbre { secs: 0.5, ..brass }.at(C5),
+            ],
+            gap,
         ),
     );
     // Bring each sound to its target peak: stacked layers don't clip, faint sounds stay audible.
@@ -576,16 +865,74 @@ const RADIO_HIGH_CUT: f64 = 0.45; // one-pole low-pass, applied twice (~3 kHz)
 const CRACKLES_PER_SECOND: f64 = 7.0;
 const CRACKLE_LENGTH: usize = 12; // samples
 const CRACKLE_DECAY: f64 = 0.6; // per sample
+const CRACKLE_MIN_AMP: f64 = 0.05;
+const CRACKLE_MAX_AMP: f64 = 0.3;
+const HISS_VOL: f64 = 0.012;
+const HISS_CUTOFF: f64 = 0.9; // bright hiss, the radio filters then darken it
+const NO_DECAY: f64 = 1e9; // decay time constant (s) of a noise that keeps its volume
 const NOTE_RELEASE: f64 = 0.01; // note fade-out (s): a note cut dead clicks
+/// Walking bass, slightly detached.
+const BASS: Timbre = Timbre {
+    secs: BEAT * 0.95,
+    wave: Tri,
+    vol: 0.35,
+    env: Env {
+        attack: 0.004,
+        ..decay(0.2)
+    },
+};
+/// Piano chords, one octave above the bass root.
+const PIANO_TRANSPOSE: f64 = 2.0;
+const PIANO: Timbre = Timbre {
+    secs: 0.3,
+    wave: Tri,
+    vol: 0.06,
+    env: decay(0.1),
+};
+/// Vibraphone theme: two octaves above the bass root, each note decaying over THEME_DECAY of its length.
+const THEME_TRANSPOSE: f64 = 4.0;
+const THEME_ATTACK: f64 = 0.01;
+const THEME_DECAY: f64 = 0.6;
+const THEME_VIBRATO: (f64, f64) = (5.0, 0.006);
+const THEME_VOL: f64 = 0.16;
+const RIDE_HIT: Noise = Noise {
+    secs: 0.18,
+    vol: 0.1,
+    decay: 0.06,
+    cutoff: 0.95,
+    seed: 21,
+};
+const BRUSH_SWEEP: Noise = Noise {
+    secs: 0.25,
+    vol: 0.12,
+    decay: 0.1,
+    cutoff: 0.4,
+    seed: 22,
+};
+/// Kick drum: a falling thump (Hz) and the click on top.
+const KICK_FROM: f64 = 180.0;
+const KICK_TO: f64 = 70.0;
+const KICK_THUMP: Timbre = Timbre {
+    secs: 0.15,
+    wave: Sine,
+    vol: 0.5,
+    env: decay(0.06),
+};
+const KICK_CLICK: Noise = Noise {
+    secs: 0.03,
+    vol: 0.4,
+    decay: 0.01,
+    cutoff: 0.5,
+    seed: 23,
+};
 
 /// Index of a track in STYLES (and in `build_music`'s result).
 pub fn track_index(name: &str) -> Option<usize> {
     STYLES.iter().position(|(n, _)| *n == name)
 }
 
-/// tone() ending with a short fade to zero, for music notes.
-fn note(f0: f64, f1: f64, dur: f64, kind: Wave, vol: f64, env: Env) -> Vec<f64> {
-    let mut samples = tone(f0, f1, dur, kind, vol, env);
+/// A tone ending with a short fade to zero, for music notes.
+fn note(mut samples: Vec<f64>) -> Vec<f64> {
     let n = samples.len().min((NOTE_RELEASE * RATE_F) as usize);
     for (i, x) in samples.iter_mut().rev().take(n).enumerate() {
         *x *= i as f64 / n as f64;
@@ -612,7 +959,7 @@ fn radio(mut track: Vec<f64>, seed: &str) -> Vec<f64> {
     let n = track.len();
     for _ in 0..(n as f64 / RATE_F * CRACKLES_PER_SECOND) as usize {
         let pos = rng.random_range(0..n);
-        let amp = rng.random_range(0.05..0.3) * pick(&mut rng, &[-1.0, 1.0]);
+        let amp = rng.random_range(CRACKLE_MIN_AMP..CRACKLE_MAX_AMP) * pick(&mut rng, &[-1.0, 1.0]);
         for i in 0..CRACKLE_LENGTH {
             track[(pos + i) % n] += amp * CRACKLE_DECAY.powi(i as i32);
         }
@@ -620,9 +967,9 @@ fn radio(mut track: Vec<f64>, seed: &str) -> Vec<f64> {
     // +1: never shorter than the track
     let hiss = noise(
         (n + 1) as f64 / RATE_F,
-        0.012,
-        1e9,
-        0.9,
+        HISS_VOL,
+        NO_DECAY,
+        HISS_CUTOFF,
         seed_of(&format!("{seed}-hiss")),
     );
     for (x, h) in track.iter_mut().zip(hiss) {
@@ -660,15 +1007,10 @@ fn bass(out: &mut [f64], bar_start: f64, root: f64, chord: Chord, next_root: f64
         approach,
     ];
     for &beat in beats {
-        let f = walk[beat];
-        let env = Env {
-            attack: 0.004,
-            ..decay(0.2)
-        };
         add_at(
             out,
             bar_start + beat as f64 * BEAT,
-            &note(f, f, BEAT * 0.95, Tri, 0.35, env),
+            &note(BASS.at(walk[beat])),
         );
     }
 }
@@ -676,17 +1018,18 @@ fn bass(out: &mut [f64], bar_start: f64, root: f64, chord: Chord, next_root: f64
 /// Chord notes two octaves up, with slight vibrato like a vibraphone.
 fn theme(out: &mut [f64], bar_start: f64, root: f64, chord: Chord, rng: &mut StdRng) {
     for &(start, length) in pick(rng, PHRASES) {
-        let f = root * 4.0 * semitones(pick(rng, &chord));
-        let env = Env {
-            attack: 0.01,
-            decay: Some(length * BEAT * 0.6),
-            vibrato: (5.0, 0.006),
+        let f = root * THEME_TRANSPOSE * semitones(pick(rng, &chord));
+        let vibraphone = Timbre {
+            secs: length * BEAT,
+            wave: Sine,
+            vol: THEME_VOL,
+            env: Env {
+                attack: THEME_ATTACK,
+                decay: Some(length * BEAT * THEME_DECAY),
+                vibrato: THEME_VIBRATO,
+            },
         };
-        add_at(
-            out,
-            bar_start + start * BEAT,
-            &note(f, f, length * BEAT, Sine, 0.16, env),
-        );
+        add_at(out, bar_start + start * BEAT, &note(vibraphone.at(f)));
     }
 }
 
@@ -700,12 +1043,12 @@ fn track(index: usize) -> Arc<[f32]> {
         .1;
     let mut out = vec![0.0; ((BARS * BEATS_PER_BAR) as f64 * BEAT * RATE_F) as usize];
     let mut rng = StdRng::seed_from_u64(seed_of(name));
-    let ride = noise(0.18, 0.1, 0.06, 0.95, 21);
-    let brush = noise(0.25, 0.12, 0.1, 0.4, 22);
+    let ride = RIDE_HIT.render();
+    let brush = BRUSH_SWEEP.render();
     // Under the radio's high-pass only the kick's click gets through, so give it one.
     let kick = mix(vec![
-        (0.0, note(180.0, 70.0, 0.15, Sine, 0.5, decay(0.06))),
-        (0.0, noise(0.03, 0.4, 0.01, 0.5, 23)),
+        (0.0, note(KICK_THUMP.glide(KICK_FROM, KICK_TO))),
+        (0.0, KICK_CLICK.render()),
     ]);
     for (bar, &(root, chord)) in progression.iter().enumerate() {
         let bar_start = (bar * BEATS_PER_BAR) as f64 * BEAT;
@@ -717,19 +1060,9 @@ fn track(index: usize) -> Arc<[f32]> {
             progression[(bar + 1) % BARS].0,
             style.bass,
         );
-        let voicing = chord.iter().map(|&i| {
-            (
-                0.0,
-                note(
-                    root * 2.0 * semitones(i),
-                    root * 2.0 * semitones(i),
-                    0.3,
-                    Tri,
-                    0.06,
-                    decay(0.1),
-                ),
-            )
-        });
+        let voicing = chord
+            .iter()
+            .map(|&i| (0.0, note(PIANO.at(root * PIANO_TRANSPOSE * semitones(i)))));
         play_beats(&mut out, bar_start, style.piano, &mix(voicing.collect()));
         play_beats(&mut out, bar_start, RIDE, &ride);
         play_beats(&mut out, bar_start, BRUSH, &brush);
@@ -797,9 +1130,10 @@ pub const PCM_SCALE: f64 = 32000.0; // slightly under 32767, the 16-bit integer 
 /// (Windows Remote Desktop) cuts a stream of pure silence and is slow to restart it, so effects come late
 /// and choppy whenever the music is off.
 pub const KEEPALIVE_LSB: i16 = 2;
+const KEEPALIVE_SEED: u64 = 0;
 /// One-second loop of the background hiss.
 pub static KEEPALIVE: LazyLock<Vec<i16>> = LazyLock::new(|| {
-    let mut rng = StdRng::seed_from_u64(0);
+    let mut rng = StdRng::seed_from_u64(KEEPALIVE_SEED);
     (0..RATE)
         .map(|_| rng.random_range(-KEEPALIVE_LSB..=KEEPALIVE_LSB))
         .collect()
@@ -1374,8 +1708,8 @@ mod tests {
             missing.is_empty(),
             "sounds emitted but never synthesized: {missing:?}"
         );
-        for i in 0..8 {
-            assert!(BANK.contains_key(&format!("click{i}")));
+        for name in CLICK_SOUNDS {
+            assert!(BANK.contains_key(name), "{name}");
         }
     }
 
@@ -1391,7 +1725,7 @@ mod tests {
                 (BARS as f64 * 4.0 * BEAT * RATE_F) as usize,
                 "{name}"
             );
-            assert!(peak(track) <= 0.9 + 1e-6, "{name}");
+            assert!(peak(track) <= MUSIC_PEAK + 1e-6, "{name}");
         }
     }
 

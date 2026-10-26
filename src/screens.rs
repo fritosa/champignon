@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 
 use crate::game::{fmt, wall_time};
-use crate::saves::{RawSave, Saves};
+use crate::saves::{MAIN_SLOT, RawSave, Saves};
 use crate::sound::SoundSink;
 use crate::term::{Key, Screen, Style, width};
 
@@ -34,6 +34,12 @@ pub const INTRO: &[&str] = &[
 pub const INTRO_SPEED: f64 = 80.0; // characters/s
 pub const STORY_GUARD: f64 = 1.0; // seconds of keys ignored by a challenge story (players are still hammering SPACE)
 const TYPE_FRAME: Duration = Duration::from_millis(30);
+const TICK_EVERY: i32 = 6; // typewriter sound every TICK_EVERY characters
+const TEXT_MARGIN: i32 = 4; // columns kept around the typed text…
+const TEXT_MIN_W: i32 = 10; // …whose width stays within these bounds
+const TEXT_MAX_W: i32 = 70;
+const TEXT_TOP: i32 = 2; // rows of the title and the blank line above the text
+const TEXT_CHROME_H: i32 = 4; // rows centered with the text: title, blank line, two below
 
 /// Challenge stories, shown like the introduction at launch ("start") and on success ("end").
 pub const STORIES: &[((&str, &str), &[&str])] = &[
@@ -275,33 +281,33 @@ pub fn intro_with_clock(
     let bold = Style::PLAIN.bold();
     loop {
         let (h, w) = scr.size();
-        let bw = (w - 4).clamp(10, 70);
+        let bw = (w - TEXT_MARGIN).clamp(TEXT_MIN_W, TEXT_MAX_W);
         let mut lines: Vec<(String, bool)> = Vec::new();
         for (i, par) in pages.iter().enumerate() {
             lines.extend(wrap(&nbsp(par), bw).into_iter().map(|line| (line, i == 0)));
             lines.push((String::new(), false));
         }
-        lines.truncate((h - 3).max(1) as usize); // overflow is neither typed nor waited for
+        lines.truncate((h - TEXT_TOP - 1).max(1) as usize); // overflow is neither typed nor waited for
         let total: i32 = lines.iter().map(|(line, _)| width(line)).sum();
         let before = shown as i32;
         shown = f64::from(total).min((clock() - start) * INTRO_SPEED);
         if let Some(sound) = sound
-            && shown as i32 / 6 != before / 6
+            && shown as i32 / TICK_EVERY != before / TICK_EVERY
             && shown < f64::from(total)
         {
             sound.play("tick");
         }
         scr.erase();
-        let y = fdiv(h - lines.len() as i32 - 4, 2).max(0);
+        let y = fdiv(h - lines.len() as i32 - TEXT_CHROME_H, 2).max(0);
         let x = fdiv(w - bw, 2).max(0);
         menu_put(scr, y, fdiv(w - width(TITLE), 2).max(0), TITLE, bold);
         let mut left = shown as i32;
         for (i, (line, is_bold)) in lines.iter().enumerate() {
-            if y + 2 + i as i32 >= h - 1 {
+            if y + TEXT_TOP + i as i32 >= h - 1 {
                 break;
             }
             let style = if *is_bold { bold } else { Style::PLAIN };
-            menu_put(scr, y + 2 + i as i32, x, &head(line, left), style);
+            menu_put(scr, y + TEXT_TOP + i as i32, x, &head(line, left), style);
             left = (left - width(line)).max(0);
         }
         let done = shown >= f64::from(total);
@@ -334,10 +340,21 @@ fn number_or_zero(d: &RawSave, key: &str) -> f64 {
     d.get(key).and_then(Value::as_f64).unwrap_or(0.0)
 }
 
+/// Units of `ago`, largest first: (name, seconds).
+const AGO_UNITS: [(&str, f64); 3] = [("j", 86400.0), ("h", 3600.0), ("min", 60.0)];
+
+// Start menu layout: header (title, blank, question, blank), 2 rows per game, ↓ and help rows.
+const MENU_HEADER_H: i32 = 4;
+const MENU_CHROME_H: i32 = MENU_HEADER_H + 2;
+const MENU_ROW_H: i32 = 2; // label, then details
+const MENU_QUESTION_ROW: i32 = 2;
+const MENU_HALF_W: i32 = 30; // the list starts this many columns left of the center
+const MENU_DETAIL_X: i32 = 4; // details indent under a label
+
 /// How long ago `wall` was, `now` being the current wall-clock time.
 pub fn ago(wall: f64, now: f64) -> String {
     let s = (now - wall).max(0.0);
-    for (unit, n) in [("j", 86400.0), ("h", 3600.0), ("min", 60.0)] {
+    for (unit, n) in AGO_UNITS {
         if s >= n {
             return format!("il y a {} {unit}", (s / n).floor() as i64);
         }
@@ -355,7 +372,7 @@ pub fn save_menu(
     let now = wall_time();
     let mut entries: Vec<(String, String, Option<PathBuf>)> = Vec::new();
     for (n, path, d) in slots {
-        let name = if *n == 1 {
+        let name = if *n == MAIN_SLOT {
             "Partie principale".to_string()
         } else {
             format!("Partie {n}")
@@ -390,28 +407,34 @@ pub fn save_menu(
         let (h, w) = scr.size();
         scr.erase();
         // Header (4 lines), scrolling list (2 lines per game), help on the last line.
-        let visible = fdiv(h - 6, 2).max(1);
-        let y = (fdiv(h, 2) - count - 3)
-            .min(h - 6 - 2 * count.min(visible))
+        let visible = fdiv(h - MENU_CHROME_H, MENU_ROW_H).max(1);
+        let y = (fdiv(h, 2) - count - MENU_CHROME_H / 2)
+            .min(h - MENU_CHROME_H - MENU_ROW_H * count.min(visible))
             .max(0);
         top = top.min(sel).max(sel - visible + 1);
         menu_put(scr, y, fdiv(w - width(TITLE), 2).max(0), TITLE, bold);
         let q = "Quelle partie lancer ?";
-        menu_put(scr, y + 2, fdiv(w - width(q), 2).max(0), q, Style::PLAIN);
-        let x = (fdiv(w, 2) - 30).max(0);
+        menu_put(
+            scr,
+            y + MENU_QUESTION_ROW,
+            fdiv(w - width(q), 2).max(0),
+            q,
+            Style::PLAIN,
+        );
+        let x = (fdiv(w, 2) - MENU_HALF_W).max(0);
         for (row, i) in (top..count.min(top + visible)).enumerate() {
             let (label, detail, _) = &entries[i as usize];
-            let ly = y + 4 + 2 * row as i32;
+            let ly = y + MENU_HEADER_H + MENU_ROW_H * row as i32;
             let (mark, style) = if i == sel {
                 ('▶', bold.reverse())
             } else {
                 (' ', bold)
             };
             menu_put(scr, ly, x, &format!(" {mark} {label} "), style);
-            menu_put(scr, ly + 1, x + 4, detail, Style::PLAIN.dim());
+            menu_put(scr, ly + 1, x + MENU_DETAIL_X, detail, Style::PLAIN.dim());
         }
         if top > 0 {
-            menu_put(scr, y + 3, x, "↑", Style::PLAIN);
+            menu_put(scr, y + MENU_HEADER_H - 1, x, "↑", Style::PLAIN);
         }
         if top + visible < count {
             menu_put(scr, h - 2, x, "↓", Style::PLAIN);

@@ -13,7 +13,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use champignon::game::{Game, MsgKind};
-use champignon::saves::{self, MAX_SLOTS, Saves};
+use champignon::saves::{self, MAIN_SLOT, MAX_SLOTS, Saves};
 use champignon::screens::{self, INTRO};
 use champignon::sound::{Sound, SoundSink};
 use champignon::term::{self, Screen, TermScreen};
@@ -28,7 +28,7 @@ fn log_purged(g: &mut Game, purged: &[u32]) {
     let names: Vec<String> = purged
         .iter()
         .map(|&n| {
-            if n == 1 {
+            if n == MAIN_SLOT {
                 "partie principale".to_string()
             } else {
                 format!("partie {n}")

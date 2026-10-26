@@ -12,7 +12,7 @@ use champignon::game::{Enemy, Game, Plane, need};
 use champignon::rng::StdRandom;
 use champignon::sound::SoundSink;
 use champignon::term::{BufferScreen, ColorName, Ink, Style};
-use champignon::ui::{Float, UI};
+use champignon::ui::{self, Float, UI};
 
 const W: i32 = 100;
 const H: i32 = 30;
@@ -22,8 +22,20 @@ const CELL_H: i32 = 17;
 const MARGIN: i32 = 10;
 const BASELINE_OFFSET: i32 = 4; // from the cell bottom to the text baseline
 const SETTLE_FRAMES: usize = 40;
+const SETTLE_DT: f64 = 0.05; // seconds per settling frame
+const CORNER_RADIUS: i32 = 8;
+const STROKE_WIDTH: &str = "1.2"; // border lines, in px
+const DIM_ATTR: &str = " opacity=\"0.6\""; // how the dim attribute looks
 const BG: &str = "#1d1f21";
 const FG: &str = "#c5c8c6";
+/// Fixed seeds: the game's draws and the interface's, so that the capture never changes by itself.
+const SCENE_SEED: u64 = 4;
+const UI_SEED: u64 = 1;
+/// Captured situation, beyond the plain field values of `scene`: share of the level done, share of the
+/// commando's time elapsed, plane on screen for PLANE_AGE seconds (out of events::PLANE_DURATION).
+const LEVEL_PROGRESS: f64 = 0.6;
+const ENEMY_ELAPSED: f64 = 0.65;
+const PLANE_AGE: f64 = 2.0;
 
 /// Fake "available" sound, so the help bar shows the sound mode.
 struct Sound;
@@ -88,7 +100,7 @@ fn block(c: char) -> Option<(f64, f64)> {
 }
 
 fn scene() -> Game {
-    let mut g = Game::new(Box::new(StdRandom::seeded(4)));
+    let mut g = Game::new(Box::new(StdRandom::seeded(SCENE_SEED)));
     g.click(true);
     g.exploded = true;
     g.challenge = Some("nanar");
@@ -96,7 +108,7 @@ fn scene() -> Game {
     g.isotopes = 41;
     g.pt = 4;
     g.radiation = 42e6;
-    g.progress = 0.6 * need(g.level);
+    g.progress = LEVEL_PROGRESS * need(g.level);
     let counts = [
         ("soldier", 140),
         ("mortar", 95),
@@ -119,14 +131,14 @@ fn scene() -> Game {
     let dur = events::enemy_duration(&g, EnemyKind::Commando);
     g.enemies = vec![Enemy {
         kind: EnemyKind::Commando,
-        start: g.time - dur * 0.65,
+        start: g.time - dur * ENEMY_ELAPSED,
         dur,
         hits: 0,
     }];
     g.plane = Some(Plane {
         letter: 'R',
-        start: g.time - 2.0,
-        dur: 10.0,
+        start: g.time - PLANE_AGE,
+        dur: events::PLANE_DURATION,
     });
     g.messages.clear();
     g.sfx.clear();
@@ -207,7 +219,7 @@ fn svg(cells: &[Vec<(char, Style)>]) -> String {
             f64::from(W) * CELL_W + f64::from(2 * MARGIN),
             H * CELL_H + 2 * MARGIN
         ),
-        format!("<rect width=\"100%\" height=\"100%\" rx=\"8\" fill=\"{BG}\"/>"),
+        format!("<rect width=\"100%\" height=\"100%\" rx=\"{CORNER_RADIUS}\" fill=\"{BG}\"/>"),
     ];
     for (y, row) in cells.iter().enumerate() {
         for (x, end, style) in same_attr_runs(row) {
@@ -221,7 +233,7 @@ fn svg(cells: &[Vec<(char, Style)>]) -> String {
                     "<rect x=\"{px:.1}\" y=\"{py}\" width=\"{width:.1}\" height=\"{CELL_H}\" fill=\"{bg}\"/>"
                 ));
             }
-            let dim = if style.dim { " opacity=\"0.6\"" } else { "" };
+            let dim = if style.dim { DIM_ATTR } else { "" };
             let mut d = String::new();
             for (i, &c) in chars.iter().enumerate() {
                 if let Some(arms) = box_arms(c) {
@@ -239,7 +251,7 @@ fn svg(cells: &[Vec<(char, Style)>]) -> String {
             if !d.is_empty() {
                 // A single path per segment: lighter file, and no darker joins in dim mode.
                 out.push(format!(
-                    "<path d=\"{d}\" stroke=\"{fg}\" stroke-width=\"1.2\" fill=\"none\"{dim}/>"
+                    "<path d=\"{d}\" stroke=\"{fg}\" stroke-width=\"{STROKE_WIDTH}\" fill=\"none\"{dim}/>"
                 ));
             }
             let text: String = chars
@@ -273,9 +285,9 @@ fn svg(cells: &[Vec<(char, Style)>]) -> String {
 
 fn main() {
     let mut u = UI::new(BufferScreen::new(H, W), scene(), Some(Box::new(Sound)));
-    u.rng = Box::new(StdRandom::seeded(1));
+    u.rng = Box::new(StdRandom::seeded(UI_SEED));
     for _ in 0..SETTLE_FRAMES {
-        u.draw(0.05);
+        u.draw(SETTLE_DT);
     }
     // Nanarland challenge: a press that fizzles, and a botched-shoot title set at the start of the banner.
     u.floats.push(Float {
@@ -285,7 +297,8 @@ fn main() {
         style: u.c("grey").bold(),
     });
     u.news = events::NEWS_NANAR[1];
-    u.news_off = f64::from(u.w) - " FLASH INFO ".chars().count() as f64 - 2.0;
+    u.news_off =
+        f64::from(u.w) - " FLASH INFO ".chars().count() as f64 - f64::from(ui::NEWS_MARGIN);
     u.draw(0.0);
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("apercu.svg");
     std::fs::write(path, svg(u.scr.rows())).expect("write apercu.svg");

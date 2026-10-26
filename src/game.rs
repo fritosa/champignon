@@ -18,15 +18,31 @@ use crate::saves;
 pub const SUFFIXES: [&str; 12] = [
     "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc",
 ];
-pub const OFFLINE_MAX: f64 = 2.0 * 3600.0;
+/// Shorter absences earn nothing offline (seconds; the share and the cap are in data, with p_offline).
 pub const OFFLINE_MIN: f64 = 60.0;
-pub const OFFLINE_SHARE: f64 = 0.25;
 pub const MAX_BULK: u64 = 1000; // beyond that, 1.15^n overflows
 pub const AUDIO_MODES: [&str; 3] = ["all", "sfx", "off"]; // music + effects, effects only, muted
-pub const NANAR_FIZZLE: f64 = 1.0 / 3.0;
+pub const NANAR_FIZZLE: f64 = 1.0 / data::NANAR_FIZZLE_EVERY;
 pub const VOLUME_STEP: u32 = 5; // in %
+pub const MAX_VOLUME: u32 = 100; // in %
 pub const COMBO_STEP: f64 = 0.08;
 pub const COMBO_GRACE: f64 = 0.4;
+/// Window over which presses are counted for the overheat threshold (presses per second).
+pub const PRESS_WINDOW: f64 = 1.0;
+/// Seconds of overheat (Tête brûlée challenge: data::HOTHEAD_OVERHEAT).
+pub const OVERHEAT_TIME: f64 = 3.0;
+/// Seconds of white flash of the first explosion.
+pub const EXPLOSION_FLASH: f64 = 0.8;
+/// "Long ago" for the times of the last press and critical (nothing recent to show).
+const LONG_AGO: f64 = -10.0;
+/// Periods of the automatic purchases and of the achievement checks, in seconds.
+pub const AUTOBUY_PERIOD: f64 = 1.0;
+pub const ACHIEVEMENT_PERIOD: f64 = 1.0;
+/// Most units bought by the quartermaster at each period.
+pub const AUTOBUY_MAX: usize = 50;
+/// PT per level up, and bonus every PT_BONUS_EVERY levels up to data::BASE_CAP.
+pub const PT_PER_LEVEL: i64 = 1;
+pub const PT_BONUS: i64 = 5;
 pub const CLICK_PITCHES: usize = 8;
 /// Press sounds, from the lowest to the highest combo.
 pub const CLICK_SOUNDS: [&str; CLICK_PITCHES] = [
@@ -37,6 +53,19 @@ pub const PT_LEVEL_GROWTH: f64 = 1.04; // beyond data::BASE_CAP, one PT every +4
 pub const SFX_MAX: usize = 16;
 pub const MESSAGES_MAX: usize = 8;
 pub const THREAT_MAX: f64 = 3600.0; // maximum duration read back from a save (seconds)
+/// A saved enemy may not have entered yet (wave): at most this many seconds early.
+const WALKER_MAX_EARLY: f64 = 10.0;
+/// Highest wave number read back from a save.
+const WAVE_NUMBER_MAX: u32 = 10_000;
+/// Radiation needed for a level: NEED_BASE * level^NEED_EXPONENT.
+pub const NEED_BASE: f64 = 25.0;
+pub const NEED_EXPONENT: f64 = 2.4;
+/// Isotopes of a prestige: PRESTIGE_GAIN * (level / PRESTIGE_LEVEL)^PRESTIGE_EXPONENT, before bonuses.
+pub const PRESTIGE_GAIN: f64 = 10.0;
+pub const PRESTIGE_LEVEL: f64 = 100.0;
+pub const PRESTIGE_EXPONENT: f64 = 0.6;
+/// Below this, numbers are shown with one decimal (fmt).
+const ONE_DECIMAL_BELOW: f64 = 100.0;
 
 /// Powers of 1000 as correctly rounded floats (like Python's int → float conversion).
 const THOUSANDS: [f64; 12] = [
@@ -48,7 +77,7 @@ pub fn fmt(n: f64) -> String {
     if n == f64::INFINITY {
         return "∞".to_string();
     }
-    if n < 100.0 {
+    if n < ONE_DECIMAL_BELOW {
         if n == n.trunc() {
             return format!("{}", n as i64);
         }
@@ -67,7 +96,7 @@ pub fn fmt(n: f64) -> String {
 
 /// Radiation needed to go from level `level` to the next one.
 pub fn need(level: u32) -> f64 {
-    25.0 * (level as f64).powf(2.4)
+    NEED_BASE * (level as f64).powf(NEED_EXPONENT)
 }
 
 /// Cost of the next rank of a prestige or supernova talent (fixed list or geometric growth).
@@ -488,8 +517,10 @@ fn is_delay(v: Option<f64>) -> Option<f64> {
 /// Saved inspector or enemy → (elapsed, dur, hits) if valid.
 fn load_walker(w: &WalkerData, max_hits: u32) -> Option<(f64, f64, u32)> {
     let WalkerData { elapsed, dur, hits } = *w;
-    let valid =
-        (-10.0..dur).contains(&elapsed) && dur > 0.0 && dur <= THREAT_MAX && hits < max_hits;
+    let valid = (-WALKER_MAX_EARLY..dur).contains(&elapsed)
+        && dur > 0.0
+        && dur <= THREAT_MAX
+        && hits < max_hits;
     valid.then_some((elapsed, dur, hits))
 }
 
@@ -600,7 +631,7 @@ impl Game {
             skins: BTreeSet::from(["classic"]),
             skin: "classic",
             audio: "all",
-            volume: 100,
+            volume: MAX_VOLUME,
             challenge: None,
             stats: Stats::default(),
             messages: VecDeque::new(),
@@ -624,10 +655,10 @@ impl Game {
             run_time: 0.0,
             run_stats: RunStats::default(),
             combo: 0.0,
-            last_click: -10.0,
+            last_click: LONG_AGO,
             click_times: VecDeque::new(),
             overheat_until: 0.0,
-            last_crit: -10.0,
+            last_crit: LONG_AGO,
             buffs: Vec::new(),
             freeze_until: 0.0,
             bribe_until: 0.0,
@@ -677,9 +708,9 @@ impl Game {
         self.progress = 0.0;
         self.next_pt_level = 0;
         self.radiation = 0.0;
-        self.pt = 5 * self.pr("p_pt") as i64
+        self.pt = data::P_PT_BONUS * self.pr("p_pt") as i64
             + if self.challenges_done.contains("ascete") {
-                10
+                data::ASCETE_PT
             } else {
                 0
             };
@@ -690,11 +721,11 @@ impl Game {
             .collect();
         if self.pr("p_vets") > 0 {
             self.talents.insert("u_soldier", 1);
-            self.units["soldier"] = 10 * self.pr("p_vets") as u64;
+            self.units["soldier"] = data::P_VETS_SOLDIERS * self.pr("p_vets") as u64;
         }
         if self.challenge == Some("onearm") {
             self.talents.insert("u_soldier", 1);
-            self.units["soldier"] = self.units["soldier"].max(3);
+            self.units["soldier"] = self.units["soldier"].max(data::ONEARM_SOLDIERS);
         }
         self.mutations = Vec::new();
         self.pending_mutation = None;
@@ -704,10 +735,10 @@ impl Game {
         self.run_time = 0.0;
         self.run_stats = RunStats::default();
         self.combo = 0.0;
-        self.last_click = -10.0;
+        self.last_click = LONG_AGO;
         self.click_times = VecDeque::new();
         self.overheat_until = 0.0;
-        self.last_crit = -10.0;
+        self.last_crit = LONG_AGO;
         self.buffs = Vec::new();
         self.freeze_until = 0.0;
         self.bribe_until = 0.0;
@@ -718,7 +749,8 @@ impl Game {
         self.enemies = Vec::new();
         self.wave = 0;
         self.schedule_enemy(true);
-        self.next_plane = self.time + self.rng.uniform(40.0, 90.0);
+        let (low, high) = events::FIRST_PLANE_DELAY;
+        self.next_plane = self.time + self.rng.uniform(low, high);
         self.schedule_inspector(true);
         self.auto_acc = 0.0;
         self.autobuy_acc = 0.0;
@@ -727,28 +759,30 @@ impl Game {
 
     pub fn schedule_inspector(&mut self, first: bool) {
         let delay = if self.challenge == Some("watched") {
-            self.rng.uniform(30.0, 60.0)
+            let (low, high) = data::WATCHED_INSPECTOR_DELAY;
+            self.rng.uniform(low, high)
         } else {
-            let base = if first {
-                self.rng.uniform(120.0, 240.0)
+            let (low, high) = if first {
+                events::FIRST_INSPECTOR_DELAY
             } else {
-                self.rng.uniform(150.0, 300.0)
+                events::INSPECTOR_DELAY
             };
-            base / events::threat_pressure(self)
+            self.rng.uniform(low, high) / events::threat_pressure(self)
         };
         self.next_inspector = self.time + delay;
     }
 
     pub fn schedule_enemy(&mut self, first: bool) {
         let delay = if self.challenge == Some("invasion") {
-            self.rng.uniform(15.0, 30.0)
+            let (low, high) = data::INVASION_ENEMY_DELAY;
+            self.rng.uniform(low, high)
         } else {
-            let base = if first {
-                self.rng.uniform(60.0, 120.0)
+            let (low, high) = if first {
+                events::FIRST_ENEMY_DELAY
             } else {
-                self.rng.uniform(90.0, 180.0)
+                events::ENEMY_DELAY
             };
-            base / events::threat_pressure(self)
+            self.rng.uniform(low, high) / events::threat_pressure(self)
         };
         self.next_enemy = self.time + delay;
     }
@@ -801,7 +835,8 @@ impl Game {
 
     /// Max level: 100 × 10^rank of "Expansion du cœur".
     pub fn cap(&self) -> u32 {
-        data::MAX_CAP.min(data::BASE_CAP.saturating_mul(10u32.saturating_pow(self.pr("p_cap"))))
+        data::MAX_CAP
+            .min(data::BASE_CAP.saturating_mul(data::P_CAP_MULT.saturating_pow(self.pr("p_cap"))))
     }
 
     pub fn frozen(&self) -> bool {
@@ -832,7 +867,13 @@ impl Game {
     }
 
     pub fn max_combo(&self) -> u32 {
-        3 + self.tr("t_combo") + if self.has_mut("berserk") { 2 } else { 0 }
+        data::BASE_MAX_COMBO
+            + data::T_COMBO_MAX * self.tr("t_combo")
+            + if self.has_mut("berserk") {
+                events::BERSERK_COMBO
+            } else {
+                0
+            }
     }
 
     pub fn combo_mult(&self) -> f64 {
@@ -841,11 +882,12 @@ impl Game {
 
     pub fn overheat_threshold(&self) -> u32 {
         if self.challenge == Some("hothead") {
-            return 6;
+            return data::HOTHEAD_THRESHOLD;
         }
-        12 + 3 * self.tr("t_cool")
+        data::BASE_OVERHEAT_THRESHOLD
+            + data::T_COOL_THRESHOLD * self.tr("t_cool")
             + if self.challenges_done.contains("hothead") {
-                5
+                data::HOTHEAD_THRESHOLD_BONUS
             } else {
                 0
             }
@@ -853,9 +895,9 @@ impl Game {
 
     pub fn crit_mult(&self) -> f64 {
         if self.challenges_done.contains("nanar") {
-            15.0
+            data::NANAR_CRIT_MULT
         } else {
-            10.0
+            data::BASE_CRIT_MULT
         }
     }
 
@@ -863,32 +905,36 @@ impl Game {
         if self.challenge == Some("unlucky") {
             return 0.0;
         }
-        0.05 * self.tr("t_crit") as f64
-            + if self.has_mut("glow") { 0.15 } else { 0.0 }
+        data::T_CRIT_CHANCE * self.tr("t_crit") as f64
+            + if self.has_mut("glow") {
+                events::GLOW_CRIT_CHANCE
+            } else {
+                0.0
+            }
             + if self.challenges_done.contains("unlucky") {
-                0.1
+                data::UNLUCKY_CRIT_CHANCE
             } else {
                 0.0
             }
     }
 
     pub fn global_mult(&self) -> f64 {
-        let mut m = (1.0 + 0.1 * self.tr("l_global") as f64)
-            * 1.5f64.powi(self.pr("p_prod") as i32)
-            * 2f64.powi(self.sr("s_prod") as i32);
-        m *= 1.0 + 0.02 * self.achievements.len() as f64;
-        m *= 1.0 + 0.001 * self.tr("l_synergy") as f64 * self.units.total() as f64;
+        let mut m = (1.0 + data::L_GLOBAL_PROD * self.tr("l_global") as f64)
+            * data::P_PROD_MULT.powi(self.pr("p_prod") as i32)
+            * data::S_PROD_MULT.powi(self.sr("s_prod") as i32);
+        m *= 1.0 + events::ACHIEVEMENT_BONUS * self.achievements.len() as f64;
+        m *= 1.0 + data::L_SYNERGY_PROD * self.tr("l_synergy") as f64 * self.units.total() as f64;
         if self.has_mut("fallout") {
-            m *= 1.5;
+            m *= events::FALLOUT_PROD_MULT;
         }
         if self.has_mut("gamble") {
-            m *= 3.0;
+            m *= events::GAMBLE_PROD_MULT;
         }
         if self.has_syn("twins") {
-            m *= 1.5;
+            m *= events::TWINS_PROD_MULT;
         }
         if self.challenges_done.contains("onearm") {
-            m *= 2.0;
+            m *= data::ONEARM_PROD_MULT;
         }
         m * self.buff_mult(BuffKind::Prod)
     }
@@ -910,13 +956,13 @@ impl Game {
     /// Production of one unit of this type (multipliers included, freeze excluded).
     pub fn unit_prod(&self, uid: &str) -> f64 {
         let mut p = data::unit(uid).prod
-            * 2f64.powi(self.tr(data::UNIT_TALENT_IDS[unit_slot(uid)].1) as i32)
+            * data::UNIT_TALENT_MULT.powi(self.tr(data::UNIT_TALENT_IDS[unit_slot(uid)].1) as i32)
             * data::MILESTONE_MULT.powi(self.unit_milestones(uid) as i32);
         if self.has_mut("spores") {
             let per_soldier = if self.has_syn("proliferation") {
-                0.02
+                events::PROLIFERATION_PER_SOLDIER
             } else {
-                0.01
+                events::SPORES_PER_SOLDIER
             };
             p *= 1.0 + per_soldier * self.units["soldier"] as f64;
         }
@@ -934,7 +980,7 @@ impl Game {
             .map(|(uid, n)| n as f64 * self.unit_prod(uid))
             .sum();
         if self.challenge == Some("nanar") {
-            p *= 0.5;
+            p /= data::NANAR_PROD_DIVISOR;
         }
         let protesters = self.enemies.iter().any(|e| e.kind == EnemyKind::Hippies);
         if protesters {
@@ -945,21 +991,22 @@ impl Game {
     }
 
     pub fn click_value(&self, manual: bool) -> f64 {
-        let mut m = 2f64.powi(self.pr("p_click") as i32) * self.buff_mult(BuffKind::Click);
+        let mut m =
+            data::P_CLICK_MULT.powi(self.pr("p_click") as i32) * self.buff_mult(BuffKind::Click);
         if self.has_mut("twin") {
-            m *= 2.0;
+            m *= events::TWIN_CLICK_MULT;
         }
         if self.has_mut("acid") && !self.has_syn("storm") {
-            m *= 0.5;
+            m *= events::ACID_CLICK_MULT;
         }
         if self.challenges_done.contains("pacifist") {
-            m *= 3.0;
+            m *= data::PACIFIST_CLICK_MULT;
         }
-        let mut v = (1.0 + 2.0 * self.tr("t_click") as f64) * m;
+        let mut v = (data::BASE_CLICK + data::T_CLICK_POWER * self.tr("t_click") as f64) * m;
         if manual {
             v *= self.combo_mult();
         }
-        v + self.production() * 0.02 * self.tr("t_shock") as f64
+        v + self.production() * data::T_SHOCK_SHARE * self.tr("t_shock") as f64
     }
 
     // --- Actions -----------------------------------------------------------------
@@ -968,7 +1015,7 @@ impl Game {
         self.exploded = true;
         self.level = 1;
         self.progress = 0.0;
-        self.flash_until = self.time + 0.8;
+        self.flash_until = self.time + EXPLOSION_FLASH;
         self.sfx.push_back("boom");
         self.log(
             "BOOM ! Le champignon est né.",
@@ -1027,7 +1074,7 @@ impl Game {
                 self.run_stats.crits += 1;
             }
             if self.has_syn("chain") && self.qte.is_none() {
-                self.crit_gauge = (self.crit_gauge + 0.03).min(1.0);
+                self.crit_gauge = (self.crit_gauge + events::CHAIN_CRIT_CHARGE).min(1.0);
             }
             if manual {
                 self.sfx.push_back("crit");
@@ -1046,7 +1093,7 @@ impl Game {
         while self
             .click_times
             .front()
-            .is_some_and(|&t| t < self.time - 1.0)
+            .is_some_and(|&t| t < self.time - PRESS_WINDOW)
         {
             self.click_times.pop_front();
         }
@@ -1057,9 +1104,9 @@ impl Game {
     fn overheat(&mut self) {
         self.overheat_until = self.time
             + if self.challenge == Some("hothead") {
-                6.0
+                data::HOTHEAD_OVERHEAT
             } else {
-                3.0
+                OVERHEAT_TIME
             };
         self.combo = 0.0;
         self.click_times.clear();
@@ -1095,8 +1142,13 @@ impl Game {
         if below_base_cap || lvl >= self.next_pt_level {
             self.sfx.push_back("level");
             let round_level = below_base_cap && lvl.is_multiple_of(PT_BONUS_EVERY);
-            self.pt +=
-                1 + if round_level { 5 } else { 0 } + if self.has_mut("mitosis") { 1 } else { 0 };
+            self.pt += PT_PER_LEVEL
+                + if round_level { PT_BONUS } else { 0 }
+                + if self.has_mut("mitosis") {
+                    events::MITOSIS_PT
+                } else {
+                    0
+                };
             self.next_pt_level = (lvl as f64 * PT_LEVEL_GROWTH).ceil() as u32;
         }
         self.stats.max_level = self.stats.max_level.max(lvl);
@@ -1148,14 +1200,18 @@ impl Game {
         let n = count.unwrap_or(self.units[uid]);
         let mut c = u.cost
             * data::UNIT_COST_GROWTH.powf(n as f64)
-            * (1.0 - 0.04 * self.tr("l_discount") as f64);
+            * (1.0 - data::L_DISCOUNT * self.tr("l_discount") as f64);
         if self.challenge == Some("inflation") {
-            c *= 4.0;
+            c *= data::INFLATION_COST_MULT;
         }
         if self.challenges_done.contains("inflation") {
-            c *= 0.9;
+            c *= data::INFLATION_COST_REWARD;
         }
-        c * if self.has_mut("acid") { 0.7 } else { 1.0 }
+        c * if self.has_mut("acid") {
+            events::ACID_COST_MULT
+        } else {
+            1.0
+        }
     }
 
     pub fn can_buy_unit(&self, uid: &str) -> bool {
@@ -1175,7 +1231,11 @@ impl Game {
         for m in data::UNIT_MILESTONES {
             if before < m && m <= self.units[uid] {
                 self.sfx.push_back("milestone");
-                let text = format!("Palier : {m} {}s, production ×2 !", data::unit(uid).name);
+                let text = format!(
+                    "Palier : {m} {}s, production ×{} !",
+                    data::unit(uid).name,
+                    data::fr_num(data::MILESTONE_MULT)
+                );
                 self.log(text, MsgKind::Good, Some("PALIER"));
             }
         }
@@ -1252,7 +1312,8 @@ impl Game {
         }
         if pid == "p_cap" {
             let cost = p.costs.expect("p_cap has fixed costs")[r as usize] as f64;
-            return (cost * (1.0 - 0.2 * self.sr("s_core") as f64)).round_ties_even();
+            return (cost * (1.0 - data::S_CORE_DISCOUNT * self.sr("s_core") as f64))
+                .round_ties_even();
         }
         rank_cost(p, r) as f64
     }
@@ -1282,12 +1343,13 @@ impl Game {
     }
 
     pub fn prestige_gain(&self) -> i64 {
-        let mut g =
-            10.0 * (self.level as f64 / 100.0).powf(0.6) * (1.0 + 0.25 * self.pr("p_iso") as f64);
+        let mut g = PRESTIGE_GAIN
+            * (self.level as f64 / PRESTIGE_LEVEL).powf(PRESTIGE_EXPONENT)
+            * (1.0 + data::P_ISO_BONUS * self.pr("p_iso") as f64);
         if self.challenges_done.contains("race") {
-            g *= 1.5;
+            g *= data::RACE_ISO_MULT;
         }
-        (g * 2f64.powi(self.sr("s_iso") as i32)) as i64
+        (g * data::S_ISO_MULT.powi(self.sr("s_iso") as i32)) as i64
     }
 
     /// Summary of the run that is ending (prestige or supernova).
@@ -1338,7 +1400,7 @@ impl Game {
             {
                 self.stats.best_prestige_time = Some(self.run_time);
             }
-            if self.prestige_count >= 5 {
+            if self.prestige_count >= data::PLASMA_PRESTIGES {
                 self.skins.insert("plasma");
             }
             self.sfx.push_back("prestige");
@@ -1468,7 +1530,7 @@ impl Game {
     /// +1 / -1 step; returns true if the volume changed.
     pub fn change_volume(&mut self, step: i32) -> bool {
         let old = self.volume;
-        self.volume = (old as i32 + step * VOLUME_STEP as i32).clamp(0, 100) as u32;
+        self.volume = (old as i32 + step * VOLUME_STEP as i32).clamp(0, MAX_VOLUME as i32) as u32;
         self.volume != old
     }
 
@@ -1493,7 +1555,11 @@ impl Game {
         self.run_time += dt;
 
         if self.time - self.last_click > COMBO_GRACE {
-            let decay_rate = if self.has_syn("berserker") { 0.4 } else { 1.2 };
+            let decay_rate = if self.has_syn("berserker") {
+                events::BERSERKER_COMBO_DECAY
+            } else {
+                events::COMBO_DECAY
+            };
             self.combo = (self.combo - decay_rate * dt).max(0.0);
         }
 
@@ -1501,7 +1567,7 @@ impl Game {
         self.auto_detonate(dt);
 
         self.autobuy_acc += dt;
-        if self.autobuy_acc >= 1.0 {
+        if self.autobuy_acc >= AUTOBUY_PERIOD {
             self.autobuy_acc = 0.0;
             self.autobuy();
             if self.sr("s_auto") > 0 {
@@ -1516,7 +1582,7 @@ impl Game {
         events::tick(self, dt);
 
         self.ach_acc += dt;
-        if self.ach_acc >= 1.0 {
+        if self.ach_acc >= ACHIEVEMENT_PERIOD {
             self.ach_acc = 0.0;
             self.check_achievements();
         }
@@ -1524,7 +1590,7 @@ impl Game {
 
     fn auto_detonate(&mut self, dt: f64) {
         if self.tr("t_auto") > 0 && self.challenge != Some("onearm") {
-            self.auto_acc += dt * self.tr("t_auto") as f64;
+            self.auto_acc += dt * data::T_AUTO_RATE * self.tr("t_auto") as f64;
             while self.auto_acc >= 1.0 {
                 self.auto_acc -= 1.0;
                 self.click(false);
@@ -1550,8 +1616,12 @@ impl Game {
         if rank == 0 {
             return;
         }
-        let allowed: Vec<&'static str> = UNITS.iter().take(3 * rank).map(|u| u.id).collect();
-        for _ in 0..50 {
+        let allowed: Vec<&'static str> = UNITS
+            .iter()
+            .take(data::L_AUTOBUY_TYPES * rank)
+            .map(|u| u.id)
+            .collect();
+        for _ in 0..AUTOBUY_MAX {
             // The cheapest one (the first of them on a tie).
             let mut cheapest: Option<(&str, f64)> = None;
             for &u in allowed.iter().filter(|u| self.can_buy_unit(u)) {
@@ -1571,7 +1641,11 @@ impl Game {
                 self.achievements.insert(a.id);
                 self.sfx.push_back("achievement");
                 self.log(
-                    format!("★ Succès : {} (+2 % de production)", a.name),
+                    format!(
+                        "★ Succès : {} (+{} % de production)",
+                        a.name,
+                        data::fr_num(data::percent(events::ACHIEVEMENT_BONUS))
+                    ),
                     MsgKind::Star,
                     Some("SUCCÈS"),
                 );
@@ -1653,7 +1727,7 @@ impl Game {
                 });
             }
         }
-        if let Some(wave) = t.wave.filter(|&w| w <= 10_000) {
+        if let Some(wave) = t.wave.filter(|&w| w <= WAVE_NUMBER_MAX) {
             self.wave = wave;
         }
     }
@@ -1823,8 +1897,10 @@ impl Game {
             .and_then(|a| AUDIO_MODES.into_iter().find(|&m| m == a))
             .unwrap_or("all");
         g.volume = match d.volume {
-            Some(v) if (0.0..=100.0).contains(&v) => v as u32 / VOLUME_STEP * VOLUME_STEP,
-            _ => 100,
+            Some(v) if (0.0..=f64::from(MAX_VOLUME)).contains(&v) => {
+                v as u32 / VOLUME_STEP * VOLUME_STEP
+            }
+            _ => MAX_VOLUME,
         };
         g.achievements = ids(d.achievements, |s| {
             events::find_achievement(s).map(|a| a.id)
@@ -1865,8 +1941,8 @@ impl Game {
         if rank == 0 || elapsed < OFFLINE_MIN || !self.exploded {
             return;
         }
-        let secs = elapsed.min(OFFLINE_MAX);
-        let amount = self.production() * secs * OFFLINE_SHARE * rank as f64;
+        let secs = elapsed.min(data::OFFLINE_MAX);
+        let amount = self.production() * secs * data::P_OFFLINE_SHARE * rank as f64;
         if amount > 0.0 {
             self.gain(amount);
             let text = format!(

@@ -424,6 +424,13 @@ const RESTORE_TITLE: &str = "\x1b]0;\x07\x1b[23;0t";
 /// How often a blocking `read_key` looks at `interrupt_flag`.
 const SIGNAL_CHECK: Duration = Duration::from_millis(100);
 
+/// Size assumed when the terminal cannot tell (columns, rows): the classic 80×24.
+const FALLBACK_SIZE: (u16, u16) = (80, 24);
+
+/// Shades of the 256-color palette for the colors that the 8 ANSI colors lack.
+const ORANGE_256: u8 = 208;
+const GREY_256: u8 = 244;
+
 /// Set by the signals (main registers it): `TermScreen::read_key` then returns `Key::Interrupt`.
 pub fn interrupt_flag() -> &'static Arc<AtomicBool> {
     static FLAG: OnceLock<Arc<AtomicBool>> = OnceLock::new();
@@ -514,7 +521,7 @@ impl TermScreen {
             restore_terminal();
             return Err(e);
         }
-        let (w, h) = terminal::size().unwrap_or((80, 24));
+        let (w, h) = terminal::size().unwrap_or(FALLBACK_SIZE);
         let (h, w) = (i32::from(h), i32::from(w));
         Ok(TermScreen {
             out,
@@ -547,13 +554,13 @@ impl TermScreen {
             Ink::Black => C::Black,
             Ink::Named(c) => match c {
                 ColorName::Red => C::DarkRed,
-                ColorName::Orange if self.many_colors => C::AnsiValue(208),
+                ColorName::Orange if self.many_colors => C::AnsiValue(ORANGE_256),
                 ColorName::Orange | ColorName::Yellow => C::DarkYellow,
                 ColorName::Green => C::DarkGreen,
                 ColorName::Cyan => C::DarkCyan,
                 ColorName::Blue => C::DarkBlue,
                 ColorName::Magenta => C::DarkMagenta,
-                ColorName::Grey if self.many_colors => C::AnsiValue(244),
+                ColorName::Grey if self.many_colors => C::AnsiValue(GREY_256),
                 ColorName::White | ColorName::Grey => C::Grey, // ANSI white (7)
             },
         }

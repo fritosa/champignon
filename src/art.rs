@@ -4,6 +4,7 @@
 //! color into a style. Widths count 1 column per `char`.
 
 use crate::term::ColorName::{self, Blue, Cyan, Green, Grey, Magenta, Orange, Red, White, Yellow};
+use crate::term::width;
 
 /// (y, x, character, color), relative to the panel.
 pub type Cell = (i32, i32, char, ColorName);
@@ -30,7 +31,78 @@ const DENSE: &[char] = &['@', '#', '%', '&'];
 const MID: &[char] = &['*', '%', '+', '='];
 const LIGHT: &[char] = &['.', ':', '\'', '*'];
 
+const STEM: &[char] = &['!', '|', ':', '|'];
+const RING: &[char] = &['~', '=', '-'];
+const DUST: &[char] = &['~', '^', '°', '*', '~'];
+const MARIO_FACE: &str = "•‿•";
+
 const BOMB: [&str; 3] = [r"  _/\_  ", r" |BOMB| ", r" |____| "];
+
+// --- Mushroom geometry and animation ------------------------------------------------
+// Ratios are relative to the cap width (cap_w) or to the mushroom height unless stated otherwise.
+
+/// Animation frames per second of the flickering characters, and color rows per second of `rainbow`.
+const FLICKER_FPS: f64 = 6.0;
+const RAINBOW_SPEED: f64 = 4.0;
+/// Pseudo-random cell values (`noise`): multipliers of the spatial hash, kept on NOISE_MASK.
+const NOISE_X: i64 = 73856093;
+const NOISE_Y: i64 = 19349663;
+const NOISE_FRAME: i64 = 83492791;
+const NOISE_MASK: i64 = 0xFFFF;
+/// The color takes the noise bits above the ones the character used, so the two vary independently.
+const COLOR_NOISE_SHIFT: u32 = 3;
+/// Size fraction of a level-1 mushroom, and what the levels add up to the run's max level.
+const SIZE_MIN: f64 = 0.15;
+const SIZE_GROWTH: f64 = 0.85;
+/// Rows of the panel the mushroom never takes (the ground line and one above the cap), and its min height.
+const FREE_ROWS: i32 = 2;
+const MIN_HEIGHT: i32 = 4;
+/// Columns kept free on the sides of the panel (one each), and between twins too.
+const SIDE_MARGIN: i32 = 2;
+const TWIN_MARGIN: i32 = 4;
+/// Columns between a twin's center and the panel center beyond half its cap.
+const TWIN_OFFSET: i32 = 1;
+/// Cap width per row of height (terminal cells are about twice as tall as wide), and its min width.
+const CAP_W_PER_ROW: f64 = 2.4;
+const MIN_CAP_W: i32 = 5;
+/// Share of the height taken by the cap, and its min height (such small caps have no rim).
+const CAP_SHARE: f64 = 0.42;
+const MIN_CAP_H: i32 = 2;
+/// Cap row width: CAP_TOP of cap_w at the top, up to cap_w at the bottom (quarter sine), the rim tucked in.
+const CAP_TOP: f64 = 0.4;
+const CAP_FLARE: f64 = 0.6;
+const RIM_TUCK: f64 = 0.9;
+/// Distance from the cap center (0..1 of its half width) where the characters get lighter.
+const DENSE_UNDER: f64 = 0.5;
+const MID_UNDER: f64 = 0.85;
+/// Mario's white spots: one cell out of MARIO_SPOT_EVERY along diagonals, off the rim (MID_UNDER).
+const MARIO_SPOT_EVERY: i32 = 5;
+const MARIO_SPOT_SLOPE: i32 = 2;
+/// Stem width at the top (made odd), and columns it gains down to the ground.
+const STEM_SHARE: f64 = 0.16;
+const STEM_FLARE: f64 = 2.0;
+/// Mario's face needs this many stem rows.
+const MARIO_FACE_MIN_ROWS: i32 = 2;
+/// Condensation ring: from this height, at this share of the stem from its top, overhanging the stem by
+/// RING_OVERHANG columns or RING_SHARE of the cap width on each side; one cell out of RING_GLINT_EVERY
+/// glints cyan.
+const RING_MIN_HEIGHT: i32 = 10;
+const RING_ROW: f64 = 0.35;
+const RING_OVERHANG: i32 = 2;
+const RING_SHARE: f64 = 0.3;
+const RING_GLINT_EVERY: i64 = 4;
+/// Dust cloud: lower row width (also the ground taken by a mushroom), upper row from DUST_HIGH_MIN_HEIGHT.
+const DUST_LOW: f64 = 1.3;
+const DUST_HIGH: f64 = 0.8;
+const DUST_HIGH_MIN_HEIGHT: i32 = 7;
+const DUST_MIN_HALF: i32 = 2;
+/// Frayed edges: one cell out of DUST_FRAY_EVERY missing beyond DUST_FRAY_FROM of the half width.
+const DUST_FRAY_EVERY: usize = 5;
+const DUST_FRAY_FROM: f64 = 0.7;
+/// One dust cell out of DUST_EMBER_EVERY is an orange ember.
+const DUST_EMBER_EVERY: usize = 3;
+/// Animation frames per second of the units and enemies.
+const SPRITE_FPS: f64 = 2.0;
 
 /// Palette of a skin (None for `rainbow` and `mario`, drawn by special cases, and for unknown skins).
 pub fn palette(skin: &str) -> Option<&'static [ColorName]> {
@@ -47,10 +119,10 @@ pub fn has_skin(skin: &str) -> bool {
 
 /// 16-bit pseudo-random value, stable for a given cell and frame.
 fn noise(x: i32, y: i32, frame: i64) -> usize {
-    let n = i64::from(x).wrapping_mul(73856093)
-        ^ i64::from(y).wrapping_mul(19349663)
-        ^ frame.wrapping_mul(83492791);
-    (n & 0xFFFF) as usize
+    let n = i64::from(x).wrapping_mul(NOISE_X)
+        ^ i64::from(y).wrapping_mul(NOISE_Y)
+        ^ frame.wrapping_mul(NOISE_FRAME);
+    (n & NOISE_MASK) as usize
 }
 
 fn pick<T: Copy>(seq: &[T], n: usize) -> T {
@@ -62,7 +134,7 @@ pub fn size_fraction(level: f64, cap: f64) -> f64 {
     if level <= 0.0 {
         return 0.0;
     }
-    0.15 + 0.85 * (1.0 + level).ln() / (1.0 + cap).ln()
+    SIZE_MIN + SIZE_GROWTH * (1.0 + level).ln() / (1.0 + cap).ln()
 }
 
 pub fn bomb(w: i32, h: i32) -> Vec<Cell> {
@@ -84,15 +156,16 @@ pub fn bomb(w: i32, h: i32) -> Vec<Cell> {
 /// Total height of a size-f mushroom in a panel of height h.
 pub fn mushroom_height(h: i32, f: f64) -> i32 {
     // Python's round(): ties to even
-    4.max((f64::from(h - 2) * f).round_ties_even() as i32)
+    MIN_HEIGHT.max((f64::from(h - FREE_ROWS) * f).round_ties_even() as i32)
 }
 
 /// (total height, cap width) of a size-f mushroom; twins share the width.
 fn dimensions(w: i32, h: i32, f: f64, twin: bool) -> (i32, i32) {
     let height = mushroom_height(h, f);
-    let mut cap_w = (w - 2).min(5.max((f64::from(height) * 2.4) as i32));
+    let mut cap_w =
+        (w - SIDE_MARGIN).min(MIN_CAP_W.max((f64::from(height) * CAP_W_PER_ROW) as i32));
     if twin {
-        cap_w = cap_w.min((w - 4).div_euclid(2));
+        cap_w = cap_w.min((w - TWIN_MARGIN).div_euclid(2));
     }
     (height, cap_w)
 }
@@ -111,15 +184,15 @@ struct Shape<'a> {
 /// Mushroom of size f (0..1) in a w×h panel, ground on the last line.
 pub fn mushroom(w: i32, h: i32, f: f64, t: f64, skin: &str, twin: bool) -> Vec<Cell> {
     let ground = h - 1;
-    let frame = (t * 6.0) as i64;
+    let frame = (t * FLICKER_FPS) as i64;
     let (height, cap_w) = dimensions(w, h, f, twin);
-    let cap_h = 2.max((f64::from(height) * 0.42) as i32);
+    let cap_h = MIN_CAP_H.max((f64::from(height) * CAP_SHARE) as i32);
     let stem_h = height - cap_h;
     let half_w = w.div_euclid(2);
     let centers = if twin {
         vec![
-            half_w - cap_w.div_euclid(2) - 1,
-            half_w + cap_w.div_euclid(2) + 1,
+            half_w - cap_w.div_euclid(2) - TWIN_OFFSET,
+            half_w + cap_w.div_euclid(2) + TWIN_OFFSET,
         ]
     } else {
         vec![half_w]
@@ -146,20 +219,24 @@ pub fn mushroom(w: i32, h: i32, f: f64, t: f64, skin: &str, twin: bool) -> Vec<C
 
 fn color(skin: &str, n: usize, row: i32, t: f64) -> ColorName {
     if skin == "rainbow" {
-        let i = (i64::from(row) + (t * 4.0) as i64).rem_euclid(RAINBOW.len() as i64);
+        let i = (i64::from(row) + (t * RAINBOW_SPEED) as i64).rem_euclid(RAINBOW.len() as i64);
         return RAINBOW[i as usize];
     }
-    pick(palette(skin).unwrap_or(PALETTES[0].1), n >> 3)
+    pick(
+        palette(skin).unwrap_or(PALETTES[0].1),
+        n >> COLOR_NOISE_SHIFT,
+    )
 }
 
 /// Cap: a dome, wider at the bottom, with a slightly tucked-in lower rim.
 fn cap(cells: &mut Vec<Cell>, s: &Shape, top: i32) {
     for i in 0..s.cap_h {
         let rel = f64::from(i + 1) / f64::from(s.cap_h);
-        let mut width = f64::from(s.cap_w) * (0.4 + 0.6 * (rel * std::f64::consts::PI / 2.0).sin());
-        let is_rim = i == s.cap_h - 1 && s.cap_h > 2;
+        let mut width =
+            f64::from(s.cap_w) * (CAP_TOP + CAP_FLARE * (rel * std::f64::consts::PI / 2.0).sin());
+        let is_rim = i == s.cap_h - 1 && s.cap_h > MIN_CAP_H;
         if is_rim {
-            width *= 0.9;
+            width *= RIM_TUCK;
         }
         let half = 1.max((width / 2.0) as i32);
         let y = top + i;
@@ -167,7 +244,8 @@ fn cap(cells: &mut Vec<Cell>, s: &Shape, top: i32) {
             let n = noise(x, y, s.frame);
             let dist = f64::from((x - s.cx).abs()) / (f64::from(half) + 0.5);
             if s.mario {
-                let spot = (x + 2 * y).rem_euclid(5) == 0 && dist < 0.85;
+                let spot = (x + MARIO_SPOT_SLOPE * y).rem_euclid(MARIO_SPOT_EVERY) == 0
+                    && dist < MID_UNDER;
                 cells.push((
                     y,
                     x,
@@ -176,9 +254,9 @@ fn cap(cells: &mut Vec<Cell>, s: &Shape, top: i32) {
                 ));
                 continue;
             }
-            let chars = if dist < 0.5 {
+            let chars = if dist < DENSE_UNDER {
                 DENSE
-            } else if dist < 0.85 {
+            } else if dist < MID_UNDER {
                 MID
             } else {
                 LIGHT
@@ -190,18 +268,19 @@ fn cap(cells: &mut Vec<Cell>, s: &Shape, top: i32) {
 
 /// Stem: widens toward the bottom, with a condensation ring on large mushrooms.
 fn stem(cells: &mut Vec<Cell>, s: &Shape, top: i32, stem_h: i32, height: i32) {
-    let stem_w = 1.max((f64::from(s.cap_w) * 0.16) as i32) | 1; // odd, to stay centered on cx
-    let ring_row = (height >= 10).then(|| (f64::from(stem_h) * 0.35) as i32);
+    let stem_w = 1.max((f64::from(s.cap_w) * STEM_SHARE) as i32) | 1; // odd, to stay centered on cx
+    let ring_row = (height >= RING_MIN_HEIGHT).then(|| (f64::from(stem_h) * RING_ROW) as i32);
     let cx = s.cx;
     for j in 0..stem_h {
         let y = top + j;
-        let half = (stem_w + (2.0 * f64::from(j) / f64::from(1.max(stem_h))) as i32).div_euclid(2);
+        let half =
+            (stem_w + (STEM_FLARE * f64::from(j) / f64::from(1.max(stem_h))) as i32).div_euclid(2);
         if Some(j) == ring_row {
             ring(
                 cells,
                 cx,
                 y,
-                (half + 2).max((f64::from(s.cap_w) * 0.3) as i32),
+                (half + RING_OVERHANG).max((f64::from(s.cap_w) * RING_SHARE) as i32),
                 s.frame,
             );
             continue;
@@ -216,19 +295,15 @@ fn stem(cells: &mut Vec<Cell>, s: &Shape, top: i32, stem_h: i32, height: i32) {
             } else if x == cx + half && half != 0 {
                 cells.push((y, x, ')', Orange));
             } else {
-                cells.push((
-                    y,
-                    x,
-                    pick(&['!', '|', ':', '|'], n),
-                    color(s.skin, n, s.cap_h + j, s.t),
-                ));
+                cells.push((y, x, pick(STEM, n), color(s.skin, n, s.cap_h + j, s.t)));
             }
         }
     }
-    if s.mario && stem_h >= 2 && stem_w >= 3 {
+    let face_w = width(MARIO_FACE);
+    if s.mario && stem_h >= MARIO_FACE_MIN_ROWS && stem_w >= face_w {
         let y = top + stem_h.div_euclid(2);
-        for (k, ch) in "•‿•".chars().enumerate() {
-            cells.push((y, cx - 1 + k as i32, ch, White));
+        for (k, ch) in MARIO_FACE.chars().enumerate() {
+            cells.push((y, cx - face_w.div_euclid(2) + k as i32, ch, White));
         }
     }
 }
@@ -241,13 +316,13 @@ fn ring(cells: &mut Vec<Cell>, cx: i32, y: i32, half: i32, frame: i64) {
         } else if x == cx + half {
             ')'
         } else {
-            ['~', '=', '-'][phase.rem_euclid(3) as usize]
+            RING[phase.rem_euclid(RING.len() as i64) as usize]
         };
         cells.push((
             y,
             x,
             ch,
-            if phase.rem_euclid(4) != 0 {
+            if phase.rem_euclid(RING_GLINT_EVERY) != 0 {
                 White
             } else {
                 Cyan
@@ -258,21 +333,26 @@ fn ring(cells: &mut Vec<Cell>, cx: i32, y: i32, half: i32, frame: i64) {
 
 /// Dust cloud at the base, frayed at the edges.
 fn dust(cells: &mut Vec<Cell>, s: &Shape, ground: i32, height: i32) {
-    let mut rows = vec![(ground - 1, 1.3)];
-    if height >= 7 {
-        rows.push((ground - 2, 0.8));
+    let mut rows = vec![(ground - 1, DUST_LOW)];
+    if height >= DUST_HIGH_MIN_HEIGHT {
+        rows.push((ground - 2, DUST_HIGH));
     }
     let cx = s.cx;
     for (y, scale) in rows {
-        let half = 2.max((f64::from(s.cap_w) * scale / 2.0) as i32);
+        let half = DUST_MIN_HALF.max((f64::from(s.cap_w) * scale / 2.0) as i32);
         for x in cx - half..=cx + half {
             let n = noise(x, y, s.frame);
-            let frayed = n.is_multiple_of(5) && f64::from((x - cx).abs()) > f64::from(half) * 0.7;
+            let frayed = n.is_multiple_of(DUST_FRAY_EVERY)
+                && f64::from((x - cx).abs()) > f64::from(half) * DUST_FRAY_FROM;
             if frayed {
                 continue;
             }
-            let color = if !n.is_multiple_of(3) { Grey } else { Orange };
-            cells.push((y, x, pick(&['~', '^', '°', '*', '~'], n), color));
+            let color = if !n.is_multiple_of(DUST_EMBER_EVERY) {
+                Grey
+            } else {
+                Orange
+            };
+            cells.push((y, x, pick(DUST, n), color));
         }
     }
 }
@@ -281,9 +361,9 @@ fn dust(cells: &mut Vec<Cell>, s: &Shape, ground: i32, height: i32) {
 pub fn mushroom_width(w: i32, h: i32, f: f64, twin: bool) -> i32 {
     let cap_w = dimensions(w, h, f, twin).1;
     if twin {
-        return (w - 2).min(2 * cap_w + 2);
+        return (w - SIDE_MARGIN).min(2 * cap_w + 2 * TWIN_OFFSET);
     }
-    (w - 2).min((f64::from(cap_w) * 1.3) as i32)
+    (w - SIDE_MARGIN).min((f64::from(cap_w) * DUST_LOW) as i32)
 }
 
 // --- Units and enemies ------------------------------------------------------------
@@ -375,7 +455,7 @@ fn mirrored(ch: char) -> char {
 
 /// Current frame of a sprite (2 frames/s), padded to equal widths, flipped horizontally if mirror.
 pub fn sprite(frames: &Frames, t: f64, mirror: bool) -> Vec<String> {
-    let rows = frames[((t * 2.0) as i64).rem_euclid(frames.len() as i64) as usize];
+    let rows = frames[((t * SPRITE_FPS) as i64).rem_euclid(frames.len() as i64) as usize];
     let w = rows.iter().map(|r| r.chars().count()).max().unwrap_or(0);
     rows.iter()
         .map(|r| {
@@ -479,13 +559,16 @@ fn strip_accent(c: char) -> char {
     }
 }
 
+/// Unicode combining diacritical marks (what NFD splits off the letters).
+const COMBINING_MARKS: std::ops::RangeInclusive<char> = '\u{300}'..='\u{36f}';
+
 /// Uppercase without accents (É → E, Œ → OE) for the big font.
 pub fn plain(text: &str) -> String {
     text.to_uppercase()
         .replace('Œ', "OE")
         .replace('Æ', "AE")
         .chars()
-        .filter(|c| !('\u{300}'..='\u{36f}').contains(c)) // combining marks
+        .filter(|c| !COMBINING_MARKS.contains(c))
         .map(strip_accent)
         .collect()
 }

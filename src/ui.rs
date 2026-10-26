@@ -41,6 +41,138 @@ pub const MIN_W: i32 = 60;
 pub const MIN_H: i32 = 20;
 pub const MAX_FLOATS: usize = 6; // floating numbers shown at once
 const MAX_PARTICLES: usize = 60;
+const LONG_AGO: f64 = -9.0; // timestamp of "never": older than any delay of the interface
+const TITLE_INTERVAL: f64 = 1.0; // seconds between two terminal title updates
+const CONFIRM_TIME: f64 = 3.0; // seconds to press Enter again on a prestige, challenge or supernova
+const PAGE_ROWS: usize = 5; // selection jump of PageUp / PageDown
+const EPIC_CAP_DIV: f64 = 2.0; // epic music once the level reaches cap / EPIC_CAP_DIV
+const PRESTIGE_TAB: usize = 2; // index in TABS, "???" until the prestige is unlocked
+
+// Blink periods (seconds per on/off phase).
+const BLINK_OVERHEAT: f64 = 0.2; // mushroom frame and stats line during an overheat
+const BLINK_FLASH: f64 = 0.1; // explosion flash, fresh messages
+const BLINK_PROMPT: f64 = 0.6; // "Appuie sur…" invitations
+const BLINK_BIG_TITLE: f64 = 0.15; // big title of an important message
+const BLINK_ALERT: f64 = 0.3; // inspector and enemy alerts, inspector waving
+const BLINK_LEVEL_MAX: f64 = 0.5;
+const BLINK_PLANE: f64 = 0.25; // letter of the supply plane
+const BLINK_GAUGE_READY: f64 = 0.4; // critical mass ready
+
+// Layout of the game screen.
+const LEFT_MIN_W: i32 = 30; // mushroom panel: at least this wide…
+const LEFT_SHARE: f64 = 0.45; // …or this share of the terminal width
+const STATS_H: i32 = 10;
+const PANEL_PAD: i32 = 2; // columns between a panel edge and its text (border + space)
+const INITIAL_TAB_W: i32 = 40; // inner tab width before the first draw
+const SEL_PREFIX_W: i32 = 2; // "▶ " before every tab row
+const POPUP_MARGIN: i32 = 4; // columns kept around a popup narrower than the screen
+
+// Messages under the mushroom panel edge.
+const MSG_SHOWN: usize = 3; // latest messages stacked
+const MSG_MAX_LINES: usize = 2; // lines of a wrapped message
+const MSG_MIN_W: i32 = 10; // wrap width on a tiny panel
+const MSG_WRAP_MARGIN: i32 = 4; // columns of the panel not used by message text
+const MSG_FLASH_TIME: f64 = 0.6; // a new message blinks in reverse video this long
+const MSG_FADE: f64 = 1.0; // last seconds of a message, shown dimmer
+const BIG_FLASH_TIME: f64 = 1.0; // the big title of an important message flashes this long
+
+// Mushroom panel: scenery and animations.
+const SHAKE_MIN_W: i32 = 4; // narrower, the panel does not shake
+const STEM_GAP_MIN: i32 = 3; // columns kept clear on each side of the stem…
+const STEM_GAP_DIV: i32 = 6; // …or the foot width / STEM_GAP_DIV
+const ARMY_GAP_MIN: i32 = 2; // same for the army sprites
+const ARMY_GAP_DIV: i32 = 10;
+const SKY_GROUND_MARGIN: i32 = 3; // rows above the ground without sky objects
+const SKY_MIN_H: i32 = 2;
+const SKY_MIN_W: i32 = 10;
+const SKY_SEED_STRIDE: i32 = 1000; // sky seed: iw * SKY_SEED_STRIDE + ground (same sky for a same size)
+const SKY_STARS_LEVEL: u32 = 100; // clouds below, stars from there
+const SKY_PLANETS_LEVEL: u32 = 1000;
+const CLOUD: &str = "(~~)";
+const CLOUD_SPACING: i32 = 25; // one cloud per CLOUD_SPACING columns
+const CLOUD_SPEED: f64 = 0.5; // columns/s of the first cloud…
+const CLOUD_SPEED_STEP: f64 = 0.3; // …each next one is faster by this much
+const WRAP_MARGIN: i32 = 6; // columns past the left edge before a drifting sprite reappears on the right
+const STAR_DENSITY: i32 = 30; // one star per STAR_DENSITY cells of sky
+const BIG_STAR_EVERY: i32 = 7;
+const TWINKLE_SPEED: f64 = 2.0; // twinkle steps per second
+const TWINKLE_EVERY: i64 = 9; // one star in TWINKLE_EVERY is lit
+const ARMY_COPIES: u32 = 3; // sprites per unit type at most…
+const ARMY_COPY_BASE: u64 = 10; // …the k-th from ARMY_COPY_BASE^k units
+const ARMY_COPY_PHASE: f64 = 0.3; // animation offset (s) between copies
+const ARMY_UPPER_ROW: i32 = 5; // rows above the ground of the second row of sprites…
+const ARMY_UPPER_MIN: i32 = 12; // …which needs at least this many rows above the ground
+const BOMBERS_SHOWN: u64 = 2;
+const BOMBER_SPEED: f64 = 8.0; // columns/s
+const BOMBER_SPACING: i32 = 23; // columns between two bombers
+const BOMBER_TOP: i32 = 3; // bottom row of the first bomber…
+const BOMBER_ROW_STEP: i32 = 3; // …and of each next one, lower
+const PARTICLE_RATE_BASE: f64 = 0.4; // projectiles/s of a unit type: base…
+const PARTICLE_RATE_LOG: f64 = 0.6; // …+ this × log2(1 + count)…
+const PARTICLE_RATE_MAX: f64 = 5.0; // …at most this
+const PARTICLE_SKY_ROW: i32 = 2; // bombs fall from this row
+const PARTICLE_PEAK_MIN: f64 = 2.0; // height of a projectile arc (rows)
+const PARTICLE_PEAK_MAX: f64 = 5.0;
+const PARTICLE_SPREAD: i64 = 2; // impact columns around the stem center
+const PARTICLE_DUR_MIN: f64 = 0.7; // flight duration (s)
+const PARTICLE_DUR_MAX: f64 = 1.3;
+const IMPACT_END: f64 = 1.2; // impact star shown until this share of the flight duration
+const FLOAT_TIME: f64 = 0.9; // seconds a floating number stays
+const FLOAT_SPEED: f64 = 4.0; // rows/s
+const FLOAT_SPREAD: i64 = 4; // random horizontal offset of a floating number
+const PLANE_EXIT: i32 = 8; // the plane flies until this many columns past the left edge
+const PLANE_LABEL_GAP: i32 = 2; // columns from the plane to its letter
+const INSPECTOR_START: i32 = 6; // columns from the right edge where the inspector appears
+const INSPECTOR_W: i32 = 5; // "[ONU]"
+const HIPPIES_RUSH: f64 = 4.0; // protesters walk this much faster, then stage their sit-in
+const DRONE_ALTITUDE: i32 = 2; // sky enemies: rows above their sprite top
+
+// Statistics panel.
+const LEVEL_BAR_MARGIN: i32 = 6; // columns right of the level bar, for the percentage
+const COMBO_BAR_MAX: i32 = 20;
+const COMBO_LABEL_W: i32 = 16; // "Combo ×1.0 " and some room
+const GAUGE_MIN_W: i32 = 5;
+const GAUGE_LABEL_W: i32 = 20; // "Masse critique " and " 100%"
+
+// Tabs.
+const TAB_LABEL_SHORT: i32 = 5; // characters kept of the tab names when they don't fit…
+const TAB_LABEL_TINY: i32 = 3; // …then fewer
+const UNIT_NAME_MIN_W: i32 = 8;
+const UNIT_COLUMNS_W: i32 = 28; // "▶ " + count, production and cost columns of a unit row
+const NAME_MIN_W: i32 = 10; // talent names
+const TALENT_COLUMNS_W: i32 = 16; // "▶ " + rank and cost columns of a talent row
+const TREE_COLUMNS_W: i32 = 18; // same for the prestige and supernova trees
+const STAT_NAME_MIN_W: i32 = 6;
+const STAT_VALUE_MIN_W: i32 = 10;
+const STAT_ROW_EXTRA_W: i32 = 4; // "▶ ", space between the columns, free last column
+// Heading rules (──), shortened so that the headings end about the same column.
+const RULE: usize = 20;
+const RULE_COUNTED: usize = 10; // headings with a counter in them
+const RULE_STATS: usize = 15;
+const RULE_LAST_RUN: usize = 12;
+const SPRITE_MIN_TAB_W: i32 = 36; // narrower, no unit sprite next to the description
+const SPRITE_GAP: i32 = 2; // columns between the description and the sprite
+const MIN_LIST_H: i32 = 5; // rows kept for the list above the description
+const MIN_DESC_H: i32 = 2;
+
+// Overlays.
+const QTE_W: i32 = 44;
+const QTE_H: i32 = 6;
+const QTE_ROW_DIV: i32 = 3; // the QTE box is a 1/QTE_ROW_DIV of the way down the panel
+const QTE_RESULT_H: i32 = 3;
+const REPORT_W: i32 = 72;
+const REPORT_CHROME_H: i32 = 4; // borders, blank row and prompt of the end screen
+const REPORT_LABEL_GAP: i32 = 2; // columns between labels and values
+const REPORT_VALUE_MIN_W: i32 = 10;
+const REPORT_WRAP_MARGIN: i32 = 6; // columns of the box not used by values
+const REPORT_VALUE_LINES: usize = 2; // lines of a wrapped value
+const REPORT_CHESTS_SHOWN: usize = 6; // latest chests listed
+const POPUP_W: i32 = 70; // chest and mutation choices
+const POPUP_CHROME_H: i32 = 4; // borders, intro row and bottom blank row
+const OPTION_ROW_H: i32 = 2; // name, then description
+const OPTION_DESC_X: i32 = 5; // description indent in the popup
+const NEWS_SPEED: f64 = 12.0; // columns/s of the news ticker
+pub const NEWS_MARGIN: i32 = 2; // columns of the news line outside the label and the ticker
 
 fn sfx_gap(key: &str) -> f64 {
     SFX_GAP
@@ -254,7 +386,7 @@ impl<S: Screen> UI<S> {
             qty: Qty::N(1),
             shake_until: 0.0,
             title: None,
-            title_at: -9.0,
+            title_at: LONG_AGO,
             tab: 0,
             sel: [0; TABS.len()],
             scroll: [0; TABS.len()],
@@ -267,7 +399,7 @@ impl<S: Screen> UI<S> {
             t: 0.0,
             h: 0,
             w: 0,
-            tab_w: 40,
+            tab_w: INITIAL_TAB_W,
             rng: Box::new(StdRandom::new()),
             story_guard: STORY_GUARD,
         }
@@ -319,7 +451,7 @@ impl<S: Screen> UI<S> {
         }
         self.put(y + h - 1, x, &format!("└{rule}┘"), style);
         if !title.is_empty() {
-            self.put(y, x + 2, &format!(" {title} "), style.bold());
+            self.put(y, x + PANEL_PAD, &format!(" {title} "), style.bold());
         }
     }
 
@@ -350,9 +482,9 @@ impl<S: Screen> UI<S> {
             self.scr.refresh();
             return;
         }
-        let left_w = 30.max((f64::from(self.w) * 0.45) as i32);
+        let left_w = LEFT_MIN_W.max((f64::from(self.w) * LEFT_SHARE) as i32);
         let right_w = self.w - left_w;
-        let stats_h = 10;
+        let stats_h = STATS_H;
         let news_y = self.h - 1;
         self.draw_mushroom(0, 0, news_y, left_w, dt);
         self.draw_stats(0, left_w, stats_h, right_w);
@@ -396,7 +528,9 @@ impl<S: Screen> UI<S> {
         {
             return "tension";
         }
-        if g.challenge.is_some() || (g.exploded && f64::from(g.level) >= f64::from(g.cap()) / 2.0) {
+        if g.challenge.is_some()
+            || (g.exploded && f64::from(g.level) >= f64::from(g.cap()) / EPIC_CAP_DIV)
+        {
             return "epic";
         }
         "calm"
@@ -421,7 +555,7 @@ impl<S: Screen> UI<S> {
             } else {
                 name
             }; // press variants share one delay
-            let last = self.sfx_last.get(key).copied().unwrap_or(-9.0);
+            let last = self.sfx_last.get(key).copied().unwrap_or(LONG_AGO);
             let too_soon = self.t - last < sfx_gap(key);
             let Some(sound) = &self.sound else { continue };
             if played.contains(&key) || too_soon {
@@ -435,7 +569,7 @@ impl<S: Screen> UI<S> {
 
     pub fn draw_mushroom(&mut self, y0: i32, x0: i32, h: i32, w: i32, dt: f64) {
         let mut border = self.c("grey");
-        if self.g.overheated() && self.blink(0.2) {
+        if self.g.overheated() && self.blink(BLINK_OVERHEAT) {
             border = self.c("red").bold();
         } else if self.g.frozen() {
             border = self.c("blue").bold();
@@ -449,7 +583,7 @@ impl<S: Screen> UI<S> {
                 let line: String = (0..iw)
                     .map(|_| *self.rng.choice(&['█', '▓', '▒', '░']))
                     .collect();
-                let style = if self.blink(0.1) {
+                let style = if self.blink(BLINK_FLASH) {
                     self.c("flash")
                 } else {
                     self.c("white").bold()
@@ -460,7 +594,7 @@ impl<S: Screen> UI<S> {
             return;
         }
 
-        if self.t < self.shake_until && iw > 4 {
+        if self.t < self.shake_until && iw > SHAKE_MIN_W {
             let shift = *self.rng.choice(&[0, 1]);
             ix += shift;
             iw -= 1; // the lost width keeps the shift inside the frame
@@ -475,7 +609,7 @@ impl<S: Screen> UI<S> {
             for (y, x, ch, col) in art::bomb(iw, ih) {
                 self.put_char(iy + y, ix + x, ch, Style::of(col));
             }
-            if self.blink(0.6) {
+            if self.blink(BLINK_PROMPT) {
                 let msg = "Appuie sur ESPACE !";
                 let style = self.c("yellow").bold();
                 self.put(iy + ih / 2, ix + fdiv(iw - width(msg), 2), msg, style);
@@ -494,8 +628,8 @@ impl<S: Screen> UI<S> {
         }
 
         let foot_w = art::mushroom_width(iw, ih, size, twin);
-        let gap = 3.max(foot_w / 6);
-        self.draw_army(iy, ix, iw, ground, 2.max(foot_w / 10));
+        let gap = STEM_GAP_MIN.max(foot_w / STEM_GAP_DIV);
+        self.draw_army(iy, ix, iw, ground, ARMY_GAP_MIN.max(foot_w / ARMY_GAP_DIV));
         let banners = self.banner_lines(iw);
         self.update_particles(
             iy,
@@ -508,7 +642,7 @@ impl<S: Screen> UI<S> {
             dt,
             1 + banners.len() as i32,
         );
-        self.draw_inspector(iy, ix, iw, ground, (iw - 6).min(iw / 2 + gap));
+        self.draw_inspector(iy, ix, iw, ground, (iw - INSPECTOR_START).min(iw / 2 + gap));
         self.draw_enemy(iy, ix, iw, ground, gap);
         self.draw_plane(iy, ix, iw);
         self.draw_banners(iy, ix, iw, Some(banners));
@@ -517,7 +651,7 @@ impl<S: Screen> UI<S> {
     /// Title in big letters (3 lines of equal width), or in spaced letters if it does not fit.
     pub fn big_lines(&self, title: &str, kind: MsgKind, iw: i32, flashing: bool) -> Vec<Line> {
         let mut style = Style::of(kind.color()).bold();
-        if flashing && self.blink(0.15) {
+        if flashing && self.blink(BLINK_BIG_TITLE) {
             style = self.c("white").bold();
         }
         let rows = art::big_text(title);
@@ -536,36 +670,37 @@ impl<S: Screen> UI<S> {
 
     /// Backdrop that evolves with the level: clouds, then stars, then planets (fixed positions per size).
     pub fn draw_sky(&mut self, iy: i32, ix: i32, iw: i32, ground: i32) {
-        let (lvl, top) = (self.g.level, ground - 3);
-        if top < 2 || iw < 10 {
+        let (lvl, top) = (self.g.level, ground - SKY_GROUND_MARGIN);
+        if top < SKY_MIN_H || iw < SKY_MIN_W {
             return;
         }
-        let mut rng = StdRandom::seeded((iw * 1000 + ground) as u64);
+        let mut rng = StdRandom::seeded((iw * SKY_SEED_STRIDE + ground) as u64);
         let grey = self.c("grey");
-        if lvl < 100 {
-            for i in 0..1.max(iw / 25) {
+        if lvl < SKY_STARS_LEVEL {
+            for i in 0..1.max(iw / CLOUD_SPACING) {
                 let y = rng.randint(1, i64::from(top)) as i32;
                 let x0 = rng.randint(0, i64::from(iw));
-                let x = ((x0 as f64 + self.t * (0.5 + 0.3 * f64::from(i))) as i64)
-                    .rem_euclid(i64::from(iw) + 6) as i32
-                    - 6;
-                let cloud = slice("(~~)", (-x).max(0), 4.min(iw - x).max(0));
+                let x = ((x0 as f64 + self.t * (CLOUD_SPEED + CLOUD_SPEED_STEP * f64::from(i)))
+                    as i64)
+                    .rem_euclid(i64::from(iw + WRAP_MARGIN)) as i32
+                    - WRAP_MARGIN;
+                let cloud = slice(CLOUD, (-x).max(0), width(CLOUD).min(iw - x).max(0));
                 self.put(iy + y, ix + x.max(0), &cloud, grey);
             }
             return;
         }
-        for i in 0..iw * top / 30 {
+        for i in 0..iw * top / STAR_DENSITY {
             let y = rng.randint(1, i64::from(top)) as i32;
             let x = rng.randint(0, i64::from(iw - 1)) as i32;
-            let ch = if i % 7 == 0 { "✦" } else { "·" };
-            let style = if (i64::from(i) + (self.t * 2.0) as i64) % 9 == 0 {
+            let ch = if i % BIG_STAR_EVERY == 0 { "✦" } else { "·" };
+            let style = if (i64::from(i) + (self.t * TWINKLE_SPEED) as i64) % TWINKLE_EVERY == 0 {
                 self.c("white")
             } else {
                 grey
             };
             self.put(iy + y, ix + x, ch, style);
         }
-        if lvl >= 1000 {
+        if lvl >= SKY_PLANETS_LEVEL {
             for (ch, col) in [("◯", "cyan"), ("♄", "yellow"), ("☾", "white")] {
                 let y = rng.randint(1, i64::from(top)) as i32;
                 let x = rng.randint(0, i64::from(iw - 1)) as i32;
@@ -578,7 +713,7 @@ impl<S: Screen> UI<S> {
     /// Level in the terminal title, at most once per second and only when it changes.
     pub fn update_title(&mut self) {
         let Some(title) = &self.title else { return };
-        if self.t - self.title_at < 1.0 {
+        if self.t - self.title_at < TITLE_INTERVAL {
             return;
         }
         let text = format!(
@@ -606,7 +741,7 @@ impl<S: Screen> UI<S> {
     }
 
     fn alert_attr(&self, calm: &str) -> Style {
-        if self.blink(0.3) {
+        if self.blink(BLINK_ALERT) {
             self.c("alert")
         } else {
             self.c(calm)
@@ -645,25 +780,30 @@ impl<S: Screen> UI<S> {
             .iter()
             .filter(|m| g.time - m.time < MSG_TIME)
             .collect();
-        let recent = &recent[recent.len().saturating_sub(3)..];
+        let recent = &recent[recent.len().saturating_sub(MSG_SHOWN)..];
         for (i, m) in recent.iter().rev().enumerate() {
             let kind = m.kind;
             let age = g.time - m.time;
             let important = matches!(kind, MsgKind::Epic | MsgKind::Star);
             if let Some(title) = m.title.as_deref().filter(|t| !t.is_empty())
                 && i == 0
-                && age < if important { MSG_TIME - 1.0 } else { BIG_TIME }
+                && age
+                    < if important {
+                        MSG_TIME - MSG_FADE
+                    } else {
+                        BIG_TIME
+                    }
             {
-                lines.extend(self.big_lines(title, kind, iw, important && age < 1.0));
+                lines.extend(self.big_lines(title, kind, iw, important && age < BIG_FLASH_TIME));
             }
             let mut style = Style::of(Color::Msg(kind));
-            if age < 0.6 && self.blink(0.1) {
+            if age < MSG_FLASH_TIME && self.blink(BLINK_FLASH) {
                 style = style.toggle_reverse();
-            } else if age > MSG_TIME - 1.0 {
+            } else if age > MSG_TIME - MSG_FADE {
                 style = Style::of(kind.color()).bold();
             }
-            let mut parts = wrap(&m.text, 10.max(iw - 4));
-            parts.truncate(2);
+            let mut parts = wrap(&m.text, MSG_MIN_W.max(iw - MSG_WRAP_MARGIN));
+            parts.truncate(MSG_MAX_LINES);
             let w = parts.iter().map(|p| width(p)).max().unwrap_or(0);
             lines.extend(parts.iter().map(|p| (center(p, w), style)));
         }
@@ -707,13 +847,13 @@ impl<S: Screen> UI<S> {
             .iter()
             .filter(|u| self.g.units[u.id] > 0 && u.id != "bomber")
             .collect();
-        let wanted: Vec<_> = (0..3u32)
+        let wanted: Vec<_> = (0..ARMY_COPIES)
             .flat_map(|copy| owned.iter().map(move |u| (*u, copy)))
-            .filter(|(u, copy)| self.g.units[u.id] >= 10u64.pow(*copy))
+            .filter(|(u, copy)| self.g.units[u.id] >= ARMY_COPY_BASE.pow(*copy))
             .collect();
         let mut bottoms = vec![ground - 1];
-        if ground >= 12 {
-            bottoms.push(ground - 5);
+        if ground >= ARMY_UPPER_MIN {
+            bottoms.push(ground - ARMY_UPPER_ROW);
         }
         // (bottom line, on the right side)
         let slots: Vec<(i32, bool)> = bottoms
@@ -734,7 +874,8 @@ impl<S: Screen> UI<S> {
                 let x = if right { cursor[k] - w } else { cursor[k] };
                 if (!right && x + w <= iw / 2 - gap) || (right && x >= iw / 2 + gap) {
                     cursor[k] = if right { x - 1 } else { x + w + 1 };
-                    let rows = art::sprite(frames, self.t + f64::from(copy) * 0.3, right);
+                    let rows =
+                        art::sprite(frames, self.t + f64::from(copy) * ARMY_COPY_PHASE, right);
                     let style = self.c(u.color).bold();
                     self.draw_sprite(iy, ix, iw, bottom, x, &rows, style, true);
                     next_slot = (next_slot + tries + 1) % slots.len();
@@ -743,13 +884,22 @@ impl<S: Screen> UI<S> {
             }
         }
         let frames = art::unit_art("bomber").expect("bombers have art");
-        for i in 0..self.g.units["bomber"].min(2) as i32 {
-            let x = ((self.t * 8.0 + f64::from(i * 23)) as i64).rem_euclid(i64::from(iw) + 6)
-                as i32
-                - 6;
+        for i in 0..self.g.units["bomber"].min(BOMBERS_SHOWN) as i32 {
+            let x = ((self.t * BOMBER_SPEED + f64::from(i * BOMBER_SPACING)) as i64)
+                .rem_euclid(i64::from(iw + WRAP_MARGIN)) as i32
+                - WRAP_MARGIN;
             let rows = art::sprite(frames, self.t, false);
             let style = self.c("cyan").bold();
-            self.draw_sprite(iy, ix, iw, 3 + 3 * i, x, &rows, style, false);
+            self.draw_sprite(
+                iy,
+                ix,
+                iw,
+                BOMBER_TOP + BOMBER_ROW_STEP * i,
+                x,
+                &rows,
+                style,
+                false,
+            );
         }
     }
 
@@ -774,13 +924,14 @@ impl<S: Screen> UI<S> {
                 if n == 0 {
                     continue;
                 }
-                let per_second = (0.4 + (1.0 + n as f64).log2() * 0.6).min(5.0);
+                let per_second = (PARTICLE_RATE_BASE + (1.0 + n as f64).log2() * PARTICLE_RATE_LOG)
+                    .min(PARTICLE_RATE_MAX);
                 let mut acc = self.spawn_acc.get(u.id).copied().unwrap_or(0.0) + dt * per_second;
                 while acc >= 1.0 && self.particles.len() < MAX_PARTICLES {
                     acc -= 1.0;
                     let rng = &mut self.rng;
                     let (sx, sy, peak) = if u.id == "bomber" {
-                        (rng.randint(0, i64::from(iw - 1)), 2, 0.0)
+                        (rng.randint(0, i64::from(iw - 1)), PARTICLE_SKY_ROW, 0.0)
                     } else {
                         let left = rng.random() < 0.5;
                         let sx = if left {
@@ -788,13 +939,17 @@ impl<S: Screen> UI<S> {
                         } else {
                             rng.randint(i64::from(iw / 2 + gap), i64::from(iw - 2))
                         };
-                        (sx, ground - 1, rng.uniform(2.0, 5.0))
+                        (
+                            sx,
+                            ground - 1,
+                            rng.uniform(PARTICLE_PEAK_MIN, PARTICLE_PEAK_MAX),
+                        )
                     };
-                    let tx = iw / 2 + rng.randint(-2, 2) as i32;
+                    let tx = iw / 2 + rng.randint(-PARTICLE_SPREAD, PARTICLE_SPREAD) as i32;
                     let ty = rng
                         .randint(i64::from((top + 1).min(ground - 2)), i64::from(ground - 2))
                         as i32;
-                    let dur = rng.uniform(0.7, 1.3);
+                    let dur = rng.uniform(PARTICLE_DUR_MIN, PARTICLE_DUR_MAX);
                     self.particles.push(Particle {
                         sx: sx as i32,
                         sy,
@@ -814,7 +969,7 @@ impl<S: Screen> UI<S> {
         for mut p in std::mem::take(&mut self.particles) {
             p.age += dt;
             let flight = p.age / p.dur;
-            if flight >= 1.2 {
+            if flight >= IMPACT_END {
                 continue;
             }
             if flight >= 1.0 {
@@ -836,8 +991,8 @@ impl<S: Screen> UI<S> {
         let mut floats = Vec::new();
         for mut fl in std::mem::take(&mut self.floats) {
             fl.age += dt;
-            if fl.age < 0.9 {
-                let y = (f64::from(top) - 1.0 - fl.age * 4.0) as i32;
+            if fl.age < FLOAT_TIME {
+                let y = (f64::from(top) - 1.0 - fl.age * FLOAT_SPEED) as i32;
                 let len = width(&fl.text);
                 let x = iw / 2 + fl.dx - len / 2;
                 self.put(
@@ -855,29 +1010,34 @@ impl<S: Screen> UI<S> {
     pub fn draw_plane(&mut self, iy: i32, ix: i32, iw: i32) {
         let Some(p) = self.g.plane else { return };
         let progress = (self.g.time - p.start) / p.dur;
-        let x = (f64::from(iw) - progress * f64::from(iw + 8)) as i32;
+        let x = (f64::from(iw) - progress * f64::from(iw + PLANE_EXIT)) as i32;
         let style = self.c("white").bold();
         self.put(iy, ix + x.max(0), "✈", style);
         let label = format!("[{}]", p.letter.to_uppercase());
-        let style = if self.blink(0.25) {
+        let style = if self.blink(BLINK_PLANE) {
             self.c("yellow")
         } else {
             self.c("cyan")
         }
         .bold();
-        if 0 <= x + 2 && x + 2 <= iw - width(&label) {
-            self.put(iy, ix + x + 2, &label, style);
+        let lx = x + PLANE_LABEL_GAP;
+        if 0 <= lx && lx <= iw - width(&label) {
+            self.put(iy, ix + lx, &label, style);
         }
     }
 
     pub fn draw_inspector(&mut self, iy: i32, ix: i32, iw: i32, ground: i32, target: i32) {
         let Some(ins) = self.g.inspector else { return };
         let progress = ((self.g.time - ins.start) / ins.dur).min(1.0);
-        let start = iw - 6;
+        let start = iw - INSPECTOR_START;
         let x = (f64::from(start) - f64::from(start - target) * progress) as i32;
-        let x = x.min(iw - 5).max(0);
+        let x = x.min(iw - INSPECTOR_W).max(0);
         let style = self.c("magenta").bold();
-        let arms = if self.blink(0.3) { " o/" } else { "\\o " };
+        let arms = if self.blink(BLINK_ALERT) {
+            " o/"
+        } else {
+            "\\o "
+        };
         self.put(iy + ground - 2, ix + x + 1, arms, style);
         self.put(iy + ground - 1, ix + x, "[ONU]", style);
         let left = events::inspector_hits(&self.g).saturating_sub(ins.hits);
@@ -905,13 +1065,13 @@ impl<S: Screen> UI<S> {
                 target = (target - w).max(0);
                 let mut progress = progress.clamp(0.0, 1.0);
                 if en.kind == events::EnemyKind::Hippies {
-                    progress = (progress * 4.0).min(1.0); // they arrive fast then stage their sit-in
+                    progress = (progress * HIPPIES_RUSH).min(1.0);
                 }
                 let x = (f64::from(-w) + f64::from(target + w) * progress) as i32;
                 target = target.min(x) - 1;
                 let rows = art::sprite(frames, self.t, false);
                 let bottom = if sky {
-                    2 + rows.len() as i32
+                    DRONE_ALTITUDE + rows.len() as i32
                 } else {
                     ground - 1
                 };
@@ -939,7 +1099,7 @@ impl<S: Screen> UI<S> {
     pub fn draw_stats(&mut self, y0: i32, x0: i32, h: i32, w: i32) {
         let grey = self.c("grey");
         self.frame(y0, x0, h, w, "Statistiques", grey);
-        let (iy, ix, iw) = (y0 + 1, x0 + 2, w - 4);
+        let (iy, ix, iw) = (y0 + 1, x0 + PANEL_PAD, w - 2 * PANEL_PAD);
         let g = &self.g;
         let mut lines: Vec<Vec<Line>> = Vec::new();
 
@@ -970,7 +1130,7 @@ impl<S: Screen> UI<S> {
         ]);
 
         if g.level >= g.cap() {
-            let style = if self.blink(0.5) {
+            let style = if self.blink(BLINK_LEVEL_MAX) {
                 self.c("green").bold()
             } else {
                 self.c("green")
@@ -991,7 +1151,10 @@ impl<S: Screen> UI<S> {
                 format!(" {:3}%", (frac * 100.0) as i64)
             };
             lines.push(vec![
-                (Self::bar(frac, iw - 6, "█", "░"), self.c("orange")),
+                (
+                    Self::bar(frac, iw - LEVEL_BAR_MARGIN, "█", "░"),
+                    self.c("orange"),
+                ),
                 (percent, Style::PLAIN),
             ]);
         }
@@ -1041,7 +1204,7 @@ impl<S: Screen> UI<S> {
         ]);
 
         if g.overheated() {
-            let style = if self.blink(0.2) {
+            let style = if self.blink(BLINK_OVERHEAT) {
                 self.c("alert")
             } else {
                 self.c("red").bold()
@@ -1052,7 +1215,7 @@ impl<S: Screen> UI<S> {
             )]);
         } else {
             let steps = (g.max_combo() as i32 - 1).max(1);
-            let step_w = 1.max(fdiv(20.min(iw - 16), steps));
+            let step_w = 1.max(fdiv(COMBO_BAR_MAX.min(iw - COMBO_LABEL_W), steps));
             let filled = (g.combo * f64::from(step_w)) as i32;
             lines.push(vec![
                 (format!("Combo ×{:.1} ", g.combo_mult()), Style::PLAIN),
@@ -1070,7 +1233,7 @@ impl<S: Screen> UI<S> {
                 self.c("red").bold(),
             )]);
         } else if g.crit_gauge >= 1.0 {
-            let style = if self.blink(0.4) {
+            let style = if self.blink(BLINK_GAUGE_READY) {
                 self.c("green").bold()
             } else {
                 self.c("yellow")
@@ -1083,7 +1246,7 @@ impl<S: Screen> UI<S> {
             lines.push(vec![
                 ("Masse critique ".to_string(), Style::PLAIN),
                 (
-                    Self::bar(g.crit_gauge, 5.max(iw - 20), "█", "░"),
+                    Self::bar(g.crit_gauge, GAUGE_MIN_W.max(iw - GAUGE_LABEL_W), "█", "░"),
                     self.c("red"),
                 ),
                 (format!(" {}%", (g.crit_gauge * 100.0) as i64), Style::PLAIN),
@@ -1163,7 +1326,7 @@ impl<S: Screen> UI<S> {
                 self.c("magenta"),
             ));
         }
-        let nw = 8.max(self.tab_w - 28);
+        let nw = UNIT_NAME_MIN_W.max(self.tab_w - UNIT_COLUMNS_W);
         let mut teased = false;
         for u in &UNITS {
             let uid = u.id;
@@ -1230,7 +1393,7 @@ impl<S: Screen> UI<S> {
         )];
         for (bid, label) in data::BRANCHES {
             rows.push(Row::label(
-                format!("── {label} {}", "─".repeat(20)),
+                format!("── {label} {}", "─".repeat(RULE)),
                 self.c("cyan"),
             ));
             for t in data::TALENTS.iter().filter(|t| t.branch == bid) {
@@ -1249,7 +1412,7 @@ impl<S: Screen> UI<S> {
                     String::new()
                 };
                 let name = indent + t.name;
-                let nw = 10.max(self.tab_w - 16);
+                let nw = NAME_MIN_W.max(self.tab_w - TALENT_COLUMNS_W);
                 let text = format!(
                     "{:<nw$} {r}/{:<2} {cost:>6}",
                     head(&name, nw),
@@ -1320,7 +1483,7 @@ impl<S: Screen> UI<S> {
         }
         if g.prestige_count > 0 {
             rows.push(Row::label(
-                format!("── DÉFIS {}", "─".repeat(20)),
+                format!("── DÉFIS {}", "─".repeat(RULE)),
                 self.c("cyan"),
             ));
             for c in &data::CHALLENGES {
@@ -1367,13 +1530,16 @@ impl<S: Screen> UI<S> {
             ),
             self.c("magenta"),
             Some(Action::Skin),
-            "Entrée : changer de skin. Les défis et 5 prestiges en débloquent d'autres.",
+            format!(
+                "Entrée : changer de skin. Les défis et {} prestiges en débloquent d'autres.",
+                data::PLASMA_PRESTIGES
+            ),
         ));
         rows.push(Row::label(
             format!(
                 "── ARBRE DE PRESTIGE ({} ⚛) {}",
                 game::fmt(g.isotopes as f64),
-                "─".repeat(10)
+                "─".repeat(RULE_COUNTED)
             ),
             self.c("cyan"),
         ));
@@ -1405,7 +1571,7 @@ impl<S: Screen> UI<S> {
             format!(
                 "── SUPERNOVA ({} ✦) {}",
                 game::fmt(g.stars as f64),
-                "─".repeat(10)
+                "─".repeat(RULE_COUNTED)
             ),
             self.c("magenta").bold(),
         )];
@@ -1456,7 +1622,7 @@ impl<S: Screen> UI<S> {
         unit: &str,
         extra_desc: &dyn Fn(&str) -> String,
     ) -> Vec<Row> {
-        let nw = 10.max(self.tab_w - 18);
+        let nw = NAME_MIN_W.max(self.tab_w - TREE_COLUMNS_W);
         talents
             .iter()
             .map(|t| {
@@ -1494,7 +1660,7 @@ impl<S: Screen> UI<S> {
             format!(
                 "{n}/{} succès · +{} % de production",
                 ACHIEVEMENTS.len(),
-                2 * n
+                data::fr_num(data::percent(events::ACHIEVEMENT_BONUS) * n as f64)
             ),
             self.c("yellow").bold(),
         )];
@@ -1517,7 +1683,7 @@ impl<S: Screen> UI<S> {
                 "── SYNERGIES ({}/{}) {}",
                 found.len(),
                 SYNERGIES.len(),
-                "─".repeat(10)
+                "─".repeat(RULE_COUNTED)
             ),
             self.c("magenta"),
         ));
@@ -1563,19 +1729,19 @@ impl<S: Screen> UI<S> {
             self.c("white"),
         );
         let mut rows = vec![Row::label(
-            format!("── TOUCHES {}", "─".repeat(20)),
+            format!("── TOUCHES {}", "─".repeat(RULE)),
             head_style,
         )];
         for (k, what) in key_help() {
             rows.push(Row::new(
-                clip(&format!("{k:<9} {what}"), self.tab_w - 2),
+                clip(&format!("{k:<9} {what}"), self.tab_w - SEL_PREFIX_W),
                 key,
                 None,
                 what,
             ));
         }
         rows.push(Row::label(
-            format!("── STATISTIQUES {}", "─".repeat(15)),
+            format!("── STATISTIQUES {}", "─".repeat(RULE_STATS)),
             head_style,
         ));
         let count = |n: u64| game::fmt(n as f64);
@@ -1612,8 +1778,8 @@ impl<S: Screen> UI<S> {
             ),
         ];
         for (label, value) in stats {
-            let vw = 10.max(width(&value));
-            let nw = 6.max(self.tab_w - 4 - vw);
+            let vw = STAT_VALUE_MIN_W.max(width(&value));
+            let nw = STAT_NAME_MIN_W.max(self.tab_w - STAT_ROW_EXTRA_W - vw);
             let text = format!(
                 "{:<nw$} {value:>vw$}",
                 head(label, nw),
@@ -1643,24 +1809,29 @@ impl<S: Screen> UI<S> {
         }
         if let Some(r) = &g.last_run {
             rows.push(Row::label(
-                format!("── DERNIÈRE PARTIE {}", "─".repeat(12)),
+                format!("── DERNIÈRE PARTIE {}", "─".repeat(RULE_LAST_RUN)),
                 head_style,
             ));
             for (label, value) in report_lines(r) {
                 let text = format!("{label} : {value}");
-                rows.push(Row::new(clip(&text, self.tab_w - 2), grey, None, text));
+                rows.push(Row::new(
+                    clip(&text, self.tab_w - SEL_PREFIX_W),
+                    grey,
+                    None,
+                    text,
+                ));
             }
         }
         rows
     }
 
     pub fn draw_tab(&mut self, y0: i32, x0: i32, h: i32, w: i32) {
-        self.tab_w = w - 4;
+        self.tab_w = w - 2 * PANEL_PAD;
         let grey = self.c("grey");
         self.frame(y0, x0, h, w, "", grey);
         self.draw_tab_labels(y0, x0, w);
         self.draw_tab_help(y0 + h - 1, x0, w);
-        self.draw_tab_body(y0 + 1, x0 + 2, h - 2, w - 4);
+        self.draw_tab_body(y0 + 1, x0 + PANEL_PAD, h - 2, w - 2 * PANEL_PAD);
     }
 
     /// Tab names on the top edge, shortened until they fit; • if something there is affordable.
@@ -1669,7 +1840,7 @@ impl<S: Screen> UI<S> {
             .iter()
             .enumerate()
             .map(|(i, n)| {
-                if i == 2 && !self.g.prestige_unlocked() {
+                if i == PRESTIGE_TAB && !self.g.prestige_unlocked() {
                     "???".to_string()
                 } else {
                     n.to_string()
@@ -1684,8 +1855,8 @@ impl<S: Screen> UI<S> {
             .collect();
         let formats: [fn(usize, &str, &str) -> String; 4] = [
             |i, n, dot| format!(" {}:{n}{dot} ", i + 1),
-            |i, n, dot| format!("{}:{}{dot}", i + 1, head(n, 5)),
-            |i, n, dot| format!("{}:{}{dot}", i + 1, head(n, 3)),
+            |i, n, dot| format!("{}:{}{dot}", i + 1, head(n, TAB_LABEL_SHORT)),
+            |i, n, dot| format!("{}:{}{dot}", i + 1, head(n, TAB_LABEL_TINY)),
             |i, _, dot| format!("{}{dot}", i + 1),
         ];
         let mut labels = Vec::new();
@@ -1695,11 +1866,11 @@ impl<S: Screen> UI<S> {
                 .enumerate()
                 .map(|(i, n)| fmt_label(i, n, dots[i]))
                 .collect();
-            if labels.iter().map(|lb| width(lb) + 1).sum::<i32>() <= w - 3 {
+            if labels.iter().map(|lb| width(lb) + 1).sum::<i32>() < w - PANEL_PAD {
                 break;
             }
         }
-        let mut x = x0 + 2;
+        let mut x = x0 + PANEL_PAD;
         for (i, label) in labels.iter().enumerate() {
             let style = if i == self.tab {
                 Style::PLAIN.reverse().bold()
@@ -1722,7 +1893,7 @@ impl<S: Screen> UI<S> {
             .to_string(),
             _ => "indispo".to_string(),
         };
-        if (sound_label == "♪" || sound_label == "on") && self.g.volume < 100 {
+        if (sound_label == "♪" || sound_label == "on") && self.g.volume < game::MAX_VOLUME {
             sound_label += &format!(" {}%", self.g.volume);
         }
         let q = self.qty;
@@ -1735,7 +1906,7 @@ impl<S: Screen> UI<S> {
         let help = variants
             .iter()
             .find(|h| width(h) <= w - 2)
-            .unwrap_or(&variants[3]);
+            .unwrap_or(&variants[variants.len() - 1]);
         let grey = self.c("grey");
         self.put(
             y,
@@ -1824,7 +1995,7 @@ impl<S: Screen> UI<S> {
     ) -> (Vec<String>, Vec<String>, Style) {
         let (mut art_rows, mut art_style) = (Vec::new(), Style::PLAIN);
         if let Some((uid, unlocked)) = sprite
-            && iw >= 36
+            && iw >= SPRITE_MIN_TAB_W
         {
             art_rows = art::sprite(
                 art::unit_art(uid).expect("every unit has art"),
@@ -1837,16 +2008,15 @@ impl<S: Screen> UI<S> {
                 self.c("grey")
             };
         }
-        let mut text_w = iw - art_rows.first().map_or(0, |r| width(r) + 2);
-        let min_list_h = 5;
-        let max_desc_h = ih - 1 - min_list_h;
+        let mut text_w = iw - art_rows.first().map_or(0, |r| width(r) + SPRITE_GAP);
+        let max_desc_h = ih - 1 - MIN_LIST_H;
         let mut lines = wrap(desc, text_w);
-        let mut n_desc = 2.max((lines.len().max(art_rows.len()) as i32).min(max_desc_h));
+        let mut n_desc = MIN_DESC_H.max((lines.len().max(art_rows.len()) as i32).min(max_desc_h));
         if art_rows.len() as i32 > n_desc {
             art_rows.clear();
             text_w = iw;
             lines = wrap(desc, iw);
-            n_desc = 2.max((lines.len() as i32).min(max_desc_h));
+            n_desc = MIN_DESC_H.max((lines.len() as i32).min(max_desc_h));
         }
         let n = n_desc as usize;
         if lines.len() > n {
@@ -1892,14 +2062,14 @@ impl<S: Screen> UI<S> {
     }
 
     pub fn draw_qte(&mut self, y0: i32, x0: i32, h: i32, w: i32) {
-        let bw = (w - 4).min(44);
-        let y = y0 + h / 3;
+        let bw = (w - POPUP_MARGIN).min(QTE_W);
+        let y = y0 + h / QTE_ROW_DIV;
         let x = x0 + fdiv(w - bw, 2);
         if let Some(q) = self.g.qte {
-            self.clear(y, x, 6, bw);
+            self.clear(y, x, QTE_H, bw);
             let red = self.c("red").bold();
-            self.frame(y, x, 6, bw, "MASSE CRITIQUE", red);
-            let n = bw - 4;
+            self.frame(y, x, QTE_H, bw, "MASSE CRITIQUE", red);
+            let n = bw - 2 * PANEL_PAD;
             for i in 0..n {
                 let off_center = ((f64::from(i) + 0.5) / f64::from(n) - q.center).abs();
                 let (ch, col) = if off_center <= q.green {
@@ -1910,14 +2080,14 @@ impl<S: Screen> UI<S> {
                     ("░", "red")
                 };
                 let style = self.c(col);
-                self.put(y + 3, x + 2 + i, ch, style);
+                self.put(y + 3, x + PANEL_PAD + i, ch, style);
             }
-            let cx = x + 2 + (n - 1).min((events::qte_pos(&q) * f64::from(n)) as i32);
+            let cx = x + PANEL_PAD + (n - 1).min((events::qte_pos(&q) * f64::from(n)) as i32);
             let white = self.c("white").bold();
             self.put(y + 2, cx, "▼", white);
             self.put(
                 y + 1,
-                x + 2,
+                x + PANEL_PAD,
                 &head("Appuie sur F au bon moment !", n),
                 white,
             );
@@ -1925,7 +2095,7 @@ impl<S: Screen> UI<S> {
             && self.g.time < res.until
         {
             let style = self.c(res.color).bold();
-            self.frame(y, x, 3, bw, "", style);
+            self.frame(y, x, QTE_RESULT_H, bw, "", style);
             self.put(
                 y + 1,
                 x + 1,
@@ -1945,30 +2115,33 @@ impl<S: Screen> UI<S> {
             return;
         };
         let lines = report_lines(&r);
-        let bw = (self.w - 4).min(72);
+        let bw = (self.w - POPUP_MARGIN).min(REPORT_W);
         let lw = lines
             .iter()
             .map(|(label, _)| width(label))
             .max()
             .unwrap_or(0)
-            + 2;
+            + REPORT_LABEL_GAP;
         let mut rows: Vec<(String, String)> = Vec::new();
-        let value_w = 10.max(bw - 6 - lw);
+        let value_w = REPORT_VALUE_MIN_W.max(bw - REPORT_WRAP_MARGIN - lw);
         for (label, value) in lines {
             let mut wrapped = wrap(&value, value_w);
             if wrapped.is_empty() {
                 wrapped.push(String::new());
             }
-            if wrapped.len() > 2 {
-                wrapped = vec![wrapped[0].clone(), head(&wrapped[1], value_w - 1) + "…"];
+            if wrapped.len() > REPORT_VALUE_LINES {
+                wrapped.truncate(REPORT_VALUE_LINES);
+                let last = wrapped.pop().unwrap_or_default();
+                wrapped.push(head(&last, value_w - 1) + "…");
             }
             let mut wrapped = wrapped.into_iter();
             rows.push((label.to_string(), wrapped.next().unwrap_or_default()));
             rows.extend(wrapped.map(|more| (String::new(), more)));
         }
-        let bh = (self.h - 2).min(rows.len() as i32 + 4);
-        if rows.len() as i32 > bh - 4 && bh - 4 > 0 {
-            rows.truncate((bh - 5) as usize);
+        let bh = (self.h - 2).min(rows.len() as i32 + REPORT_CHROME_H);
+        let room = bh - REPORT_CHROME_H;
+        if rows.len() as i32 > room && room > 0 {
+            rows.truncate((room - 1) as usize);
             rows.push(("…".to_string(), String::new()));
         }
         let (y, x) = (fdiv(self.h - bh, 2).max(0), fdiv(self.w - bw, 2).max(0));
@@ -1985,17 +2158,17 @@ impl<S: Screen> UI<S> {
         let style = self.c(col).bold();
         self.frame(y, x, bh, bw, &title, style);
         let (cyan, white) = (self.c("cyan"), self.c("white").bold());
-        for (i, (label, value)) in rows.iter().take((bh - 4).max(0) as usize).enumerate() {
-            self.put(y + 1 + i as i32, x + 2, label, cyan);
+        for (i, (label, value)) in rows.iter().take(room.max(0) as usize).enumerate() {
+            self.put(y + 1 + i as i32, x + PANEL_PAD, label, cyan);
             self.put(
                 y + 1 + i as i32,
-                x + 2 + lw,
-                &head(value, bw - 4 - lw),
+                x + PANEL_PAD + lw,
+                &head(value, bw - 2 * PANEL_PAD - lw),
                 white,
             );
         }
         let msg = "Appuie sur une touche pour recommencer";
-        let style = if self.blink(0.6) {
+        let style = if self.blink(BLINK_PROMPT) {
             self.c("yellow").bold()
         } else {
             self.c("yellow")
@@ -2012,10 +2185,10 @@ impl<S: Screen> UI<S> {
         let Some(opts) = self.g.pending_chest.clone().filter(|o| !o.is_empty()) else {
             return;
         };
-        let bw = (self.w - 4).min(70);
+        let bw = (self.w - POPUP_MARGIN).min(POPUP_W);
         let cyan = self.c("cyan").bold();
         let (y, x) = self.popup(
-            4 + 2 * opts.len() as i32,
+            POPUP_CHROME_H + OPTION_ROW_H * opts.len() as i32,
             bw,
             "COFFRE DE RAVITAILLEMENT",
             cyan,
@@ -2023,7 +2196,7 @@ impl<S: Screen> UI<S> {
         let white = self.c("white").bold();
         self.put(
             y + 1,
-            x + 2,
+            x + PANEL_PAD,
             &format!("Choisis ton bonus avec 1-{} :", opts.len()),
             white,
         );
@@ -2038,14 +2211,19 @@ impl<S: Screen> UI<S> {
             } else {
                 (self.c("grey"), self.c("grey"))
             };
-            let row = y + 2 + 2 * i as i32;
+            let row = y + 2 + OPTION_ROW_H * i as i32;
             self.put(
                 row,
-                x + 2,
-                &head(&format!("{}. {name}", i + 1), bw - 4),
+                x + PANEL_PAD,
+                &head(&format!("{}. {name}", i + 1), bw - 2 * PANEL_PAD),
                 name_style,
             );
-            self.put(row + 1, x + 5, &head(&desc, bw - 7), desc_style);
+            self.put(
+                row + 1,
+                x + OPTION_DESC_X,
+                &head(&desc, bw - OPTION_DESC_X - PANEL_PAD),
+                desc_style,
+            );
         }
     }
 
@@ -2056,18 +2234,28 @@ impl<S: Screen> UI<S> {
         if self.g.pending_chest.as_ref().is_some_and(|c| !c.is_empty()) {
             return;
         }
-        let bw = (self.w - 4).min(70);
+        let bw = (self.w - POPUP_MARGIN).min(POPUP_W);
         let green = self.c("green").bold();
-        let (y, x) = self.popup(4 + 2 * opts.len() as i32, bw, "MUTATION !", green);
+        let (y, x) = self.popup(
+            POPUP_CHROME_H + OPTION_ROW_H * opts.len() as i32,
+            bw,
+            "MUTATION !",
+            green,
+        );
         let white = self.c("white").bold();
         let intro = format!("Ton champignon mute. Choisis avec 1-{} :", opts.len());
-        self.put(y + 1, x + 2, &intro, white);
+        self.put(y + 1, x + PANEL_PAD, &intro, white);
         for (i, mid) in opts.iter().enumerate() {
             let m = events::mutation(mid);
             let label = format!("{}. {}", i + 1, m.name);
-            let row = y + 2 + 2 * i as i32;
+            let row = y + 2 + OPTION_ROW_H * i as i32;
             let yellow = self.c("yellow").bold();
-            self.put(row, x + 2, &head(&label, bw - 4), yellow);
+            self.put(
+                row,
+                x + PANEL_PAD,
+                &head(&label, bw - 2 * PANEL_PAD),
+                yellow,
+            );
             if let Some(syn) = events::synergy_completed_by(&self.g, mid) {
                 let hint = if self.g.synergies_found.contains(syn.id) {
                     format!(" ★ {}", syn.name)
@@ -2076,10 +2264,20 @@ impl<S: Screen> UI<S> {
                 };
                 let magenta = self.c("magenta").bold();
                 let lw = width(&label);
-                self.put(row, x + 2 + lw, &head(&hint, (bw - 4 - lw).max(0)), magenta);
+                self.put(
+                    row,
+                    x + PANEL_PAD + lw,
+                    &head(&hint, (bw - 2 * PANEL_PAD - lw).max(0)),
+                    magenta,
+                );
             }
             let desc_style = self.c("white");
-            self.put(row + 1, x + 5, &head(m.effect, bw - 7), desc_style);
+            self.put(
+                row + 1,
+                x + OPTION_DESC_X,
+                &head(m.effect, bw - OPTION_DESC_X - PANEL_PAD),
+                desc_style,
+            );
         }
     }
 
@@ -2087,8 +2285,8 @@ impl<S: Screen> UI<S> {
         let label = " FLASH INFO ";
         let alert = self.c("alert");
         self.put(y, 0, label, alert);
-        let ww = self.w - width(label) - 2;
-        self.news_off += dt * 12.0;
+        let ww = self.w - width(label) - NEWS_MARGIN;
+        self.news_off += dt * NEWS_SPEED;
         if self.news.is_empty() || self.news_off > f64::from(width(self.news) + ww) {
             self.news = events::pick_news(&mut self.g);
             self.news_off = 0.0;
@@ -2126,7 +2324,7 @@ impl<S: Screen> UI<S> {
                 g.click(true);
                 let gained = g.radiation - before;
                 let fizzled = g.sfx.iter().filter(|&&s| s == "fizzle").count() > fizzles;
-                let dx = self.rng.randint(-4, 4) as i32;
+                let dx = self.rng.randint(-FLOAT_SPREAD, FLOAT_SPREAD) as i32;
                 if gained > 0.0 {
                     let crit = self.g.last_crit == self.g.time;
                     let text = format!(
@@ -2218,8 +2416,8 @@ impl<S: Screen> UI<S> {
                 self.sel[self.tab] += 1;
                 self.sfx("tick");
             }
-            Key::PageUp => self.sel[self.tab] = self.sel[self.tab].saturating_sub(5),
-            Key::PageDown => self.sel[self.tab] += 5,
+            Key::PageUp => self.sel[self.tab] = self.sel[self.tab].saturating_sub(PAGE_ROWS),
+            Key::PageDown => self.sel[self.tab] += PAGE_ROWS,
             Key::Enter => return self.activate(),
             Key::Char('m' | 'M') => {
                 let i = QTY.iter().position(|q| *q == self.qty).unwrap_or(0);
@@ -2359,7 +2557,7 @@ impl<S: Screen> UI<S> {
                         self.spawn_acc.clear();
                     }
                 } else {
-                    self.confirm = Some((action, self.t + 3.0));
+                    self.confirm = Some((action, self.t + CONFIRM_TIME));
                 }
             }
         }
@@ -2430,9 +2628,12 @@ pub fn report_lines(r: &RunReport) -> Vec<(&'static str, String)> {
     lines.push(("Mutations", or_none(&r.mutations, "aucune")));
     lines.push(("Synergies", or_none(&r.synergies, "aucune")));
     let chests = &r.chests;
-    let mut shown = or_none(&chests[chests.len().saturating_sub(6)..], "aucun");
-    if chests.len() > 6 {
-        shown += &format!(" (+{})", chests.len() - 6);
+    let mut shown = or_none(
+        &chests[chests.len().saturating_sub(REPORT_CHESTS_SHOWN)..],
+        "aucun",
+    );
+    if chests.len() > REPORT_CHESTS_SHOWN {
+        shown += &format!(" (+{})", chests.len() - REPORT_CHESTS_SHOWN);
     }
     lines.push(("Coffres", shown));
     lines

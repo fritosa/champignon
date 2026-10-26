@@ -22,7 +22,7 @@ binaires, le jeu (`src/main.rs`), `sim` et `apercu`.
 | `src/game.rs` | `Game` : état complet, multiplicateurs, actions, prestige/supernova, `tick`, file de sons `Sfx`, messages ; format de sauvegarde typé (`SaveData`, serde) et conversion dans les deux sens (`save_data` / `from_save`). | `data`, `events`, `rng`, `saves`, `serde` |
 | `src/term.rs` | Couche écran : couleurs (`ColorName`, `Color`), `Style`, touches (`Key`), trait `Screen`, terminal réel `TermScreen` (crossterm, double tampon) et grille en mémoire `BufferScreen` (tests, capture). Drapeau des signaux (`interrupt_flag`), restauration du terminal après une panique. | `game` (`MsgKind`), `crossterm` |
 | `src/art.rs` | Génération ASCII : champignon procédural, palettes des skins, sprites des unités et ennemis, grosse police. Renvoie des cellules/lignes, n'écrit pas à l'écran. | `term` (`ColorName`) |
-| `src/sound.rs` | Synthèse des effets et de la musique, mixage dans un thread, sortie PulseAudio (`libpulse-simple` chargée à l'exécution par `libloading`). Silencieux sans PulseAudio. Trait `SoundSink` (ce que l'UI utilise). | `libloading`, `rand` |
+| `src/sound.rs` | Synthèse des effets et de la musique, mixage dans un thread, sortie PulseAudio (`libpulse-simple` chargée à l'exécution par `libloading`). Silencieux sans PulseAudio. Trait `SoundSink` (ce que l'UI utilise). | `game` (`CLICK_SOUNDS`), `libloading`, `rand` |
 | `src/screens.rs` | Écrans plein écran hors partie, qui pilotent le `Screen` eux-mêmes : introduction et histoires des défis (texte tapé à la machine), menu des parties ; aides de texte (`wrap`, `center`, `head`, `slice`). | `game`, `saves`, `sound`, `term` |
 | `src/ui.rs` | `UI<S: Screen>` : rendu des panneaux, onglets et overlays de la partie, bandeaux, particules, sons de l'interface, touches (`handle` → `Flow`). | tous les modules de la bibliothèque |
 | `src/main.rs` | Binaire `champignon` : choix de la partie, intro des nouvelles parties, boucle principale (20 images/s), autosauvegarde toutes les 30 s, sauvegarde même après une panique, signaux, `--reset`, `--mute`. | `game`, `saves`, `screens`, `sound`, `term`, `ui`, `signal-hook` |
@@ -51,6 +51,31 @@ Les tests sont dans un module `#[cfg(test)] mod tests` en fin de chaque fichier 
   (effets visuels : flash de l'explosion, secousse, décalage des nombres flottants).
 - **Défi Brouillard de guerre** : tout nombre affiché passe par `g.fmt()` (messages) ou `UI::num()` (écran)
   pour être masqué en `???`.
+- **Pas de nombre magique.** Toute valeur de réglage est une constante nommée et commentée (unité, sens),
+  près de ce qu'elle règle :
+  - effets des talents, perks, défis et skins dans `data.rs`, à côté de leur table (`T_…` talents de run,
+    `L_…` talents de niveau, `P_…` prestige, `S_…` supernova, puis un préfixe par défi : `RACE_…`,
+    `NANAR_…`…) ;
+  - mutations, synergies, succès, ravitaillements, inspecteur, ennemis et masse critique dans `events.rs` ;
+  - règles générales (paliers de niveau, prestige, volume, auto-achat) en tête de `game.rs` ;
+  - réglages de l'interface par blocs en tête de `ui.rs` (général, clignotements `BLINK_…`, mise en page,
+    messages, champignon, stats, onglets, overlays), de `screens.rs`, `art.rs` (géométrie du champignon),
+    `term.rs`, `sim.rs` et `apercu.rs` ;
+  - paramètres de synthèse dans `sound.rs` : notes nommées (`C5`, `G6`…), timbres (`Timbre { secs, wave,
+    vol, env }`, `.glide(de, à)` / `.at(hz)`) et bruits (`Noise { secs, vol, decay, cutoff, seed }`) ;
+    `build()` est la table des sons écrite avec eux.
+
+  Une même règle n'a qu'une constante, que les autres modules importent (`events::ACHIEVEMENT_BONUS`,
+  `game::MAX_VOLUME`, `saves::MAIN_SLOT`…). Restent littéraux : le contenu des tables (stats des unités,
+  coûts, sprites, palettes, accords), les seuils des succès écrits à côté de leur texte, l'arithmétique
+  évidente (±1, moitiés, ×100 des pourcentages, 60 et 3600 des durées) et les tests.
+- **Les textes citent leurs constantes.** Un nombre de règle n'est jamais tapé dans un texte du joueur : il
+  est inséré par `data::fr_num` (virgule décimale, 3 décimales au plus, milliers séparés par des espaces).
+  Dans les tables `const` (`PTALENTS`, `STALENTS`, `CHALLENGES`, `SYNERGIES`), les descriptions sont des
+  `data::Desc { template, values, len }` : `{}` prend la valeur suivante, `{n}` la n-ième (3 valeurs au plus,
+  pourcentages déjà ×100 par `percent()`) ; dans `Challenge.desc`, `{0}` est le niveau visé, fourni par
+  `challenge_def`. Les tables construites au démarrage (`TALENTS`, `MUTATIONS` en `LazyLock`) utilisent
+  `format!` + `fr_num`.
 
 ## 🔁 Boucle de jeu
 

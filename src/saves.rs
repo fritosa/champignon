@@ -15,6 +15,8 @@ pub type RawSave = Map<String, Value>;
 /// Environment variable that moves the save directory (tests, several installs).
 pub const DIR_ENV: &str = "CHAMPIGNON_SAVE_DIR";
 pub const MAX_SLOTS: u32 = 99;
+/// The first save slot, shown as the main game.
+pub const MAIN_SLOT: u32 = 1;
 // Format version. On a format change, increment SAVE_VERSION. If supporting older saves becomes
 // too complicated, also raise MIN_SAVE_VERSION: older files are then deleted at startup
 // (purge_obsolete) instead of being converted.
@@ -119,7 +121,7 @@ impl Saves {
     }
 
     pub fn slot_numbers() -> std::ops::RangeInclusive<u32> {
-        1..=MAX_SLOTS
+        MAIN_SLOT..=MAX_SLOTS
     }
 
     /// File of game n.
