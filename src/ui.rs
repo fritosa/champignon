@@ -27,7 +27,7 @@ pub const SFX_GAP: [(&str, f64); 7] = [
 ];
 pub const DEFAULT_SFX_GAP: f64 = 0.05;
 pub const MSG_TIME: f64 = 6.0;
-pub const BIG_TIME: f64 = 3.0; // title in big letters (important messages: all of MSG_TIME)
+pub const BIG_TIME: f64 = 3.0; // title in big letters (important messages: see BIG_EARLY_EXIT)
 /// Screen shake duration per sound (the boom flash lasts 0.8 s).
 pub const SHAKE: [(&str, f64); 4] = [
     ("boom", 1.3),
@@ -74,6 +74,7 @@ const MSG_MIN_W: i32 = 10; // wrap width on a tiny panel
 const MSG_WRAP_MARGIN: i32 = 4; // columns of the panel not used by message text
 const MSG_FLASH_TIME: f64 = 0.6; // a new message blinks in reverse video this long
 const MSG_FADE: f64 = 1.0; // last seconds of a message, shown dimmer
+const BIG_EARLY_EXIT: f64 = 1.0; // the big title of an important message goes this long before its line
 const BIG_FLASH_TIME: f64 = 1.0; // the big title of an important message flashes this long
 
 // Mushroom panel: scenery and animations.
@@ -789,7 +790,7 @@ impl<S: Screen> UI<S> {
                 && i == 0
                 && age
                     < if important {
-                        MSG_TIME - MSG_FADE
+                        MSG_TIME - BIG_EARLY_EXIT
                     } else {
                         BIG_TIME
                     }
@@ -3406,6 +3407,11 @@ pub(crate) mod tests {
         let lines = texts(&bare_ui_with(g, None).banner_lines(60));
         assert_eq!(lines.len(), 3 + 1); // title still there; "Coffre" (6.2 s) has expired
         assert_eq!(lines[3], "Succès");
+        let mut g = exploded_game();
+        g.log("Succès", game::MsgKind::Star, Some("SUCCÈS !"));
+        g.time += MSG_TIME - BIG_EARLY_EXIT + 0.1;
+        let lines = texts(&bare_ui_with(g, None).banner_lines(60));
+        assert_eq!(lines, ["Succès"]); // the title has gone, its line stays
     }
 
     #[test]
