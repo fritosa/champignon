@@ -684,7 +684,8 @@ pub const CHALLENGES: [Challenge; 21] = [
                   Desc::new("Production ×{} par rang + skin Arc-en-ciel", &[ONEARM_PROD_MULT])),
     challenge_def("race", "Course", 100, Some(RACE_TIME), "mario", "Atteins le niveau {0} en moins de {1} minutes.",
                   &[RACE_TIME / 60.0],
-                  Desc::new("Isotopes ×{} par rang + skin Champignon de Mario", &[RACE_ISO_MULT])),
+                  Desc::new("Isotopes ×{} par rang + skin Champignon de Mario", &[RACE_ISO_MULT]))
+        .no_offline(),
     challenge_def("inflation", "Inflation", 100, None, "gold",
                   "Les unités coûtent {1} fois plus cher. Atteins le niveau {0}.", &[INFLATION_COST_MULT],
                   Desc::new("Coût des unités ×{} par rang + skin Or", &[INFLATION_COST_REWARD])),

@@ -3681,7 +3681,7 @@ pub(crate) mod tests {
         let no_offline = data::CHALLENGES.iter().filter(|c| !c.offline).map(|c| c.id);
         assert_eq!(
             no_offline.clone().collect::<Vec<_>>(),
-            ["halflife", "moussaka", "crocodile"]
+            ["race", "halflife", "moussaka", "crocodile"]
         );
         for ch in no_offline {
             g.challenge = Some(ch);

@@ -206,7 +206,7 @@ le jeu ne rattrape pas tout d'un coup.
 - Défis réussis : clé `challenge_ranks` (rang par défi). L'ancienne clé `challenges_done` (liste, version 2)
   est encore lue comme rang I, mais plus écrite.
 - Gains hors ligne : `wall_time` est sauvegardé, `Game::apply_offline` crédite l'absence en fin de `from_save`
-  (rien pendant les défis Demi-vie, moussaka et Crocodile Fury, où le temps compte).
+  (rien pendant les défis Course, Demi-vie, moussaka et Crocodile Fury, où le temps compte).
 
 ## 🔊 Son
 
