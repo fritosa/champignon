@@ -2,17 +2,16 @@
 
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::LazyLock;
 
 use crate::art;
 use crate::data::{self, UNITS};
 use crate::events::{self, ACHIEVEMENTS, SYNERGIES};
 use crate::game::{self, AUDIO_MODES, Game, MsgKind, RunReport, VOLUME_STEP, need};
+use crate::i18n::ui::KeyHelp;
+pub use crate::i18n::ui::TAB_COUNT;
 use crate::i18n::{self, tr};
 use crate::rng::{RandomExt, Rng, StdRandom};
-use crate::screens::{
-    INTRO, Interrupted, STORY_GUARD, center, fdiv, head, intro, slice, story, wrap,
-};
+use crate::screens::{Interrupted, STORY_GUARD, center, fdiv, head, intro, slice, story, wrap};
 use crate::sound::SoundSink;
 use crate::term::{Color, Key, Screen, Style, width};
 
@@ -39,7 +38,6 @@ pub const SHAKE: [(&str, f64); 4] = [
     ("supernova", 1.5),
 ];
 pub const QTY: [Qty; 4] = [Qty::N(1), Qty::N(10), Qty::N(100), Qty::Max];
-pub const TABS: [&str; 5] = ["Unités", "Talents", "Prestige", "Succès", "Infos"];
 pub const MIN_W: i32 = 60;
 pub const MIN_H: i32 = 20;
 pub const MAX_FLOATS: usize = 6; // floating numbers shown at once
@@ -49,7 +47,7 @@ const TITLE_INTERVAL: f64 = 1.0; // seconds between two terminal title updates
 const CONFIRM_TIME: f64 = 3.0; // seconds to press Enter again on a prestige, challenge or supernova
 const PAGE_ROWS: usize = 5; // selection jump of PageUp / PageDown
 const EPIC_CAP_DIV: f64 = 2.0; // epic music once the level reaches cap / EPIC_CAP_DIV
-const PRESTIGE_TAB: usize = 2; // index in TABS, "???" until the prestige is unlocked
+const PRESTIGE_TAB: usize = 2; // index of the tab, "???" until the prestige is unlocked
 
 // Blink periods (seconds per on/off phase).
 const BLINK_OVERHEAT: f64 = 0.2; // mushroom frame and stats line during an overheat
@@ -127,7 +125,6 @@ const FLOAT_SPREAD: i64 = 4; // random horizontal offset of a floating number
 const PLANE_EXIT: i32 = 8; // the plane flies until this many columns past the left edge
 const PLANE_LABEL_GAP: i32 = 2; // columns from the plane to its letter
 const INSPECTOR_START: i32 = 6; // columns from the right edge where the inspector appears
-const INSPECTOR_W: i32 = 5; // "[ONU]"
 const HIPPIES_RUSH: f64 = 4.0; // protesters walk this much faster, then stage their sit-in
 const DRONE_ALTITUDE: i32 = 2; // sky enemies: rows above their sprite top
 
@@ -191,58 +188,18 @@ fn shake(name: &str) -> Option<f64> {
 
 /// Player-facing name of an audio mode.
 pub fn audio_label(mode: &str) -> &'static str {
+    let ui = &tr().ui;
     match mode {
-        "all" => "musique + effets",
-        "sfx" => "effets seuls",
-        _ => "muet",
+        "all" => ui.audio_all,
+        "sfx" => ui.audio_sfx,
+        _ => ui.audio_off,
     }
 }
 
-/// Key help of the Infos tab: (keys, what they do), built once.
-pub fn key_help() -> &'static [(&'static str, String)] {
-    static KEY_HELP: LazyLock<Vec<(&'static str, String)>> = LazyLock::new(|| {
-        let modes: Vec<&str> = AUDIO_MODES.iter().map(|m| audio_label(m)).collect();
-        vec![
-            (
-                "ESPACE",
-                "Détonateur : gagne de la radiation (attention à la surchauffe).".into(),
-            ),
-            (
-                "F",
-                "Masse critique : lance la jauge, puis F au bon moment.".into(),
-            ),
-            (
-                "X",
-                "Chasse l'inspecteur de l'ONU et les ennemis (à marteler).".into(),
-            ),
-            (
-                "lettre",
-                "Attrape le coffre de l'avion en tapant sa lettre.".into(),
-            ),
-            (
-                "1-5",
-                "Change d'onglet (ou choisit un bonus de coffre / une mutation).".into(),
-            ),
-            ("↑↓ / j k", "Sélectionne une ligne.".into()),
-            ("Entrée", "Achète ou active la ligne sélectionnée.".into()),
-            (
-                "Onglet 3",
-                "Défis à 3 rangs ; « Double défi : oui », puis Entrée sur deux défis.".into(),
-            ),
-            (
-                "M",
-                "Quantité achetée par Entrée : ×1, ×10, ×100 ou max.".into(),
-            ),
-            ("Tab ←→", "Onglet suivant / précédent.".into()),
-            ("0", format!("Son : {}.", modes.join(" → "))),
-            (
-                "+ / -",
-                format!("Volume général (par paliers de {VOLUME_STEP} %)."),
-            ),
-            ("Q", "Sauvegarde et quitte.".into()),
-        ]
-    });
-    &KEY_HELP
+/// Key help of the Infos tab: (keys, what they do), in the current language.
+pub fn key_help() -> KeyHelp {
+    let modes: Vec<&str> = AUDIO_MODES.iter().map(|m| audio_label(m)).collect();
+    (tr().ui.key_help)(&modes, VOLUME_STEP)
 }
 
 /// Quantity bought by Enter.
@@ -256,7 +213,7 @@ impl fmt::Display for Qty {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Qty::N(n) => write!(f, "{n}"),
-            Qty::Max => write!(f, "max"),
+            Qty::Max => write!(f, "{}", tr().ui.qty_max),
         }
     }
 }
@@ -296,16 +253,12 @@ pub struct Row {
 
 /// Row folding or unfolding a list (`open`: unfolded): label, arrow, and what Enter shows or hides.
 fn fold_row(open: bool, label: &str, style: Style, action: Action, what: &str) -> Row {
-    let (arrow, verb) = if open {
-        ('▾', "masquer")
-    } else {
-        ('▸', "afficher")
-    };
+    let arrow = if open { '▾' } else { '▸' };
     Row::new(
         format!("{label} {arrow}"),
         style,
         Some(action),
-        format!("Entrée : {verb} {what}."),
+        (tr().ui.fold)(open, what),
     )
 }
 
@@ -395,8 +348,8 @@ pub struct UI<S: Screen> {
     pub title: Option<String>,
     pub title_at: f64,
     pub tab: usize,
-    pub sel: [usize; TABS.len()],
-    pub scroll: [usize; TABS.len()],
+    pub sel: [usize; TAB_COUNT],
+    pub scroll: [usize; TAB_COUNT],
     pub particles: Vec<Particle>,
     pub floats: Vec<Float>,
     pub spawn_acc: HashMap<&'static str, f64>,
@@ -429,8 +382,8 @@ impl<S: Screen> UI<S> {
             title: None,
             title_at: LONG_AGO,
             tab: 0,
-            sel: [0; TABS.len()],
-            scroll: [0; TABS.len()],
+            sel: [0; TAB_COUNT],
+            scroll: [0; TAB_COUNT],
             particles: Vec::new(),
             floats: Vec::new(),
             spawn_acc: HashMap::new(),
@@ -509,16 +462,10 @@ impl<S: Screen> UI<S> {
         (self.h, self.w) = self.scr.size();
         self.scr.erase();
         if self.w < MIN_W || self.h < MIN_H {
-            let size = format!(
-                "Terminal trop petit ({}×{}, min {MIN_W}×{MIN_H}).",
-                self.w, self.h
-            );
+            let ui = &tr().ui;
+            let size = (ui.too_small)(self.w, self.h, MIN_W, MIN_H);
             self.put(0, 0, &size, Style::PLAIN);
-            let state = format!(
-                "Niveau {}  ☢ {}  — ESPACE marche quand même.",
-                self.g.level,
-                game::fmt(self.g.radiation)
-            );
+            let state = (ui.too_small_state)(self.g.level, &game::fmt(self.g.radiation));
             self.put(1, 0, &state, Style::PLAIN);
             self.scr.refresh();
             return;
@@ -549,7 +496,7 @@ impl<S: Screen> UI<S> {
                 self.sound.as_deref(),
                 pages,
                 self.story_guard,
-                "continuer",
+                tr().screens.resume,
             )?;
         }
         Ok(())
@@ -615,7 +562,7 @@ impl<S: Screen> UI<S> {
         } else if self.g.frozen() {
             border = self.c("blue").bold();
         }
-        self.frame(y0, x0, h, w, "Champignon atomique", border);
+        self.frame(y0, x0, h, w, tr().ui.mushroom_title, border);
         let (iy, mut ix, ih, mut iw) = (y0 + 1, x0 + 1, h - 2, w - 2);
         let ground = ih - 1;
 
@@ -651,7 +598,7 @@ impl<S: Screen> UI<S> {
                 self.put_char(iy + y, ix + x, ch, Style::of(col));
             }
             if self.blink(BLINK_PROMPT) {
-                let msg = "Appuie sur ESPACE !";
+                let msg = tr().ui.press_space;
                 let style = self.c("yellow").bold();
                 self.put(iy + ih / 2, ix + fdiv(iw - width(msg), 2), msg, style);
             }
@@ -758,10 +705,7 @@ impl<S: Screen> UI<S> {
         if self.t - self.title_at < TITLE_INTERVAL {
             return;
         }
-        let text = format!(
-            "☢ Niv. {} — Champignon atomique",
-            self.num(f64::from(self.g.level))
-        );
+        let text = (tr().ui.term_title)(&self.num(f64::from(self.g.level)));
         if text != *title {
             self.scr.set_title(&text);
             self.title = Some(text);
@@ -792,30 +736,21 @@ impl<S: Screen> UI<S> {
 
     /// Active alerts then latest messages (most recent on top), stacked under the panel edge.
     pub fn banner_lines(&self, iw: i32) -> Vec<Line> {
-        let g = &self.g;
+        let (g, ui) = (&self.g, &tr().ui);
         let mut lines = Vec::new();
         if g.inspector.is_some() {
-            lines.push((
-                "⚠ Un inspecteur ! Martèle X ! ⚠".to_string(),
-                self.alert_attr("msg_info"),
-            ));
+            lines.push((ui.inspector_alert.to_string(), self.alert_attr("msg_info")));
         }
         if !g.enemies.is_empty() {
             let who = match g.enemies.as_slice() {
                 [one] => one.kind.spec().name().to_string(),
-                many => format!("{} ennemis", many.len()),
+                many => (ui.enemies)(many.len()),
             };
-            lines.push((
-                format!("⚠ {who} ! Martèle X ! ⚠"),
-                self.alert_attr("msg_bad"),
-            ));
+            lines.push(((ui.enemy_alert)(&who), self.alert_attr("msg_bad")));
         }
         if g.frozen() {
             let left = g.freeze_until - g.time;
-            lines.push((
-                format!("❄ PRODUCTION GELÉE {left:.0}s ❄"),
-                self.c("msg_loot"),
-            ));
+            lines.push(((ui.frozen_banner)(left), self.c("msg_loot")));
         }
         let recent: Vec<_> = g
             .messages
@@ -1078,7 +1013,8 @@ impl<S: Screen> UI<S> {
         let progress = ((self.g.time - ins.start) / ins.dur).min(1.0);
         let start = iw - INSPECTOR_START;
         let x = (f64::from(start) - f64::from(start - target) * progress) as i32;
-        let x = x.min(iw - INSPECTOR_W).max(0);
+        let sign = tr().ui.inspector_sign;
+        let x = x.min(iw - width(sign)).max(0);
         let style = self.c("magenta").bold();
         let arms = if self.blink(BLINK_ALERT) {
             " o/"
@@ -1086,7 +1022,7 @@ impl<S: Screen> UI<S> {
             "\\o "
         };
         self.put(iy + ground - 2, ix + x + 1, arms, style);
-        self.put(iy + ground - 1, ix + x, "[ONU]", style);
+        self.put(iy + ground - 1, ix + x, sign, style);
         let left = events::inspector_hits(&self.g).saturating_sub(ins.hits);
         let hits = "x".repeat(ins.hits as usize) + &"·".repeat(left as usize);
         let style = self.c("red");
@@ -1161,19 +1097,19 @@ impl<S: Screen> UI<S> {
 
     pub fn draw_stats(&mut self, y0: i32, x0: i32, h: i32, w: i32) {
         let grey = self.c("grey");
-        self.frame(y0, x0, h, w, "Statistiques", grey);
+        let ui = &tr().ui;
+        self.frame(y0, x0, h, w, ui.stats_title, grey);
         let (iy, ix, iw) = (y0 + 1, x0 + PANEL_PAD, w - 2 * PANEL_PAD);
         let g = &self.g;
         let mut lines: Vec<Vec<Line>> = Vec::new();
 
-        let head_text = format!(
-            "NIVEAU {} / {}",
-            self.num(f64::from(g.level)),
-            game::fmt(f64::from(g.cap()))
+        let head_text = (ui.level)(
+            &self.num(f64::from(g.level)),
+            &game::fmt(f64::from(g.cap())),
         );
         let mut tag = String::new();
         if let Some(name) = g.challenge_label() {
-            tag = format!("Défi {name}");
+            tag = (ui.challenge_tag)(&name);
             if let Some(time) = g.run_time_limit() {
                 let left = (time - g.run_time).max(0.0);
                 tag += &format!(
@@ -1183,7 +1119,7 @@ impl<S: Screen> UI<S> {
                 );
             }
         } else if g.prestige_count > 0 {
-            tag = format!("Prestige ×{}", g.prestige_count);
+            tag = (ui.prestige_tag)(g.prestige_count);
         }
         let pad = " ".repeat(1.max(iw - width(&head_text) - width(&tag)) as usize);
         lines.push(vec![
@@ -1198,10 +1134,7 @@ impl<S: Screen> UI<S> {
             } else {
                 self.c("green")
             };
-            lines.push(vec![(
-                "MAX ! Prestige disponible → onglet 3".to_string(),
-                style,
-            )]);
+            lines.push(vec![(ui.level_max.to_string(), style)]);
         } else {
             let frac = if g.exploded {
                 g.progress / need(g.level.max(1))
@@ -1209,7 +1142,7 @@ impl<S: Screen> UI<S> {
                 0.0
             };
             let percent = if g.in_challenge("blind") {
-                " ???".to_string()
+                format!(" {}", tr().hidden)
             } else {
                 format!(" {:3}%", (frac * 100.0) as i64)
             };
@@ -1222,9 +1155,9 @@ impl<S: Screen> UI<S> {
             ]);
         }
 
-        let prod = format!("+{}/s", self.num(g.production()));
+        let prod = (ui.production)(&self.num(g.production()));
         let (state, state_style) = if g.frozen() {
-            ("GELÉ".to_string(), self.c("blue"))
+            (ui.frozen.to_string(), self.c("blue"))
         } else {
             (prod, self.c("green"))
         };
@@ -1236,25 +1169,22 @@ impl<S: Screen> UI<S> {
             (state, state_style),
         ]);
         let auto = if g.tr("t_auto") > 0 {
-            format!("   Auto {}/s", g.tr("t_auto"))
+            format!("   {}", (ui.auto)(g.tr("t_auto")))
         } else {
             String::new()
         };
-        lines.push(vec![(
-            format!(
-                "Détonation {}   Crit {}%{auto}",
-                self.num(g.click_value(true)),
-                (g.crit_chance() * 100.0) as i64
-            ),
-            Style::PLAIN,
-        )]);
+        let click_stats = (ui.click_stats)(
+            &self.num(g.click_value(true)),
+            (g.crit_chance() * 100.0) as i64,
+        );
+        lines.push(vec![(click_stats + &auto, Style::PLAIN)]);
         let stars = if g.supernova_unlocked() {
             format!("   ✦ {}", game::fmt(g.stars as f64))
         } else {
             String::new()
         };
         lines.push(vec![
-            (format!("PT {}", g.pt), self.c("cyan").bold()),
+            ((ui.pt)(g.pt), self.c("cyan").bold()),
             (
                 format!("   ⚛ {}", game::fmt(g.isotopes as f64)),
                 self.c("magenta").bold(),
@@ -1272,16 +1202,13 @@ impl<S: Screen> UI<S> {
             } else {
                 self.c("red").bold()
             };
-            lines.push(vec![(
-                format!("SURCHAUFFE ! {:.1}s", g.overheat_until - g.time),
-                style,
-            )]);
+            lines.push(vec![((ui.overheat)(g.overheat_until - g.time), style)]);
         } else {
             let steps = (g.max_combo() as i32 - 1).max(1);
             let step_w = 1.max(fdiv(COMBO_BAR_MAX.min(iw - COMBO_LABEL_W), steps));
             let filled = (g.combo * f64::from(step_w)) as i32;
             lines.push(vec![
-                (format!("Combo ×{:.1} ", g.combo_mult()), Style::PLAIN),
+                ((ui.combo)(g.combo_mult()) + " ", Style::PLAIN),
                 ("■".repeat(filled.max(0) as usize), self.c("red").bold()),
                 (
                     "□".repeat((steps * step_w - filled).max(0) as usize),
@@ -1291,23 +1218,17 @@ impl<S: Screen> UI<S> {
         }
 
         if g.qte.is_some() {
-            lines.push(vec![(
-                "MASSE CRITIQUE EN COURS !".to_string(),
-                self.c("red").bold(),
-            )]);
+            lines.push(vec![(ui.gauge_running.to_string(), self.c("red").bold())]);
         } else if g.crit_gauge >= 1.0 {
             let style = if self.blink(BLINK_GAUGE_READY) {
                 self.c("green").bold()
             } else {
                 self.c("yellow")
             };
-            lines.push(vec![(
-                "Masse critique PRÊTE → appuie sur F".to_string(),
-                style,
-            )]);
+            lines.push(vec![(ui.gauge_ready.to_string(), style)]);
         } else {
             lines.push(vec![
-                ("Masse critique ".to_string(), Style::PLAIN),
+                (format!("{} ", ui.gauge), Style::PLAIN),
                 (
                     Self::bar(g.crit_gauge, GAUGE_MIN_W.max(iw - GAUGE_LABEL_W), "█", "░"),
                     self.c("red"),
@@ -1320,13 +1241,7 @@ impl<S: Screen> UI<S> {
             let txt: Vec<String> = g
                 .buffs
                 .iter()
-                .map(|b| {
-                    format!(
-                        "{} {:.0}s",
-                        events::buff_name(b.kind, b.mult),
-                        b.until - g.time
-                    )
-                })
+                .map(|b| (ui.buff)(&events::buff_name(b.kind, b.mult), b.until - g.time))
                 .collect();
             lines.push(vec![(txt.join("  "), self.c("yellow").bold())]);
         } else if !g.mutations.is_empty() {
@@ -1336,7 +1251,7 @@ impl<S: Screen> UI<S> {
                 .map(|m| events::mutation(m).name())
                 .collect();
             lines.push(vec![(
-                format!("Mutations : {}", names.join(", ")),
+                (ui.mutations)(&names.join(tr().list_join)),
                 self.c("green"),
             )]);
         }
@@ -1388,11 +1303,11 @@ impl<S: Screen> UI<S> {
 
     /// Challenge row: ranks done, next rank (if the max level allows it) or all ranks done.
     fn challenge_row(&self, c: &'static data::Challenge) -> Row {
-        let g = &self.g;
+        let (g, ui) = (&self.g, &tr().ui);
         let done = g.challenge_rank(c.id);
         let all = data::CHALLENGE_RANKS;
         let cur = if g.in_challenge(c.id) {
-            " (en cours)"
+            ui.in_progress
         } else {
             ""
         };
@@ -1402,24 +1317,17 @@ impl<S: Screen> UI<S> {
         } else {
             ""
         };
-        let text = format!("{mark} {picked}Défi {} {done}/{all}{cur}", c.name());
-        let reward = format!("Récompense : {}.", c.reward_text());
+        let text = format!(
+            "{mark} {picked}{}{cur}",
+            (ui.challenge)(c.name(), done, all)
+        );
+        let reward = (ui.reward)(&c.reward_text());
         if done == all {
-            return Row::new(
-                text,
-                self.c("green"),
-                None,
-                format!("Tous les rangs réussis. {reward}"),
-            );
+            return Row::new(text, self.c("green"), None, (ui.all_ranks_done)(&reward));
         }
         let rank = data::RANK_NAMES[done as usize];
         if self.double && data::DOUBLE_SOLO.contains(&c.id) {
-            return Row::new(
-                text,
-                self.c("grey"),
-                None,
-                format!("Ne se joue pas en double défi. {reward}"),
-            );
+            return Row::new(text, self.c("grey"), None, (ui.solo_only)(&reward));
         }
         if !g.challenge_available(c.id) {
             let needed = crate::game::fmt(g.challenge_target(c.id) as f64);
@@ -1427,13 +1335,13 @@ impl<S: Screen> UI<S> {
                 text,
                 self.c("grey"),
                 None,
-                format!("Rang {rank} : niveau max {needed} requis (Expansion du cœur). {reward}"),
+                (ui.rank_locked)(rank, &needed, data::ptalent("p_cap").name(), &reward),
             );
         }
         let note = if g.can_prestige() {
-            " Lance une nouvelle run (et fait le prestige)."
+            ui.note_prestige
         } else {
-            " Lance une nouvelle run sans gain d'isotopes."
+            ui.note_no_gain
         };
         Row::new(
             text,
@@ -1443,24 +1351,21 @@ impl<S: Screen> UI<S> {
                 self.c("white")
             },
             Some(Action::Challenge(c.id)),
-            format!("Rang {rank} : {} {reward}{note}", c.desc_at(done)),
+            (ui.rank_desc)(rank, &c.desc_at(done), &reward, note),
         )
     }
 
     pub fn unit_rows(&self) -> Vec<Row> {
-        let g = &self.g;
+        let (g, ui) = (&self.g, &tr().ui);
         let mut rows = Vec::new();
         for c in g.active_challenges() {
             let warning = match c {
-                "moussaka" => Some(format!(
-                    "Moussaka géante : production ÷{}",
-                    g.moussaka_size()
-                )),
-                "pacifist" => Some("Défi Pacifiste : unités interdites !".to_string()),
-                "mono" => Some("Défi Monoculture : une seule unité !".to_string()),
-                "strike" if g.on_strike() => Some("Grève : appuie sur ESPACE !".to_string()),
-                "savior" => Some("Le héros frappe, l'armée suit !".to_string()),
-                "devil" if g.devil_waiting() => Some("Cheval noir : attends un peu...".to_string()),
+                "moussaka" => Some((ui.moussaka)(g.moussaka_size())),
+                "pacifist" => Some(ui.pacifist.to_string()),
+                "mono" => Some(ui.mono.to_string()),
+                "strike" if g.on_strike() => Some(ui.strike.to_string()),
+                "savior" => Some(ui.savior.to_string()),
+                "devil" if g.devil_waiting() => Some(ui.devil.to_string()),
                 _ => None,
             };
             if let Some(text) = warning {
@@ -1479,9 +1384,10 @@ impl<S: Screen> UI<S> {
                 };
                 let cost = g.unit_cost_n(uid, k);
                 let text = format!(
-                    "{:<nw$} x{n:<4} {:>7}/s {:>7} ☢",
+                    "{:<nw$} x{n:<4} {:>7}{} {:>7} ☢",
                     head(u.name(), nw),
                     self.num(g.unit_prod(uid) * n as f64),
+                    ui.per_second,
                     game::fmt(cost),
                     nw = nw as usize
                 );
@@ -1491,23 +1397,16 @@ impl<S: Screen> UI<S> {
                 } else {
                     self.c("grey")
                 };
-                let mut desc = format!(
-                    "{} : +{} ☢/s chacun. Entrée : acheter ×{k} (M pour changer).",
-                    u.name(),
-                    self.num(g.unit_prod(uid))
-                );
+                let mut desc = (ui.unit_desc)(u.name(), &self.num(g.unit_prod(uid)), k);
                 if let Some(nxt) = g.next_milestone(uid) {
-                    desc += &format!(
-                        " Palier à {nxt} : production ×{}.",
-                        i18n::num(g.milestone_mult())
-                    );
+                    desc += &(ui.milestone)(nxt, &i18n::num(g.milestone_mult()));
                 }
                 if !ok && g.unit_allowed(uid) && !g.in_challenge("blind") {
                     let prod = g.production();
                     desc += &if prod > 0.0 {
-                        format!(" Encore {} d'attente.", dur((cost - g.radiation) / prod))
+                        (ui.wait)(&dur((cost - g.radiation) / prod))
                     } else {
-                        format!(" Il manque {} ☢.", game::fmt(cost - g.radiation))
+                        (ui.missing)(&game::fmt(cost - g.radiation))
                     };
                 }
                 rows.push(
@@ -1515,15 +1414,18 @@ impl<S: Screen> UI<S> {
                 );
             } else if !teased {
                 teased = true;
-                let (text, desc) = match u.challenge.map(|(c, _)| c).filter(|&c| g.challenge_rank(c) == 0) {
+                let (text, desc) = match u
+                    .challenge
+                    .map(|(c, _)| c)
+                    .filter(|&c| g.challenge_rank(c) == 0)
+                {
                     Some(c) => (
-                        "??? — réussis un défi".to_string(),
-                        format!("Se débloque après le défi {}.", data::challenge(c).name()),
+                        ui.teaser_challenge.to_string(),
+                        (ui.teaser_challenge_desc)(data::challenge(c).name()),
                     ),
                     None => (
-                        format!("??? — talent « {} »", u.unlock_name()),
-                        "Débloque de nouvelles unités dans l'onglet Talents (2), branche Infanterie."
-                            .to_string(),
+                        (ui.teaser_talent)(u.unlock_name()),
+                        ui.teaser_talent_desc.to_string(),
                     ),
                 };
                 rows.push(Row::new(text, self.c("grey"), None, desc).with_sprite(uid, false));
@@ -1533,11 +1435,8 @@ impl<S: Screen> UI<S> {
     }
 
     pub fn talent_rows(&self) -> Vec<Row> {
-        let g = &self.g;
-        let mut rows = vec![Row::label(
-            format!("Points de talent : {} PT", g.pt),
-            self.c("cyan").bold(),
-        )];
+        let (g, ui) = (&self.g, &tr().ui);
+        let mut rows = vec![Row::label((ui.talent_points)(g.pt), self.c("cyan").bold())];
         for bid in data::BRANCHES {
             let label = tr().data.branch(bid);
             rows.push(Row::label(
@@ -1550,9 +1449,9 @@ impl<S: Screen> UI<S> {
                     continue;
                 }
                 let cost = if r >= t.max {
-                    "MAX".to_string()
+                    ui.max_rank.to_string()
                 } else {
-                    format!("{} PT", g.talent_cost(tid))
+                    (ui.pt_cost)(g.talent_cost(tid))
                 };
                 let indent = if t.depth > 0 {
                     "  ".repeat(t.depth as usize - 1) + "└ "
@@ -1580,7 +1479,7 @@ impl<S: Screen> UI<S> {
                 };
                 let mut desc = format!("{}{}", t.desc(), self.qty_note());
                 if !g.talent_allowed(tid) {
-                    desc = format!("Défi Ascète : talent interdit. {desc}");
+                    desc = (ui.ascete)(&desc);
                 }
                 if !avail && r < t.max {
                     let reqs: Vec<String> = t
@@ -1588,7 +1487,7 @@ impl<S: Screen> UI<S> {
                         .iter()
                         .map(|(q, n)| format!("{} {n}", data::talent(q).name()))
                         .collect();
-                    desc += &format!(" Requiert : {}.", reqs.join(", "));
+                    desc += &(ui.requires)(&reqs.join(tr().list_join));
                 }
                 rows.push(Row::new(text, style, Some(Action::Talent(tid)), desc));
             }
@@ -1597,68 +1496,61 @@ impl<S: Screen> UI<S> {
     }
 
     pub fn prestige_rows(&self) -> Vec<Row> {
-        let g = &self.g;
+        let (g, ui) = (&self.g, &tr().ui);
         let cap = game::fmt(f64::from(g.cap()));
         if !g.prestige_unlocked() {
             let grey = self.c("grey");
-            return vec![
-                Row::label("VERROUILLÉ", self.c("red").bold()),
-                Row::label(
-                    format!("Atteins le niveau {cap} pour débloquer le prestige."),
-                    grey,
-                ),
-                Row::label("Tu y gagneras des isotopes (⚛) à investir", grey),
-                Row::label("dans un arbre qui rend les runs suivantes", grey),
-                Row::label("plus efficaces.", grey),
+            let mut rows = vec![
+                Row::label(ui.locked, self.c("red").bold()),
+                Row::label((ui.locked_reach)(&cap), grey),
             ];
+            rows.extend(ui.locked_lines.iter().map(|line| Row::label(*line, grey)));
+            return rows;
         }
         let mut rows = Vec::new();
-        let reset_desc = "Réinitialise niveau, ☢, unités, talents et mutations. Garde ⚛, prestige, succès et skins.";
         if g.can_prestige() {
             rows.push(Row::new(
-                format!("☢ PRESTIGE : +{} ⚛ ☢", g.prestige_gain()),
+                (ui.prestige_button)(g.prestige_gain()),
                 self.c("green").bold(),
                 Some(Action::Prestige),
-                format!(
-                    "{reset_desc} Surplus : ×{} (+{} par ×10 de la radiation qu'il fallait pour le niveau max : \
-                     rester au niveau max rapporte plus).",
-                    i18n::num((g.surplus_mult() * 100.0).floor() / 100.0),
-                    i18n::num(crate::game::SURPLUS_BONUS)
+                (ui.prestige_desc)(
+                    ui.reset_desc,
+                    &i18n::num((g.surplus_mult() * 100.0).floor() / 100.0),
+                    &i18n::num(crate::game::SURPLUS_BONUS),
                 ),
             ));
         } else {
             rows.push(Row::new(
-                format!("Prestige : atteins le niveau {cap}"),
+                (ui.prestige_reach)(&cap),
                 self.c("grey"),
                 None,
-                reset_desc,
+                ui.reset_desc,
             ));
         }
         if g.prestige_count > 0 {
             rows.push(Row::label(
-                format!("── DÉFIS {}", "─".repeat(RULE)),
+                format!("── {} {}", ui.challenges_rule, "─".repeat(RULE)),
                 self.c("cyan"),
             ));
             if g.double_unlocked() {
-                let (state, style) = if self.double {
-                    ("oui", self.c("yellow"))
+                let style = if self.double {
+                    self.c("yellow")
                 } else {
-                    ("non", self.c("white"))
+                    self.c("white")
                 };
                 rows.push(Row::new(
-                    format!("Double défi : {state}"),
+                    (ui.double_mode)(self.double),
                     style,
                     Some(Action::DoubleMode),
-                    "Deux défis à la fois, chacun à son rang suivant : atteins la plus haute des deux cibles et les \
-                     deux gagnent un rang. Entrée sur un premier défi (◆), puis sur le second.",
+                    ui.double_desc,
                 ));
             }
             if g.challenge.is_some() {
                 rows.push(Row::new(
-                    "✘ Abandonner le défi en cours",
+                    ui.abandon,
                     self.c("red"),
                     Some(Action::Abandon),
-                    "Retire la contrainte du défi sans réinitialiser la run.",
+                    ui.abandon_desc,
                 ));
             }
             // Challenges done at every rank are folded behind one row (Enter shows them).
@@ -1667,10 +1559,10 @@ impl<S: Screen> UI<S> {
             if done > 0 {
                 rows.push(fold_row(
                     self.show_done,
-                    &format!("✔ {done} défi(s) terminé(s) au rang III"),
+                    &(ui.done_fold)(done),
                     self.c("green"),
                     Action::ToggleDone,
-                    "les défis réussis à tous les rangs",
+                    ui.done_fold_what,
                 ));
             }
             let shown = |c: &&data::Challenge| self.show_done || !all_done(c);
@@ -1685,7 +1577,7 @@ impl<S: Screen> UI<S> {
             // No empty section when all the monster challenges are folded.
             if !monsters.is_empty() {
                 rows.push(Row::label(
-                    format!("── MONSTRES {}", "─".repeat(RULE)),
+                    format!("── {} {}", ui.monsters_rule, "─".repeat(RULE)),
                     self.c("cyan"),
                 ));
             }
@@ -1695,27 +1587,20 @@ impl<S: Screen> UI<S> {
         }
         let skin_name = data::skin_name(g.skin);
         rows.push(Row::new(
-            format!(
-                "Skin : {skin_name}  ({}/{})",
-                g.skins.len(),
-                data::SKINS.len()
-            ),
+            (ui.skin)(skin_name, g.skins.len(), data::SKINS.len()),
             self.c("magenta"),
             Some(Action::Skin),
-            format!(
-                "Entrée : changer de skin. Les défis et {} prestiges en débloquent d'autres.",
-                data::PLASMA_PRESTIGES
-            ),
+            (ui.skin_desc)(data::PLASMA_PRESTIGES),
         ));
         rows.push(Row::label(
             format!(
-                "── ARBRE DE PRESTIGE ({} ⚛) {}",
-                game::fmt(g.isotopes as f64),
+                "── {} {}",
+                (ui.prestige_tree)(&game::fmt(g.isotopes as f64)),
                 "─".repeat(RULE_COUNTED)
             ),
             self.c("cyan"),
         ));
-        let max_cap = format!(" Niveau max actuel : {cap}.");
+        let max_cap = (ui.max_cap)(&cap);
         rows.extend(self.tree_rows(
             &data::PTALENTS,
             Action::PTalent,
@@ -1738,34 +1623,30 @@ impl<S: Screen> UI<S> {
     }
 
     pub fn supernova_rows(&self) -> Vec<Row> {
-        let g = &self.g;
+        let (g, ui) = (&self.g, &tr().ui);
         let mut rows = vec![Row::label(
             format!(
-                "── SUPERNOVA ({} ✦) {}",
-                game::fmt(g.stars as f64),
+                "── {} {}",
+                (ui.supernova_tree)(&game::fmt(g.stars as f64)),
                 "─".repeat(RULE_COUNTED)
             ),
             self.c("magenta").bold(),
         )];
-        let desc = format!(
-            "Réinitialise aussi les isotopes et l'arbre de prestige (sauf les rangs d'Expansion du cœur gardés par \
-             Cœur stellaire). Garde ✦, succès, skins et défis. \
-             Gain : racine des isotopes gagnés depuis la dernière supernova / {}.",
-            data::SUPERNOVA_DIVISOR
+        let desc = (ui.supernova_desc)(
+            data::SUPERNOVA_DIVISOR,
+            data::ptalent("p_cap").name(),
+            data::stalent("s_keep").name(),
         );
         if g.can_supernova() {
             rows.push(Row::new(
-                format!("✦ SUPERNOVA : +{} ✦ ✦", g.supernova_gain()),
+                (ui.supernova_button)(g.supernova_gain()),
                 self.c("magenta").bold(),
                 Some(Action::Supernova),
                 desc,
             ));
         } else {
             rows.push(Row::new(
-                format!(
-                    "Supernova : atteins le niveau {}",
-                    game::fmt(f64::from(data::MAX_CAP))
-                ),
+                (ui.supernova_reach)(&game::fmt(f64::from(data::MAX_CAP))),
                 self.c("grey"),
                 None,
                 desc,
@@ -1803,7 +1684,7 @@ impl<S: Screen> UI<S> {
                 let maxed = r >= t.max;
                 let c = cost(&self.g, t.id);
                 let price = if maxed {
-                    "MAX".to_string()
+                    tr().ui.max_rank.to_string()
                 } else {
                     format!("{} {unit}", game::fmt(c))
                 };
@@ -1827,13 +1708,13 @@ impl<S: Screen> UI<S> {
     }
 
     pub fn achievement_rows(&self) -> Vec<Row> {
-        let g = &self.g;
+        let (g, ui) = (&self.g, &tr().ui);
         let n = g.achievements.len();
         let mut rows = vec![Row::label(
-            format!(
-                "{n}/{} succès · +{} % de production",
+            (ui.achievements)(
+                n,
                 ACHIEVEMENTS.len(),
-                i18n::num(data::percent(events::ACHIEVEMENT_BONUS) * n as f64)
+                &i18n::num(data::percent(events::ACHIEVEMENT_BONUS) * n as f64),
             ),
             self.c("yellow").bold(),
         )];
@@ -1853,9 +1734,8 @@ impl<S: Screen> UI<S> {
         let found = &g.synergies_found;
         rows.push(Row::label(
             format!(
-                "── SYNERGIES ({}/{}) {}",
-                found.len(),
-                SYNERGIES.len(),
+                "── {} {}",
+                (ui.synergies_rule)(found.len(), SYNERGIES.len()),
                 "─".repeat(RULE_COUNTED)
             ),
             self.c("magenta"),
@@ -1867,19 +1747,23 @@ impl<S: Screen> UI<S> {
                 events::mutation(s.pair.1).name()
             );
             if found.contains(s.id) {
-                let active = if g.has_syn(s.id) { " (active)" } else { "" };
+                let active = if g.has_syn(s.id) {
+                    ui.synergy_active
+                } else {
+                    ""
+                };
                 rows.push(Row::new(
                     format!("✦ {}{active}", s.name()),
                     self.c("magenta").bold(),
                     None,
-                    format!("{pair} : {}", s.effect()),
+                    (ui.synergy_desc)(&pair, &s.effect()),
                 ));
             } else {
                 rows.push(Row::new(
-                    "· ???",
+                    format!("· {}", tr().hidden),
                     self.c("grey"),
                     None,
-                    "Synergie inconnue : choisis la bonne paire de mutations pendant une partie.",
+                    ui.synergy_unknown_desc,
                 ));
             }
         }
@@ -1889,20 +1773,20 @@ impl<S: Screen> UI<S> {
     pub fn qty_note(&self) -> String {
         match self.qty {
             Qty::N(1) => String::new(),
-            Qty::Max => " Entrée : tous les rangs possibles !".to_string(),
-            Qty::N(k) => format!(" Entrée : jusqu'à {k} rangs."),
+            Qty::Max => tr().ui.qty_all.to_string(),
+            Qty::N(k) => (tr().ui.qty_up_to)(k),
         }
     }
 
     pub fn info_rows(&self) -> Vec<Row> {
-        let (g, st) = (&self.g, &self.g.stats);
+        let (g, st, ui) = (&self.g, &self.g.stats, &tr().ui);
         let (head_style, key, grey) = (
             self.c("cyan").bold(),
             self.c("yellow").bold(),
             self.c("white"),
         );
         let mut rows = vec![Row::label(
-            format!("── TOUCHES {}", "─".repeat(RULE)),
+            format!("── {} {}", ui.keys_rule, "─".repeat(RULE)),
             head_style,
         )];
         for (k, what) in key_help() {
@@ -1914,30 +1798,31 @@ impl<S: Screen> UI<S> {
             ));
         }
         rows.push(Row::label(
-            format!("── STATISTIQUES {}", "─".repeat(RULE_STATS)),
+            format!("── {} {}", ui.stats_rule, "─".repeat(RULE_STATS)),
             head_style,
         ));
         let count = |n: u64| game::fmt(n as f64);
+        let labels = &ui.stats;
         let stats = [
-            ("Temps de jeu total", dur(st.total_time)),
-            ("Partie en cours", dur(g.run_time)),
+            (labels.total_time, dur(st.total_time)),
+            (labels.run_time, dur(g.run_time)),
             (
-                "Meilleur prestige",
+                labels.best_prestige,
                 st.best_prestige_time.map_or("—".to_string(), dur),
             ),
-            ("Prestiges", count(g.prestige_count)),
-            ("Supernovas", count(g.supernova_count)),
-            ("Niveau max atteint", self.num(f64::from(st.max_level))),
-            ("Appuis sur ESPACE", count(st.clicks)),
-            ("Surchauffes", count(st.overheats)),
-            ("Fusions parfaites", count(st.perfects)),
-            ("Colis attrapés", count(st.drops)),
-            ("Inspecteurs chassés", count(st.inspectors)),
-            ("Ennemis repoussés", count(st.enemies)),
-            ("Scellés subis", count(st.frozen)),
-            ("Mutations choisies", count(st.mutations)),
+            (labels.prestiges, count(g.prestige_count)),
+            (labels.supernovas, count(g.supernova_count)),
+            (labels.max_level, self.num(f64::from(st.max_level))),
+            (labels.clicks, count(st.clicks)),
+            (labels.overheats, count(st.overheats)),
+            (labels.perfects, count(st.perfects)),
+            (labels.drops, count(st.drops)),
+            (labels.inspectors, count(st.inspectors)),
+            (labels.enemies, count(st.enemies)),
+            (labels.frozen, count(st.frozen)),
+            (labels.mutations, count(st.mutations)),
             (
-                "Rangs de défis réussis",
+                labels.challenge_ranks,
                 format!(
                     "{}/{}",
                     g.challenges_done.values().sum::<u32>(),
@@ -1945,12 +1830,15 @@ impl<S: Screen> UI<S> {
                 ),
             ),
             (
-                "Skins débloqués",
+                labels.skins,
                 format!("{}/{}", g.skins.len(), data::SKINS.len()),
             ),
-            ("Son", format!("{} · {} %", audio_label(g.audio), g.volume)),
             (
-                "Synergies découvertes",
+                labels.sound,
+                format!("{} · {} %", audio_label(g.audio), g.volume),
+            ),
+            (
+                labels.synergies,
                 format!("{}/{}", g.synergies_found.len(), SYNERGIES.len()),
             ),
         ];
@@ -1963,13 +1851,13 @@ impl<S: Screen> UI<S> {
                 nw = nw as usize,
                 vw = vw as usize
             );
-            rows.push(Row::new(text, grey, None, format!("{label} : {value}")));
+            rows.push(Row::new(text, grey, None, (ui.label_value)(label, &value)));
         }
         rows.push(Row::new(
-            "Revoir l'introduction",
+            ui.intro,
             self.c("magenta"),
             Some(Action::Intro),
-            "Entrée : relire l'histoire du professeur Morille et de son champignon.",
+            ui.intro_desc,
         ));
         // The stories of the challenges done, folded behind one row.
         let read: Vec<&data::Challenge> = data::CHALLENGES
@@ -1979,29 +1867,29 @@ impl<S: Screen> UI<S> {
         if !read.is_empty() {
             rows.push(fold_row(
                 self.show_stories,
-                &format!("Histoires des défis ({})", read.len()),
+                &(ui.stories_fold)(read.len()),
                 self.c("magenta"),
                 Action::ToggleStories,
-                "les histoires des défis réussis",
+                ui.stories_fold_what,
             ));
         }
         if self.show_stories {
             for ch in read {
                 rows.push(Row::new(
-                    format!("  Revoir le défi {}", ch.name()),
+                    format!("  {}", (ui.story)(ch.name())),
                     self.c("magenta"),
                     Some(Action::Story(ch.id)),
-                    format!("Entrée : relire l'histoire du défi {}.", ch.name()),
+                    (ui.story_desc)(ch.name()),
                 ));
             }
         }
         if let Some(r) = &g.last_run {
             rows.push(Row::label(
-                format!("── DERNIÈRE PARTIE {}", "─".repeat(RULE_LAST_RUN)),
+                format!("── {} {}", ui.last_run_rule, "─".repeat(RULE_LAST_RUN)),
                 head_style,
             ));
             for (label, value) in report_lines(r) {
-                let text = format!("{label} : {value}");
+                let text = (ui.label_value)(label, &value);
                 rows.push(Row::new(
                     clip(&text, self.tab_w - SEL_PREFIX_W),
                     grey,
@@ -2024,7 +1912,9 @@ impl<S: Screen> UI<S> {
 
     /// Tab names on the top edge, shortened until they fit; • if something there is affordable.
     pub fn draw_tab_labels(&mut self, y: i32, x0: i32, w: i32) {
-        let mut names: Vec<String> = TABS
+        let mut names: Vec<String> = tr()
+            .ui
+            .tabs
             .iter()
             .enumerate()
             .map(|(i, n)| {
@@ -2072,25 +1962,21 @@ impl<S: Screen> UI<S> {
 
     /// Key help on the bottom edge, less and less detailed as width shrinks.
     pub fn draw_tab_help(&mut self, y: i32, x0: i32, w: i32) {
-        let mut sound_label = match &self.sound {
+        let ui = &tr().ui;
+        let (mut sound_label, audible) = match &self.sound {
             Some(s) if s.ok() => match self.g.audio {
-                "all" => "♪",
-                "sfx" => "on",
-                _ => "off",
-            }
-            .to_string(),
-            _ => "indispo".to_string(),
+                "all" => ("♪", true),
+                "sfx" => (ui.sound_on, true),
+                _ => (ui.sound_off, false),
+            },
+            _ => (ui.sound_unavailable, false),
         };
-        if (sound_label == "♪" || sound_label == "on") && self.g.volume < game::MAX_VOLUME {
-            sound_label += &format!(" {}%", self.g.volume);
+        let with_volume;
+        if audible && self.g.volume < game::MAX_VOLUME {
+            with_volume = format!("{sound_label} {}%", self.g.volume);
+            sound_label = &with_volume;
         }
-        let q = self.qty;
-        let variants = [
-            format!(" Entrée acheter · M ×{q} · 5 aide · 0 son {sound_label} · Q "),
-            format!(" M ×{q} · 5 aide · 0 son {sound_label} · Q "),
-            format!(" M ×{q} · 5 aide · Q "),
-            " 5 aide ".to_string(),
-        ];
+        let variants = (ui.tab_help)(&self.qty.to_string(), sound_label);
         let help = variants
             .iter()
             .find(|h| width(h) <= w - 2)
@@ -2118,7 +2004,7 @@ impl<S: Screen> UI<S> {
         let mut desc_style = Style::PLAIN;
         let confirming = self.confirm.is_some_and(|(_, until)| until > self.t);
         if confirming {
-            desc = "Appuie encore sur Entrée pour confirmer !".to_string();
+            desc = tr().ui.confirm.to_string();
             desc_style = self.c("red").bold();
         }
         let sprite = if confirming {
@@ -2256,7 +2142,7 @@ impl<S: Screen> UI<S> {
         if let Some(q) = self.g.qte {
             self.clear(y, x, QTE_H, bw);
             let red = self.c("red").bold();
-            self.frame(y, x, QTE_H, bw, "MASSE CRITIQUE", red);
+            self.frame(y, x, QTE_H, bw, tr().ui.qte_title, red);
             let n = bw - 2 * PANEL_PAD;
             for i in 0..n {
                 let off_center = ((f64::from(i) + 0.5) / f64::from(n) - q.center).abs();
@@ -2273,12 +2159,7 @@ impl<S: Screen> UI<S> {
             let cx = x + PANEL_PAD + (n - 1).min((events::qte_pos(&q) * f64::from(n)) as i32);
             let white = self.c("white").bold();
             self.put(y + 2, cx, "▼", white);
-            self.put(
-                y + 1,
-                x + PANEL_PAD,
-                &head("Appuie sur F au bon moment !", n),
-                white,
-            );
+            self.put(y + 1, x + PANEL_PAD, &head(tr().ui.qte_prompt, n), white);
         } else if let Some(res) = self.g.qte_result.clone()
             && self.g.time < res.until
         {
@@ -2334,14 +2215,12 @@ impl<S: Screen> UI<S> {
         }
         let (y, x) = (fdiv(self.h - bh, 2).max(0), fdiv(self.w - bw, 2).max(0));
         self.clear(y, x, bh, bw);
+        let ui = &tr().ui;
         let (title, col) = match r.kind {
-            game::ReportKind::Supernova => (
-                format!("FIN DE PARTIE — SUPERNOVA n°{}", self.g.supernova_count),
-                "magenta",
-            ),
-            game::ReportKind::Prestige => {
-                (format!("FIN DE PARTIE — PRESTIGE n°{}", r.number), "green")
+            game::ReportKind::Supernova => {
+                ((ui.report_supernova)(self.g.supernova_count), "magenta")
             }
+            game::ReportKind::Prestige => ((ui.report_prestige)(r.number), "green"),
         };
         let style = self.c(col).bold();
         self.frame(y, x, bh, bw, &title, style);
@@ -2355,7 +2234,7 @@ impl<S: Screen> UI<S> {
                 white,
             );
         }
-        let msg = "Appuie sur une touche pour recommencer";
+        let msg = ui.report_prompt;
         let style = if self.blink(BLINK_PROMPT) {
             self.c("yellow").bold()
         } else {
@@ -2378,21 +2257,21 @@ impl<S: Screen> UI<S> {
         let (y, x) = self.popup(
             POPUP_CHROME_H + OPTION_ROW_H * opts.len() as i32,
             bw,
-            "COFFRE DE RAVITAILLEMENT",
+            tr().ui.chest_title,
             cyan,
         );
         let white = self.c("white").bold();
         self.put(
             y + 1,
             x + PANEL_PAD,
-            &format!("Choisis ton bonus avec 1-{} :", opts.len()),
+            &(tr().ui.chest_choose)(opts.len()),
             white,
         );
         for (i, kind) in opts.iter().enumerate() {
             let (name, mut desc) = events::chest_text(&self.g, kind);
             let ok = events::chest_allowed(&self.g, kind);
             if !ok {
-                desc = "Plus utile pour l'instant.".to_string();
+                desc = tr().ui.chest_useless.to_string();
             }
             let (name_style, desc_style) = if ok {
                 (self.c("yellow").bold(), self.c("white"))
@@ -2427,11 +2306,11 @@ impl<S: Screen> UI<S> {
         let (y, x) = self.popup(
             POPUP_CHROME_H + OPTION_ROW_H * opts.len() as i32,
             bw,
-            "MUTATION !",
+            tr().ui.mutation_title,
             green,
         );
         let white = self.c("white").bold();
-        let intro = format!("Ton champignon mute. Choisis avec 1-{} :", opts.len());
+        let intro = (tr().ui.mutation_choose)(opts.len());
         self.put(y + 1, x + PANEL_PAD, &intro, white);
         for (i, mid) in opts.iter().enumerate() {
             let m = events::mutation(mid);
@@ -2448,7 +2327,7 @@ impl<S: Screen> UI<S> {
                 let hint = if self.g.synergies_found.contains(syn.id) {
                     format!(" ★ {}", syn.name())
                 } else {
-                    " ★ synergie inconnue !".to_string()
+                    format!(" ★ {}", tr().ui.synergy_unknown)
                 };
                 let magenta = self.c("magenta").bold();
                 let lw = width(&label);
@@ -2470,7 +2349,7 @@ impl<S: Screen> UI<S> {
     }
 
     pub fn draw_news(&mut self, y: i32, dt: f64) {
-        let label = " FLASH INFO ";
+        let label = &format!(" {} ", tr().ui.news);
         let alert = self.c("alert");
         self.put(y, 0, label, alert);
         let ww = self.w - width(label) - NEWS_MARGIN;
@@ -2515,11 +2394,12 @@ impl<S: Screen> UI<S> {
                 let dx = self.rng.randint(-FLOAT_SPREAD, FLOAT_SPREAD) as i32;
                 if gained > 0.0 {
                     let crit = self.g.last_crit == self.g.time;
-                    let text = format!(
-                        "{}{}",
-                        if crit { "CRIT ! +" } else { "+" },
-                        self.num(gained)
-                    );
+                    let gained = self.num(gained);
+                    let text = if crit {
+                        (tr().ui.crit)(&gained)
+                    } else {
+                        format!("+{gained}")
+                    };
                     let style = if crit {
                         self.c("red")
                     } else {
@@ -2529,15 +2409,12 @@ impl<S: Screen> UI<S> {
                     self.add_float(text, style, dx);
                 } else if fizzled {
                     let style = self.c("grey").bold();
-                    self.add_float("pschitt…".to_string(), style, dx);
+                    self.add_float(tr().ui.fizzle.to_string(), style, dx);
                 }
                 if self.g.level > lvl && lvl > 0 {
                     let style = self.c("green").bold();
-                    self.add_float(
-                        format!("NIVEAU {} !", self.num(f64::from(self.g.level))),
-                        style,
-                        0,
-                    );
+                    let level = self.num(f64::from(self.g.level));
+                    self.add_float((tr().ui.level_up)(&level), style, 0);
                 }
             }
             Key::Char('q' | 'Q') => return Flow::Quit,
@@ -2555,11 +2432,7 @@ impl<S: Screen> UI<S> {
                 let i = AUDIO_MODES.iter().position(|m| *m == g.audio).unwrap_or(0);
                 g.audio = AUDIO_MODES[(i + 1) % AUDIO_MODES.len()];
                 let muted = g.audio == "off";
-                let msg = format!(
-                    "Son : {}{}",
-                    audio_label(g.audio),
-                    if muted { " (0 pour le remettre)" } else { "" }
-                );
+                let msg = (tr().ui.sound)(audio_label(g.audio), muted);
                 g.log(
                     msg,
                     if muted {
@@ -2571,17 +2444,16 @@ impl<S: Screen> UI<S> {
                 );
             }
             Key::Char(c @ ('+' | '=' | '-')) => {
+                let (volume, before) = (tr().ui.volume, g.volume);
                 if g.change_volume(if c == '-' { -1 } else { 1 }) {
                     g.sfx.push_back("tick"); // preview at the new volume
                 }
                 // A single volume banner: otherwise 20 presses flush the useful messages from the history.
-                if g.messages
-                    .back()
-                    .is_some_and(|m| m.text.starts_with("Volume : "))
-                {
+                // The previous banner, if it is the latest message, shows the volume before this press.
+                if g.messages.back().is_some_and(|m| m.text == volume(before)) {
                     g.messages.pop_back();
                 }
-                let msg = format!("Volume : {} %", g.volume);
+                let msg = volume(g.volume);
                 g.log(msg, game::MsgKind::Info, None);
             }
             Key::Char('1'..='5') => {
@@ -2589,11 +2461,11 @@ impl<S: Screen> UI<S> {
                 self.sfx("tick");
             }
             Key::Tab | Key::Right => {
-                self.tab = (self.tab + 1) % TABS.len();
+                self.tab = (self.tab + 1) % TAB_COUNT;
                 self.sfx("tick");
             }
             Key::BackTab | Key::Left => {
-                self.tab = (self.tab + TABS.len() - 1) % TABS.len();
+                self.tab = (self.tab + TAB_COUNT - 1) % TAB_COUNT;
                 self.sfx("tick");
             }
             Key::Up | Key::Char('k') => {
@@ -2619,7 +2491,7 @@ impl<S: Screen> UI<S> {
                 let letter = c.to_lowercase().next().unwrap_or(c);
                 if events::catch(g, letter) {
                     let style = self.c("cyan").bold();
-                    self.add_float("COFFRE !".to_string(), style, 0);
+                    self.add_float(tr().ui.chest_caught.to_string(), style, 0);
                 }
             }
             Key::Resize => self.scr.clear(),
@@ -2702,12 +2574,13 @@ impl<S: Screen> UI<S> {
                 };
             }
             Action::Intro => {
+                let texts = &tr().screens;
                 if intro(
                     &mut self.scr,
                     self.sound.as_deref(),
-                    INTRO,
+                    texts.intro,
                     0.0,
-                    "commencer",
+                    texts.start,
                 )
                 .is_err()
                 {
@@ -2722,7 +2595,7 @@ impl<S: Screen> UI<S> {
                             self.sound.as_deref(),
                             pages,
                             0.0,
-                            "continuer",
+                            tr().screens.resume,
                         )
                         .is_err()
                     {
@@ -2790,38 +2663,35 @@ pub fn dur(sec: f64) -> String {
 /// (label, value) rows of a finished game summary.
 pub fn report_lines(r: &RunReport) -> Vec<(&'static str, String)> {
     let fmt = game::fmt;
+    let labels = &tr().ui.report;
     let star = if r.kind == game::ReportKind::Supernova {
         '✦'
     } else {
         '⚛'
     };
     let mut lines = vec![
-        ("Durée", dur(r.time)),
+        (labels.duration, dur(r.time)),
         (
-            "Niveau atteint",
+            labels.level,
             format!("{} / {}", fmt(f64::from(r.level)), fmt(f64::from(r.cap))),
         ),
-        ("Gain", format!("+{} {star}", fmt(r.gain as f64))),
-        ("Radiation produite", format!("{} ☢", fmt(r.earned))),
+        (labels.gain, format!("+{} {star}", fmt(r.gain as f64))),
+        (labels.radiation, format!("{} ☢", fmt(r.earned))),
         (
-            "Appuis sur ESPACE",
-            format!(
-                "{} (critiques : {})",
-                fmt(r.clicks as f64),
-                fmt(r.crits as f64)
-            ),
+            labels.clicks,
+            (labels.clicks_value)(&fmt(r.clicks as f64), &fmt(r.crits as f64)),
         ),
-        ("Meilleure détonation", format!("{} ☢", fmt(r.best_click))),
-        ("Fusions parfaites", fmt(r.perfects as f64)),
-        ("Inspecteurs chassés", fmt(r.inspectors as f64)),
-        ("Unités", fmt(r.units as f64)),
+        (labels.best_click, format!("{} ☢", fmt(r.best_click))),
+        (labels.perfects, fmt(r.perfects as f64)),
+        (labels.inspectors, fmt(r.inspectors as f64)),
+        (labels.units, fmt(r.units as f64)),
     ];
     // The report lists ids (checked on load): their names are those of the current language.
     let or_none = |names: Vec<&str>, none: &str| {
         if names.is_empty() {
             none.to_string()
         } else {
-            names.join(", ")
+            names.join(tr().list_join)
         }
     };
     let mutations = r
@@ -2829,20 +2699,23 @@ pub fn report_lines(r: &RunReport) -> Vec<(&'static str, String)> {
         .iter()
         .map(|m| events::mutation(m).name())
         .collect();
-    lines.push(("Mutations", or_none(mutations, "aucune")));
+    lines.push((labels.mutations, or_none(mutations, labels.none)));
     let synergies = r
         .synergies
         .iter()
         .map(|s| events::synergy(s).name())
         .collect();
-    lines.push(("Synergies", or_none(synergies, "aucune")));
+    lines.push((labels.synergies, or_none(synergies, labels.none)));
     let chests = &r.chests;
     let latest = &chests[chests.len().saturating_sub(REPORT_CHESTS_SHOWN)..];
-    let mut shown = or_none(latest.iter().map(|c| tr().data.chest(c)).collect(), "aucun");
+    let mut shown = or_none(
+        latest.iter().map(|c| tr().data.chest(c)).collect(),
+        labels.no_chest,
+    );
     if chests.len() > REPORT_CHESTS_SHOWN {
         shown += &format!(" (+{})", chests.len() - REPORT_CHESTS_SHOWN);
     }
-    lines.push(("Coffres", shown));
+    lines.push((labels.chests, shown));
     lines
 }
 
@@ -3606,12 +3479,33 @@ pub(crate) mod tests {
 
     #[test]
     fn chest_overlay_fits() {
-        let mut u = bare_ui();
-        u.g.pending_chest = Some(vec!["gauge", "frenzy", "pt", "lump"]);
-        sized(&mut u, 20, 60);
-        u.draw_chest();
-        assert!(written(&u, "COFFRE DE RAVITAILLEMENT"));
-        assert!(written(&u, "4. "));
+        for (lang, texts) in i18n::LANGS {
+            i18n::with_lang(texts, || {
+                let mut u = bare_ui();
+                u.g.pending_chest = Some(vec!["gauge", "frenzy", "pt", "lump"]);
+                sized(&mut u, MIN_H, MIN_W);
+                u.draw_chest();
+                assert!(written(&u, texts.ui.chest_title), "{lang}");
+                assert!(written(&u, "4. "), "{lang}");
+            });
+        }
+    }
+
+    #[test]
+    fn mutation_overlay_fits() {
+        for (lang, texts) in i18n::LANGS {
+            i18n::with_lang(texts, || {
+                let mut u = bare_ui();
+                // Hints of both kinds: a known synergy (spores) and an unknown one (acid).
+                u.g.mutations = vec!["mitosis", "fallout"];
+                u.g.synergies_found.insert("proliferation");
+                u.g.pending_mutation = Some(vec!["spores", "twin", "acid"]);
+                sized(&mut u, MIN_H, MIN_W);
+                u.draw_mutation();
+                assert!(written(&u, texts.ui.mutation_title), "{lang}");
+                assert!(written(&u, "3. "), "{lang}");
+            });
+        }
     }
 
     // --- End of game report ----------------------------------------------------------
@@ -3659,11 +3553,16 @@ pub(crate) mod tests {
 
     #[test]
     fn draw_report_fits() {
-        for (w, h) in [(60, 20), (80, 24), (140, 40)] {
-            let mut u = finished();
-            sized(&mut u, h, w);
-            u.draw_report();
-            assert!(written(&u, "FIN DE PARTIE"), "{w}");
+        for (lang, texts) in i18n::LANGS {
+            for (w, h) in [(MIN_W, MIN_H), (80, 24), (140, 40)] {
+                i18n::with_lang(texts, || {
+                    let mut u = finished();
+                    sized(&mut u, h, w);
+                    u.draw_report();
+                    let title = (texts.ui.report_prestige)(1);
+                    assert!(written(&u, &title), "{lang} {w}");
+                });
+            }
         }
     }
 
@@ -3788,7 +3687,7 @@ pub(crate) mod tests {
     fn key_5_opens_infos() {
         let mut u = bare_ui();
         u.handle(ch('5'));
-        assert_eq!(TABS[u.tab], "Infos");
+        assert_eq!(tr().ui.tabs[u.tab], "Infos");
     }
 
     #[test]
@@ -4105,6 +4004,12 @@ pub(crate) mod tests {
     /// Full frames at the minimum size and larger, with overlays, never write off screen.
     #[test]
     fn full_draw_fits() {
+        for (lang, texts) in i18n::LANGS {
+            i18n::with_lang(texts, || full_draws_fit(lang));
+        }
+    }
+
+    fn full_draws_fit(lang: &str) {
         for (h, w) in [(MIN_H, MIN_W), (24, 80), (40, 140), (10, 30)] {
             let mut u = bare_ui();
             u.scr = BufferScreen::new(h, w);
@@ -4121,7 +4026,7 @@ pub(crate) mod tests {
             for _ in 0..30 {
                 u.draw(0.05);
             }
-            assert!(u.scr.refreshes > 0);
+            assert!(u.scr.refreshes > 0, "{lang}");
         }
     }
 }

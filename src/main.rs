@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use champignon::game::{Game, MsgKind};
 use champignon::i18n::tr;
 use champignon::saves::{self, MAIN_SLOT, MAX_SLOTS, Saves};
-use champignon::screens::{self, INTRO};
+use champignon::screens;
 use champignon::sound::{Sound, SoundSink};
 use champignon::term::{self, Screen, TermScreen};
 use champignon::ui::{Flow, UI};
@@ -57,7 +57,8 @@ fn run(saves: &Saves, purged: &[u32], mute: bool) -> io::Result<Option<PathBuf>>
         Some(g) => g,
         None => {
             let g = Game::default();
-            if screens::intro(&mut scr, Some(&sound), INTRO, 0.0, "commencer").is_err() {
+            let texts = &tr().screens;
+            if screens::intro(&mut scr, Some(&sound), texts.intro, 0.0, texts.start).is_err() {
                 return Ok(None); // Ctrl+C before the game even started: nothing to save
             }
             g

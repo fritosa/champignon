@@ -10,7 +10,8 @@ problèmes trouvés (voir `CLAUDE.md`). Les tables sont des tableaux de taille f
 et les textes la citent (valeur dans un `data::Desc`, `{}` dans le gabarit du catalogue, ou `format!` +
 `i18n::num`) au lieu de recopier le nombre. Les textes vont dans le catalogue de **chaque** langue
 (`src/i18n/fr/data.rs` pour les tables, par identifiant, `msg.rs` pour les messages du jeu, `app.rs` pour
-ceux de `main.rs`) : le test `every_table_entry_has_its_text` signale
+ceux de `main.rs`, `ui.rs` pour l'écran de jeu, `screens.rs` pour les écrans hors partie, `stories.rs` pour
+l'introduction et les histoires) : le test `every_table_entry_has_its_text` signale
 un oubli (voir « Pas de nombre magique » dans [ARCHITECTURE.md](ARCHITECTURE.md#-règles-darchitecture)).
 
 **Nouvelle unité** : ajouter un `unit_def(…)` dans `data::UNITS` (le talent de déblocage `u_<id>` et le
@@ -41,7 +42,7 @@ si sa cible doit grandir moins vite, `.rank_mult(n)`. Vérifier ses trois rangs 
 `DOUBLE_FORBIDDEN` ou `DOUBLE_SOLO` ce qui ne peut pas marcher). Si le défi
 change une échéance de début de run, penser à la fin de `Game::from_save`. Le succès « Maître des défis » suit
 automatiquement `CHALLENGES.len()`, comme « Légende vivante ». Obligatoire (test
-`every_challenge_has_both_stories`) : une histoire de lancement et de réussite dans `screens::STORIES` (clés
+`every_challenge_has_both_stories`) : une histoire de lancement et de réussite dans les `STORIES` de chaque langue (`src/i18n/fr/stories.rs`, clés
 `("<id>", "start")` / `("<id>", "end")`).
 
 **Nouveau talent** : un `table_talent(…)` dans `data::build_talents` (talents de run, `TALENTS`), ou une entrée
@@ -74,7 +75,7 @@ ou sens changé : conversion dans `Game::from_save`, ou, si elle est trop lourde
 `saves::MIN_SAVE_VERSION` (les parties plus anciennes seront supprimées) et retirer le code de
 compatibilité devenu inutile.
 
-**Nouvelle touche** : `UI::handle` + `ui::key_help()` + le tableau « Le mode d'emploi du détonateur » du
+**Nouvelle touche** : `UI::handle` + l'aide `key_help` du catalogue (`tr().ui`, lue par `ui::key_help()`) + le tableau « Le mode d'emploi du détonateur » du
 [README](README.md#-le-mode-demploi-du-détonateur). Touches déjà prises : toutes les lettres de
 `events::DROP_LETTERS` (coffres), plus F, X, M, Q, J, K, chiffres, + = -, Espace, Tab, Maj+Tab, flèches,
 Page préc./suiv., Entrée. Une touche spéciale nouvelle demande une variante de `term::Key` et sa traduction

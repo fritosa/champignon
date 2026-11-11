@@ -9,10 +9,14 @@ pub mod app;
 pub mod data;
 pub mod fr;
 pub mod msg;
+pub mod screens;
+pub mod ui;
 
 use app::AppTexts;
 use data::DataTexts;
 use msg::MsgTexts;
+use screens::ScreenTexts;
+use ui::UiTexts;
 
 /// Every text shown to the player, in one language.
 pub struct Texts {
@@ -28,12 +32,19 @@ pub struct Texts {
     pub infinity: &'static str,
     /// Between the items of a list in a sentence ("Mitose, Lueur verte").
     pub list_join: &'static str,
+    /// Typography of a paragraph before it is wrapped (French: non-breaking spaces before : ; ! ? and
+    /// inside « », so that no mark is left alone at a line edge).
+    pub typography: fn(&str) -> String,
     /// Texts of the data tables.
     pub data: DataTexts,
     /// Messages of the game.
     pub msg: MsgTexts,
     /// Texts of the program outside the game screens.
     pub app: AppTexts,
+    /// Texts of the game screen.
+    pub ui: UiTexts,
+    /// Texts of the full screens outside a game: introduction, stories, start menu.
+    pub screens: ScreenTexts,
 }
 
 /// Powers of 1000 with a suffix in game::fmt (beyond: scientific notation).

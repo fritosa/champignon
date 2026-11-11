@@ -15,7 +15,7 @@ binaires, le jeu (`src/main.rs`), `sim` et `apercu`.
 
 | Fichier | Rôle | Dépend de |
 |---|---|---|
-| `src/i18n/mod.rs` | Textes du joueur : catalogue `Texts` (struct typée, une par langue : un texte oublié ne compile pas), `tr()` (langue courante, le français seul pour l'instant), `num` (nombre dans une phrase), `LANGS` (toutes les langues, vérifiées par les tests), `with_lang` (forcer une langue en test). Types des textes par domaine : `src/i18n/data.rs` (`DataTexts`, tables lues par identifiant), `msg.rs` (`MsgTexts`, messages du jeu et leurs titres), `app.rs` (`AppTexts`, textes de `main.rs`). Une langue par sous-module, un fichier par domaine (`src/i18n/fr/` : `mod.rs`, `data.rs`, `msg.rs`, `app.rs`). | — |
+| `src/i18n/mod.rs` | Textes du joueur : catalogue `Texts` (struct typée, une par langue : un texte oublié ne compile pas), `tr()` (langue courante, le français seul pour l'instant), `num` (nombre dans une phrase), `typography` (typographie d'un paragraphe avant sa coupure en lignes : espaces insécables en français), `LANGS` (toutes les langues, vérifiées par les tests), `with_lang` (forcer une langue en test). Types des textes par domaine : `src/i18n/data.rs` (`DataTexts`, tables lues par identifiant), `msg.rs` (`MsgTexts`, messages du jeu et leurs titres), `app.rs` (`AppTexts`, textes de `main.rs`), `ui.rs` (`UiTexts`, écran de jeu : panneaux, onglets, overlays, barres d'aide ; `TAB_COUNT`), `screens.rs` (`ScreenTexts`, écrans hors partie : titre, introduction, histoires des défis, menu des parties). Une langue par sous-module, un fichier par domaine (`src/i18n/fr/` : `mod.rs`, `data.rs`, `msg.rs`, `app.rs`, `ui.rs`, `screens.rs`, et `stories.rs` pour l'introduction et les histoires). | — |
 | `src/data.rs` | Données statiques : unités (`UNITS`), talents de run (`TALENTS`, ceux des unités générés), talents de prestige (⚛, `PTALENTS`) et de supernova (✦, `STALENTS`), défis (`CHALLENGES`), skins (`SKINS`). | — |
 | `src/rng.rs` | Trait `Rng` (`random`, `below`, `uniform`, `randint`) et son extension `RandomExt` (`choice`, `sample`) ; `StdRandom` (graine système ou `seeded`), `FixedRandom` pour les tests. | `rand` |
 | `src/events.rs` | Logique pure des systèmes annexes : ravitaillements/coffres, inspecteur de l'ONU, autres ennemis, masse critique (QTE), mutations et synergies, succès, flash info. | `data`, `game`, `rng` |
@@ -85,6 +85,10 @@ Les tests sont dans un module `#[cfg(test)] mod tests` en fin de chaque fichier 
   le niveau visé (fourni par `challenge_def`) et `{1}` le temps limite en minutes d'un défi chronométré.
   Les talents des unités (`u_<id>`, `m_<id>`) tirent leur texte de l'unité (`TalentText::Unlock` /
   `Mult`). Aucun texte des tables n'est figé au démarrage : tout est lu dans `tr()` à l'affichage.
+  Les textes de l'écran sont dans `tr().ui` (`ui.rs`) et `tr().screens` (`screens.rs`), lus à l'affichage
+  (`ui::key_help()` construit l'aide à chaque appel) : restent dans le code les symboles sans mot (☢ ⚛ ✦ ─
+  ▶…), la mise en page (colonnes, largeurs, `{:<nw$}`), les noms de couleurs et de sons. Les listes dans une
+  phrase sont jointes par `tr().list_join`.
 
 ## 🔁 Boucle de jeu
 
@@ -167,13 +171,13 @@ le jeu ne rattrape pas tout d'un coup.
   qu'au rang I. Contraintes regroupées dans une
   méthode quand elles servent à plusieurs endroits : `Game::mono_forbidden` (Monoculture), `Game::on_strike`
   (Grève générale) ; récompenses lues par `milestone_mult`, `max_combo`, `shock_share`, etc.
-- **Histoires de défis** (`screens::STORIES`, clés `(id, "start" | "end")`, lues par `screens::story`) : `Game`
+- **Histoires de défis** (`tr().screens.stories`, en français dans `src/i18n/fr/stories.rs`, clés `(id, "start" | "end")`, lues par `screens::story`) : `Game`
   pose `pending_story` au lancement et à la réussite d'un défi ; `UI::show_story` (appelé par la boucle de
   `main::play`, pas par `draw`) l'affiche en plein écran (même écran tapé à la machine que l'introduction,
   `screens::intro`, touches ignorées pendant `STORY_GUARD` s) puis l'efface. Chaque défi a ses deux histoires
-  (test `every_challenge_has_both_stories`) ; une fois réussi, l'onglet Infos propose de les relire. Le lore :
+  (test `every_challenge_has_both_stories`, dans chaque langue) ; une fois réussi, l'onglet Infos propose de les relire. Le lore :
   le professeur Amédée Morille
-  (`screens::INTRO`), Gérard Zédé (Nanarland : un nanar, mauvais film sympathique, jamais un navet), l'inspecteur des récoltes
+  (`tr().screens.intro`), Gérard Zédé (Nanarland : un nanar, mauvais film sympathique, jamais un navet), l'inspecteur des récoltes
   (Monoculture), le syndicat des troufions SUTA (Grève générale), les remakes de Gérard Zédé (L'attaque de la
   moussaka géante, hommage au film grec de 1999 ; L'homme qui sauve le monde, White Fire, Crocodile Fury, Devil
   Story et Black Ninja, les nanars les plus cités dans les « top 5 des membres de la rédac' » de Nanarland,
@@ -248,7 +252,9 @@ le jeu ne rattrape pas tout d'un coup.
 
 - Terminal minimum 60×20 (`ui::MIN_W`, `MIN_H`) : tout rendu doit rester dans l'écran à cette taille
   (`UI::put` coupe, mais `BufferScreen::put`, utilisé par les tests, panique sur tout débordement ; `sized`
-  dans les tests de `ui.rs` change la taille de l'écran de test).
+  dans les tests de `ui.rs` change la taille de l'écran de test). Les tests d'écran entier (`full_draw_fits`,
+  `draw_report_fits`, `chest_overlay_fits`, `mutation_overlay_fits`, `texts_fit_80x24`) tournent dans
+  chaque langue de `i18n::LANGS` : une traduction trop longue y panique.
 - **1 colonne par caractère** : `term::width` compte les `char`. Les textes affichés ne doivent contenir que
   des caractères d'une colonne (pas d'emoji ni de caractère double largeur ou combinant), sinon la mise en
   page se décale. Couper une chaîne par caractère (`screens::slice`, `head`, `ui::clip`), jamais par octet.
@@ -273,7 +279,7 @@ le jeu ne rattrape pas tout d'un coup.
   30×100, hasard à graine fixe) et le son factice `FakeSound` (`ui::tests`) ; une partie déjà lancée par
   `game::tests::exploded_game()` ; les fichiers dans un `saves::TempDir`, jamais dans `~/.champignon`.
 - `cargo clippy --all-targets -- -D warnings` et `cargo fmt --check` doivent passer.
-- Code en anglais (identifiants, commentaires, doc-comments) ; textes affichés au joueur en français.
+- Code en anglais (identifiants, commentaires, doc-comments) ; textes affichés au joueur dans le catalogue `i18n` (en français).
 
 ## 🔮 Pistes d'évolution
 

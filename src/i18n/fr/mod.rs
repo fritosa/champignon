@@ -3,6 +3,9 @@
 mod app;
 mod data;
 mod msg;
+mod screens;
+mod stories;
+mod ui;
 
 use super::Texts;
 
@@ -15,9 +18,12 @@ pub static FR: Texts = Texts {
     hidden: "???",
     infinity: "∞",
     list_join: ", ",
+    typography,
     data: data::DATA,
     msg: msg::MSG,
     app: app::APP,
+    ui: ui::UI,
+    screens: screens::SCREENS,
 };
 
 /// Decimal comma, at most 3 decimals without trailing zeros, thousands separated by spaces
@@ -49,6 +55,18 @@ fn dur(sec: i64) -> String {
     } else {
         format!("{sec} s")
     }
+}
+
+/// Non-breaking spaces: no « or » : ; ! ? left orphaned at a line edge.
+fn typography(text: &str) -> String {
+    let text = text.replace("« ", "«\u{a0}");
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    for (i, &c) in chars.iter().enumerate() {
+        let before_mark = chars.get(i + 1).is_some_and(|n| "»:;!?".contains(*n));
+        out.push(if c == ' ' && before_mark { '\u{a0}' } else { c });
+    }
+    out
 }
 
 #[cfg(test)]
