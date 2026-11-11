@@ -1523,7 +1523,7 @@ impl Mixer {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::path::Path;
 
@@ -1568,7 +1568,7 @@ mod tests {
     }
 
     /// Rust source files of the crate, recursively.
-    fn rust_sources(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+    pub(crate) fn rust_sources(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
         for entry in std::fs::read_dir(dir).expect("readable src dir").flatten() {
             let path = entry.path();
             if path.is_dir() {

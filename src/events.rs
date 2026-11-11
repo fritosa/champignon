@@ -856,15 +856,15 @@ fn qte_resolve(g: &mut Game, timeout: bool) {
         g.sfx.push_back("perfect");
         g.gain(reward);
         g.flash_until = g.time + PERFECT_FLASH;
-        (format!("FUSION PARFAITE ! +{} ☢", g.fmt(reward)), "green")
+        ((tr().msg.qte_perfect)(&g.fmt(reward)), "green")
     } else if !timeout && distance <= q.yellow {
         let reward = base * PARTIAL_MULT;
         g.gain(reward);
         g.sfx.push_back("partial");
-        (format!("Fusion partielle : +{} ☢", g.fmt(reward)), "yellow")
+        ((tr().msg.qte_partial)(&g.fmt(reward)), "yellow")
     } else {
         g.sfx.push_back("fizzle");
-        ("Pétard mouillé...".to_string(), "red")
+        (tr().msg.qte_fizzle.to_string(), "red")
     };
     g.qte_result = Some(QteResult {
         text,

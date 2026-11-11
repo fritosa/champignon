@@ -37,6 +37,13 @@ pub struct MsgTexts {
     pub not_together: fn(&str, &str) -> String,
     /// Units eaten, unit name.
     pub crocodile: fn(u64, &str) -> String,
+    // --- Critical mass
+    /// Result of the QTE in the green zone: radiation earned.
+    pub qte_perfect: fn(&str) -> String,
+    /// Result of the QTE in the yellow zone: radiation earned.
+    pub qte_partial: fn(&str) -> String,
+    /// QTE missed.
+    pub qte_fizzle: &'static str,
     // --- Mutations
     pub mutation: fn(&str) -> String,
     /// Synergy name, its effect, first discovery or not.

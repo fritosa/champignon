@@ -25,6 +25,9 @@ pub(super) const MSG: MsgTexts = MsgTexts {
     challenge_abandoned: "Défi abandonné.",
     not_together: |a, b| format!("{a} et {b} ne se jouent pas ensemble."),
     crocodile: |eaten, unit| format!("Croco ! -{eaten} {unit}"),
+    qte_perfect: |reward| format!("FUSION PARFAITE ! +{reward} ☢"),
+    qte_partial: |reward| format!("Fusion partielle : +{reward} ☢"),
+    qte_fizzle: "Pétard mouillé...",
     mutation: |name| format!("Mutation : {name} !"),
     synergy: |name, effect, discovered| {
         let found = if discovered { " découverte" } else { "" };

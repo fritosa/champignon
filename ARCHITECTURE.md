@@ -73,6 +73,12 @@ Les tests sont dans un module `#[cfg(test)] mod tests` en fin de chaque fichier 
   `game::MAX_VOLUME`, `saves::MAIN_SLOT`…). Restent littéraux : le contenu des tables (stats des unités,
   coûts, sprites, palettes, accords), les seuils des succès (cités dans leur texte du catalogue), l'arithmétique
   évidente (±1, moitiés, ×100 des pourcentages, 60 et 3600 des durées) et les tests.
+- **Aucun texte du joueur hors du catalogue.** Tout texte affiché vient de `i18n::tr()` (voir « Les textes
+  citent leurs constantes » pour les valeurs) ; le test `no_player_text_outside_i18n` refuse, hors de
+  `src/i18n/`, des binaires de développement et des tests, tout littéral qui ressemble à une phrase (un mot
+  accentué, ou deux mots séparés par une espace), sauf les messages de développeur (`expect`, `panic!`,
+  `assert!`, `unreachable!`) et la courte liste `NOT_PLAYER_TEXT`. Un mot seul sans accent n'est pas
+  détecté.
 - **Les textes citent leurs constantes.** Un nombre de règle n'est jamais tapé dans un texte du joueur : il
   est inséré par `i18n::num` (en français : virgule décimale, 3 décimales au plus, milliers séparés par des
   espaces).

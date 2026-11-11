@@ -222,6 +222,159 @@ mod tests {
         }
     }
 
+    /// Literals that look like text but are not shown in the game.
+    const NOT_PLAYER_TEXT: [&str; 2] = [
+        " (os error",          // cut off the end of a system error message (saves::delete)
+        "Champignon atomique", // name of the audio stream in the system mixer (sound.rs), a proper noun
+    ];
+
+    /// String literals of the code before its test module, with the code just before each one; comments are
+    /// skipped.
+    fn literals(src: &str) -> Vec<(String, String)> {
+        let code = src
+            .find("#[cfg(test)]\nmod tests")
+            .or_else(|| src.find("#[cfg(test)]\npub(crate) mod tests"))
+            .map_or(src, |end| &src[..end]);
+        let chars: Vec<char> = code.chars().collect();
+        let mut found = Vec::new();
+        let mut i = 0;
+        while i < chars.len() {
+            match chars[i] {
+                '/' if chars.get(i + 1) == Some(&'/') => {
+                    while i < chars.len() && chars[i] != '\n' {
+                        i += 1;
+                    }
+                }
+                // Character literal ('"', '\'', 'x'), not a lifetime.
+                '\'' if chars.get(i + 1) == Some(&'\\') && chars.get(i + 3) == Some(&'\'') => {
+                    i += 3
+                }
+                '\'' if chars.get(i + 2) == Some(&'\'') => i += 2,
+                '"' => {
+                    // Raw string (r"…", r#"…"#): no escapes, closed by a quote and as many #.
+                    let hashes = chars[..i].iter().rev().take_while(|&&c| c == '#').count();
+                    let raw = i > hashes && chars[i - hashes - 1] == 'r';
+                    let closing = |at: usize| {
+                        chars[at] == '"'
+                            && (!raw || (1..=hashes).all(|k| chars.get(at + k) == Some(&'#')))
+                    };
+                    let before: String = chars[i.saturating_sub(200)..i].iter().collect();
+                    let mut text = String::new();
+                    i += 1;
+                    while i < chars.len() && !closing(i) {
+                        if chars[i] == '\\' && !raw {
+                            i += 1;
+                        }
+                        if let Some(&c) = chars.get(i) {
+                            text.push(c);
+                        }
+                        i += 1;
+                    }
+                    found.push((before, text));
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        found
+    }
+
+    /// A word with an accent, or two words separated by a space: French (or English) prose. A single word
+    /// without accent is not caught (it cannot be told from an id). Format placeholders (`{name:>8}`)
+    /// are not words.
+    fn looks_like_prose(text: &str) -> bool {
+        let mut plain = String::new();
+        let mut depth = 0u32;
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            match c {
+                // {{ and }} are literal braces.
+                '{' | '}' if depth == 0 && chars.peek() == Some(&c) => {
+                    chars.next();
+                    plain.push(c);
+                }
+                '{' => depth += 1,
+                '}' => depth = depth.saturating_sub(1),
+                _ if depth == 0 => plain.push(c),
+                _ => {}
+            }
+        }
+        let accented = |c: char| c.is_alphabetic() && !c.is_ascii();
+        // Identifiers (snake_case) are not words.
+        let words = plain
+            .split(|c: char| !c.is_alphanumeric() && c != '\'' && c != '_')
+            .filter(|w| !w.contains('_') && w.chars().filter(|c| c.is_alphabetic()).count() >= 2)
+            .count();
+        plain.chars().any(accented) || words >= 2 && plain.contains(' ')
+    }
+
+    /// Player texts live in the catalog: no prose literal elsewhere, except developer messages (expect,
+    /// panic) and NOT_PLAYER_TEXT.
+    #[test]
+    fn no_player_text_outside_i18n() {
+        // Outside the catalog and the binaries `sim` and `apercu` (developer tools).
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        crate::sound::tests::rust_sources(&src, &mut files);
+        files.retain(|f| !f.starts_with(src.join("i18n")) && !f.starts_with(src.join("bin")));
+        assert!(files.len() > 10, "sources not found in {}", src.display());
+        let mut stray = Vec::new();
+        for file in files {
+            let source = std::fs::read_to_string(&file).expect("readable source");
+            let file = file
+                .strip_prefix(&src)
+                .unwrap_or(&file)
+                .display()
+                .to_string();
+            for (before, text) in literals(&source) {
+                // The statement the literal belongs to: developer message if it is in one of these calls.
+                let statement = before.rsplit([';', '{', '}']).next().unwrap_or_default();
+                let developer = [
+                    "expect(",
+                    "panic!(",
+                    "unreachable!(",
+                    "assert!(",
+                    "assert_eq!(",
+                    "assert_ne!(",
+                ]
+                .iter()
+                .any(|call| statement.contains(call));
+                if looks_like_prose(&text)
+                    && !developer
+                    && !NOT_PLAYER_TEXT.contains(&text.as_str())
+                {
+                    stray.push(format!("{file}: {text:?}"));
+                }
+            }
+        }
+        assert!(
+            stray.is_empty(),
+            "texts to move to src/i18n/:\n{}",
+            stray.join("\n")
+        );
+    }
+
+    #[test]
+    fn prose_detection() {
+        assert!(looks_like_prose("Défi"));
+        assert!(looks_like_prose("Fusion partielle : +{} ☢"));
+        assert!(!looks_like_prose(" ×{}"));
+        assert!(!looks_like_prose("u_{}"));
+        assert!(!looks_like_prose("msg_bad"));
+        assert!(!looks_like_prose("{:<nw$} {r}/{:<2}"));
+        assert!(looks_like_prose("{n} unités"));
+        assert!(!looks_like_prose("libpulse-simple.so.0"));
+        assert!(!looks_like_prose("{{}} {x}"));
+        assert!(looks_like_prose("{{Défi}}"));
+        assert!(looks_like_prose("} deux mots"));
+        let lits = literals("let a = '\"'; // \"comment\"\nf(\"un \\\"deux\\\"\", r#\"x\"#);");
+        let texts: Vec<&str> = lits.iter().map(|(_, t)| t.as_str()).collect();
+        assert_eq!(texts, ["un \"deux\"", "x"]);
+        let lits = literals(r##"['\'', '"', '\''];f(r"a\", "b", r#"c"d"#);"##);
+        let texts: Vec<&str> = lits.iter().map(|(_, t)| t.as_str()).collect();
+        assert_eq!(texts, ["a\\", "b", "c\"d"]);
+    }
+
     #[test]
     #[should_panic(expected = "no text for the unit \"nope\"")]
     fn find_panics_on_missing_text() {
