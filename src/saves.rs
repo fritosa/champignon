@@ -20,8 +20,8 @@ pub const MAIN_SLOT: u32 = 1;
 // Format version. On a format change, increment SAVE_VERSION. If supporting older saves becomes
 // too complicated, also raise MIN_SAVE_VERSION: older files are then deleted at startup
 // (purge_obsolete) instead of being converted.
-pub const SAVE_VERSION: i64 = 1;
-pub const MIN_SAVE_VERSION: i64 = 1;
+pub const SAVE_VERSION: i64 = 2;
+pub const MIN_SAVE_VERSION: i64 = 2;
 
 /// Save directory: $CHAMPIGNON_SAVE_DIR, otherwise ~/.champignon.
 pub fn default_dir() -> PathBuf {
@@ -234,7 +234,10 @@ mod tests {
         }
     }
 
-    const V1: &str = r#"{"version": 1}"#;
+    /// A readable save of the current version.
+    fn current() -> String {
+        format!(r#"{{"version": {SAVE_VERSION}}}"#)
+    }
 
     #[test]
     fn paths() {
@@ -269,14 +272,14 @@ mod tests {
     #[test]
     fn listing_and_free_slot() {
         let s = setup();
-        s.write(1, r#"{"level": 4, "version": 1}"#);
-        s.write(3, V1);
+        s.write(1, &format!(r#"{{"level": 4, "version": {SAVE_VERSION}}}"#));
+        s.write(3, &current());
         s.write(4, "corrompu");
         let slots = s.saves.save_slots();
         assert_eq!(slots.iter().map(|(n, _, _)| *n).collect::<Vec<_>>(), [1, 3]);
         assert_eq!(
             Value::Object(slots[0].2.clone()),
-            json!({"level": 4, "version": 1})
+            json!({"level": 4, "version": SAVE_VERSION})
         );
         assert_eq!(s.saves.free_slot(), Some(2));
     }
@@ -284,7 +287,7 @@ mod tests {
     #[test]
     fn main_reused_when_deleted() {
         let s = setup();
-        s.write(2, V1);
+        s.write(2, &current());
         assert_eq!(s.saves.free_slot(), Some(1));
     }
 
@@ -301,7 +304,7 @@ mod tests {
     fn full() {
         let s = setup();
         for n in Saves::slot_numbers() {
-            s.write(n, V1);
+            s.write(n, &current());
         }
         assert_eq!(s.saves.save_slots().len(), MAX_SLOTS as usize);
         assert_eq!(s.saves.free_slot(), None);
@@ -318,7 +321,7 @@ mod tests {
     #[test]
     fn obsolete_purged() {
         let mut s = setup();
-        s.write(1, V1);
+        s.write(1, r#"{"version": 1}"#);
         s.write(2, r#"{"version": 1, "level": 3}"#);
         s.write(3, r#"{"level": 3}"#); // no version
         s.write(4, r#"{"version": "2"}"#);
@@ -381,7 +384,7 @@ mod tests {
     #[test]
     fn all_files_and_delete() {
         let s = setup();
-        s.write(1, V1);
+        s.write(1, &current());
         s.write(3, "corrompu");
         fs::write(tmp_path(&s.saves.slot_path(2)), "{}").unwrap();
         let mut files = s.saves.all_files();

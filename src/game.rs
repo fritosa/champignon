@@ -58,8 +58,8 @@ const WALKER_MAX_EARLY: f64 = 10.0;
 /// Highest wave number read back from a save.
 const WAVE_NUMBER_MAX: u32 = 10_000;
 /// Radiation needed for a level: NEED_BASE * level^NEED_EXPONENT.
-pub const NEED_BASE: f64 = 25.0;
-pub const NEED_EXPONENT: f64 = 2.4;
+pub const NEED_BASE: f64 = 10.0;
+pub const NEED_EXPONENT: f64 = 2.6;
 /// Isotopes of a prestige: PRESTIGE_GAIN * (level / PRESTIGE_LEVEL)^PRESTIGE_EXPONENT, before bonuses.
 pub const PRESTIGE_GAIN: f64 = 10.0;
 pub const PRESTIGE_LEVEL: f64 = 100.0;
@@ -2026,7 +2026,7 @@ pub(crate) mod tests {
 
     #[test]
     fn need_grows() {
-        assert_eq!(need(1), 25.0);
+        assert_eq!(need(1), NEED_BASE);
         assert!(need(10) < need(11));
     }
 
@@ -2403,8 +2403,11 @@ pub(crate) mod tests {
         g.stars = 100;
         assert!(g.buy_stalent("s_prod"));
         assert!(g.buy_stalent("s_iso"));
-        assert!(approx(g.production(), prod * 2.0));
-        assert_eq!(g.prestige_gain(), iso * 2);
+        assert!(approx(g.production(), prod * data::S_PROD_MULT));
+        // prestige_gain truncates once, after every multiplier: iso is already truncated.
+        let boosted = g.prestige_gain() as f64;
+        assert!(boosted >= (iso as f64 * data::S_ISO_MULT).floor());
+        assert!(boosted < (iso as f64 + 1.0) * data::S_ISO_MULT);
         assert_eq!(g.stars, 100 - 1 - 1);
     }
 
@@ -2471,7 +2474,7 @@ pub(crate) mod tests {
         assert_eq!(costs, [5.0, 8.0, 14.0, 25.0]);
         g.ptalents = BTreeMap::from([("p_cap", 2), ("p_prod", 1)]);
         g.isotopes = 100;
-        assert_eq!(g.isotopes_invested(), 100 + 20 + 150 + 2);
+        assert_eq!(g.isotopes_invested(), 100 + 20 + 100 + 2);
     }
 
     // --- Run report ---

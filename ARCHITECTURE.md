@@ -26,7 +26,7 @@ binaires, le jeu (`src/main.rs`), `sim` et `apercu`.
 | `src/screens.rs` | Écrans plein écran hors partie, qui pilotent le `Screen` eux-mêmes : introduction et histoires des défis (texte tapé à la machine), menu des parties ; aides de texte (`wrap`, `center`, `head`, `slice`). | `game`, `saves`, `sound`, `term` |
 | `src/ui.rs` | `UI<S: Screen>` : rendu des panneaux, onglets et overlays de la partie, bandeaux, particules, sons de l'interface, touches (`handle` → `Flow`). | tous les modules de la bibliothèque |
 | `src/main.rs` | Binaire `champignon` : choix de la partie, intro des nouvelles parties, boucle principale (20 images/s), autosauvegarde toutes les 30 s, sauvegarde même après une panique, signaux, `--reset`, `--mute`. | `game`, `saves`, `screens`, `sound`, `term`, `ui`, `signal-hook` |
-| `src/bin/sim.rs` | Bot qui joue sans affichage, pour vérifier l'équilibrage (`cargo run --release --bin sim -- [runs] [appuis/s]`, 8 runs et 6 appuis/s par défaut). | `game`, `events`, `data`, `rng` |
+| `src/bin/sim.rs` | Bot qui joue sans affichage, pour vérifier l'équilibrage (`cargo run --release --bin sim -- [runs] [appuis/s]`, 8 runs et 6 appuis/s par défaut). Termine par un bilan : durée totale, runs de moins d'une minute, run le plus court, heure de chaque supernova. | `game`, `events`, `data`, `rng` |
 | `src/bin/apercu.rs` | Génère `apercu.svg`, la capture en couleurs du README : le vrai rendu de `UI` sur un `BufferScreen` de 100×30. À relancer (`cargo run --release --bin apercu`) quand l'écran change. | `game`, `ui`, `events`, `data`, `term`, `rng`, `sound` |
 | `install.sh` | Compile (`cargo build --release`) et crée (ou `--desinstaller` retire) la commande `champignon`, lien vers `target/release/champignon` dans `~/.local/bin` (ou le dossier passé en argument). Refuse d'écraser un fichier qui n'est pas un lien, et de retirer un lien qui pointe ailleurs. | `cargo` |
 | `Cargo.toml` | Crate `champignon` (édition 2024) ; dépendances : `crossterm`, `libloading`, `rand`, `serde`, `serde_json`, `signal-hook`. | |
@@ -88,7 +88,7 @@ le jeu ne rattrape pas tout d'un coup.
 
 ## ⚙️ Systèmes du jeu
 
-- **Niveaux** : radiation gagnée → `progress` ; `need(level) = 25 * level^2.4`. Niveau max = `g.cap()`
+- **Niveaux** : radiation gagnée → `progress` ; `need(level) = NEED_BASE * level^NEED_EXPONENT` (10 × niveau^2,6). Niveau max = `g.cap()`
   (`BASE_CAP` × 10^rang de « Expansion du cœur », jusqu'à `MAX_CAP` = 1 000 000).
 - **Appui (ESPACE)** : `Game::click(manual)`. Combo, surchauffe (`overheat_threshold`,
   les appuis refusés jouent `jam`), critiques ×10 (`crit_mult`).
@@ -142,7 +142,7 @@ le jeu ne rattrape pas tout d'un coup.
   `all_files` ; écriture atomique `.tmp` puis `fs::rename`, dossier créé au besoin) ; `game.rs` gère le
   contenu : `Game::save_data` remplit un `SaveData` (struct serde, un champ par clé JSON),
   `Game::save` / `Game::load` l'écrivent et le relisent, `Game::from_save` reconstruit la partie.
-- **Version du format** : clé `version` (`saves::SAVE_VERSION`, actuellement 1), à incrémenter quand le format
+- **Version du format** : clé `version` (`saves::SAVE_VERSION`, actuellement 2), à incrémenter quand le format
   change. Une sauvegarde est lisible si sa version est entre `MIN_SAVE_VERSION` et `SAVE_VERSION`
   (`saves::supported`). Au lancement, `purge_obsolete` efface celles qui sont plus anciennes (message en
   jeu). Celles d'une version plus récente sont ignorées sans être touchées : réécrites ici, elles prendraient

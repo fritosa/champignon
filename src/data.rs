@@ -407,7 +407,7 @@ pub const P_DNA_CHOICES: usize = 1;
 pub const PTALENTS: [Perk; 10] = [
     perk_costs("p_cap", "Expansion du cœur", 4,
                Desc::new("Niveau max ×{} ({} → {}).", &[P_CAP_MULT as f64, BASE_CAP as f64, MAX_CAP as f64]),
-               &[20, 150, 1_200, 9_000]),
+               &[20, 100, 400, 1_600]),
     perk("p_prod", "Uranium appauvri", 25, Desc::new("Production ×{} par rang (multiplicatif).", &[P_PROD_MULT]),
          2.0, 2.0),
     perk("p_click", "Doigt nucléaire", 15, Desc::new("Puissance de détonation ×{} par rang.", &[P_CLICK_MULT]),
@@ -439,8 +439,8 @@ pub fn ptalent(id: &str) -> &'static Perk {
 }
 
 // Supernova talent effects, per rank.
-pub const S_PROD_MULT: f64 = 2.0;
-pub const S_ISO_MULT: f64 = 2.0;
+pub const S_PROD_MULT: f64 = 1.5;
+pub const S_ISO_MULT: f64 = 1.5;
 /// Cost reduction of "Expansion du cœur".
 pub const S_CORE_DISCOUNT: f64 = 0.2;
 /// Critical mass charging speed multiplier.

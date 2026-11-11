@@ -29,9 +29,13 @@ const CATCH_CHANCE: f64 = 0.1;
 const CAP_RANK_SAVED_FOR: u32 = 4;
 /// …this share of its price.
 const CAP_RESERVE_SHARE: f64 = 0.6;
+/// After a run shorter than this, two core expansion ranks may be bought at once.
+const QUICK_RUN_SECONDS: f64 = 120.0;
 /// Passes over PRESTIGE_ORDER when spending isotopes (one rank per talent per pass).
 const PRESTIGE_BUY_PASSES: usize = 40;
 const SECONDS_PER_MINUTE: f64 = 60.0;
+/// Runs shorter than this are counted as "flash" runs in the summary.
+const FLASH_RUN_SECONDS: f64 = 60.0;
 const LEVEL_MARKS: [u32; 8] = [10, 25, 50, 100, 1_000, 10_000, 100_000, 1_000_000];
 const PRESTIGE_ORDER: [&str; 10] = [
     "p_cap",
@@ -136,11 +140,15 @@ impl Bot {
     }
 }
 
-/// Buys prestige talents, core expansion first. Returns the ids bought.
-fn spend_isotopes(g: &mut Game) -> Vec<&'static str> {
+/// Buys prestige talents, core expansion first (two ranks after a quick run). Returns the ids bought.
+fn spend_isotopes(g: &mut Game, last_run_time: f64) -> Vec<&'static str> {
     let mut bought = Vec::new();
     if g.buy_ptalent("p_cap") {
         bought.push("p_cap");
+        // A second rank right away only when the max level was reached quickly.
+        if last_run_time < QUICK_RUN_SECONDS && g.buy_ptalent("p_cap") {
+            bought.push("p_cap");
+        }
     }
     // Keep enough to aim for the next core expansion.
     let reserve = if g.pr("p_cap") < CAP_RANK_SAVED_FOR {
@@ -182,8 +190,13 @@ fn main() {
         presses: 0.0,
     };
     let mut g = Game::new(Box::new(StdRandom::seeded(GAME_SEED)));
+    let mut total = 0.0;
+    let mut durations: Vec<f64> = Vec::new();
+    let mut supernova_times: Vec<f64> = Vec::new();
     for r in 0..runs {
         let marks = bot.run_once(&mut g);
+        total += g.run_time;
+        durations.push(g.run_time);
         let txt: Vec<String> = marks
             .iter()
             .map(|&(m, t)| format!("L{}:{:.1}m", fmt(m as f64), t / SECONDS_PER_MINUTE))
@@ -211,6 +224,7 @@ fn main() {
         if g.can_supernova() {
             let stars = g.supernova_gain();
             g.supernova();
+            supernova_times.push(total);
             while data::STALENTS.iter().any(|s| g.buy_stalent(s.id)) {}
             println!(
                 "        SUPERNOVA #{} +{} ✦ -> talents {}  left {} ✦",
@@ -222,8 +236,9 @@ fn main() {
             continue;
         }
         let gain = g.prestige_gain();
+        let run_time = g.run_time;
         g.prestige(None);
-        let mut bought = spend_isotopes(&mut g);
+        let mut bought = spend_isotopes(&mut g, run_time);
         bought.sort();
         bought.dedup();
         println!(
@@ -232,4 +247,25 @@ fn main() {
             g.isotopes
         );
     }
+    print_summary(total, &durations, &supernova_times);
+}
+
+fn minutes(seconds: f64) -> String {
+    format!("{:.0} min", seconds / SECONDS_PER_MINUTE)
+}
+
+/// Total time, flash runs (under FLASH_RUN_SECONDS), shortest run and time of each supernova.
+fn print_summary(total: f64, durations: &[f64], supernova_times: &[f64]) {
+    let flash = durations.iter().filter(|&&d| d < FLASH_RUN_SECONDS).count();
+    let shortest = durations.iter().copied().fold(f64::INFINITY, f64::min);
+    let supernovas: Vec<String> = supernova_times.iter().map(|&t| minutes(t)).collect();
+    println!(
+        "total {}  runs {}  under {:.0} s: {}  shortest {:.0} s  supernovas at [{}]",
+        minutes(total),
+        durations.len(),
+        FLASH_RUN_SECONDS,
+        flash,
+        shortest,
+        supernovas.join(", ")
+    );
 }
