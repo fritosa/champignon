@@ -292,8 +292,11 @@ pub const NEWS_NANAR: [&str; 4] = [
     "Faux raccord : le champignon a changé de couleur entre deux plans.",
     "Le budget effets spéciaux est épuisé. Les explosions seront désormais bruitées à la bouche.",
 ];
+/// Headline of the Crocodile Fury challenge.
+pub const NEWS_CROCODILE: &str = "Un crocodile en caoutchouc sème la panique dans les rizières : le machiniste nie toute responsabilité.";
 pub const NEWS_INSPECTOR: &str = "ALERTE : un inspecteur de l'ONU approche du site !";
-/// During the Nanarland challenge, each NEWS_NANAR headline weighs as much as this many others.
+/// During the Nanarland (Crocodile Fury) challenge, each NEWS_NANAR headline (NEWS_CROCODILE) weighs as much
+/// as this many others.
 const NANAR_NEWS_WEIGHT: usize = 3;
 
 pub fn pick_news(g: &mut Game) -> &'static str {
@@ -315,6 +318,9 @@ pub fn pick_news(g: &mut Game) -> &'static str {
         for _ in 0..NANAR_NEWS_WEIGHT {
             pool.extend(NEWS_NANAR); // the challenge sets the mood
         }
+    }
+    if g.challenge == Some("crocodile") {
+        pool.extend([NEWS_CROCODILE; NANAR_NEWS_WEIGHT]);
     }
     g.rng.choice(&pool)
 }
@@ -2122,6 +2128,16 @@ mod tests {
         g.challenge = Some("nanar");
         let picked: Vec<&str> = (0..50).map(|_| pick_news(&mut g)).collect();
         assert!(picked.iter().any(|n| NEWS_NANAR.contains(n)));
+    }
+
+    #[test]
+    fn crocodile_news() {
+        let mut g = exploded_game();
+        let picked: Vec<&str> = (0..50).map(|_| pick_news(&mut g)).collect();
+        assert!(!picked.contains(&NEWS_CROCODILE));
+        g.challenge = Some("crocodile");
+        let picked: Vec<&str> = (0..50).map(|_| pick_news(&mut g)).collect();
+        assert!(picked.contains(&NEWS_CROCODILE));
     }
 
     // --- Sounds ---

@@ -12,7 +12,7 @@ use champignon::game::{Enemy, Game, Plane, need};
 use champignon::rng::StdRandom;
 use champignon::sound::SoundSink;
 use champignon::term::{BufferScreen, ColorName, Ink, Style};
-use champignon::ui::{self, Float, UI};
+use champignon::ui::{self, UI};
 
 const W: i32 = 100;
 const H: i32 = 30;
@@ -103,7 +103,10 @@ fn scene() -> Game {
     let mut g = Game::new(Box::new(StdRandom::seeded(SCENE_SEED)));
     g.click(true);
     g.exploded = true;
-    g.challenge = Some("nanar");
+    // Crocodile Fury, wearing the skin of the challenge (as if replayed after a supernova).
+    g.skins.insert("ricefield");
+    g.skin = "ricefield";
+    g.challenge = Some("crocodile");
     g.level = 72;
     g.isotopes = 41;
     g.pt = 4;
@@ -118,12 +121,12 @@ fn scene() -> Game {
         ("sub", 8),
         ("icbm", 3),
         ("reactor", 1),
+        ("blackhole", 1),
     ];
     for (uid, n) in counts {
         g.talents.insert(data::talent(&format!("u_{uid}")).id, 1);
         g.units[uid] = n;
     }
-    g.talents.insert(data::talent("u_blackhole").id, 1);
     g.mutations = vec!["spores", "fallout"];
     g.combo = 1.4;
     g.crit_gauge = 0.62;
@@ -289,14 +292,10 @@ fn main() {
     for _ in 0..SETTLE_FRAMES {
         u.draw(SETTLE_DT);
     }
-    // Nanarland challenge: a press that fizzles, and a botched-shoot title set at the start of the banner.
-    u.floats.push(Float {
-        text: "pschitt…".to_string(),
-        age: 0.0,
-        dx: -3,
-        style: u.c("grey").bold(),
-    });
-    u.news = events::NEWS_NANAR[1];
+    // Crocodile Fury: the crocodile bites just before the capture (banner and big title on screen), and the
+    // headline is set at the start of the banner.
+    u.g.crocodile_bite("soldier");
+    u.news = events::NEWS_CROCODILE;
     u.news_off =
         f64::from(u.w) - " FLASH INFO ".chars().count() as f64 - f64::from(ui::NEWS_MARGIN);
     u.draw(0.0);

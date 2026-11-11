@@ -24,10 +24,10 @@ ASCII, toute la musique synthétisée au vol. Tourné intégralement en mode tex
 > ⭐⭐⭐⭐⭐ *« Le scénario tient sur un post-it, et c'est très bien comme ça. »* — un autre spectateur\
 > 💀 *Déconseillé aux claviers fragiles.*
 
-📸 **Photo de tournage** (terminal 100×30, défi Nanarland : une détonation fait pschitt, un commando approche,
-un avion de ravitaillement passe) :
+📸 **Photo de tournage** (terminal 100×30, défi Crocodile Fury en skin Rizière : le crocodile en caoutchouc vient
+de croquer 70 soldats, un commando approche, un avion de ravitaillement passe) :
 
-![Écran du jeu pendant le défi Nanarland : le champignon atomique, un commando et un avion à gauche, statistiques et unités à droite](apercu.svg)
+![Écran du jeu pendant le défi Crocodile Fury : le champignon atomique vert et jaune, un commando et un avion à gauche, statistiques et unités à droite](apercu.svg)
 
 ## 🚀 Lancer la projection
 

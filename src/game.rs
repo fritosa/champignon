@@ -1773,13 +1773,15 @@ impl Game {
             return;
         }
         let uid = *self.rng.choice(&owned);
+        self.crocodile_bite(uid);
+        self.sfx.push_back("enemy");
+    }
+
+    /// The crocodile eats CROCODILE_BITE of the units of type uid (rounded up), and the bite is logged.
+    pub fn crocodile_bite(&mut self, uid: &'static str) {
         let eaten = (self.units[uid] as f64 * data::CROCODILE_BITE).ceil() as u64;
         self.units[uid] -= eaten;
-        self.sfx.push_back("enemy");
-        let text = format!(
-            "Le crocodile dévore {eaten} unités ({}) !",
-            data::unit(uid).name
-        );
+        let text = format!("Le croco dévore {eaten} × {} !", data::unit(uid).name);
         self.log(text, MsgKind::Bad, Some("CROCO !"));
     }
 
