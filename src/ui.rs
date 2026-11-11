@@ -3335,7 +3335,7 @@ pub(crate) mod tests {
     #[test]
     fn numbers_masked() {
         let mut u = bare_ui();
-        assert_eq!(u.num(1500.0), "1.50K");
+        assert_eq!(u.num(1500.0), "1,50K");
         u.g.challenge = Some("blind");
         assert_eq!(u.num(1500.0), "???");
     }
@@ -3711,7 +3711,7 @@ pub(crate) mod tests {
         assert!(
             texts
                 .iter()
-                .any(|t| t.contains("Appuis sur ESPACE") && t.contains("1.23K"))
+                .any(|t| t.contains("Appuis sur ESPACE") && t.contains("1,23K"))
         );
         assert!(texts.iter().any(|t| t.contains("1 h 02 min")));
         assert!(

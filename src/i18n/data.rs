@@ -16,6 +16,7 @@ pub struct Named {
 
 pub struct UnitText {
     pub name: &'static str,
+    pub plural: &'static str,
     /// Name of the talent that unlocks it ("u_<id>").
     pub unlock_name: &'static str,
     /// Name of the talent that boosts it ("m_<id>").
@@ -44,7 +45,7 @@ pub struct DataTexts {
     pub unit_unlock: fn(&str) -> String,
     /// Description of an unlock talent of a challenge unit: unit name, challenge name.
     pub unit_unlock_after: fn(&str, &str) -> String,
-    /// Description of a unit boost talent: unit name, multiplier per rank.
+    /// Description of a unit boost talent: unit name in the plural, multiplier per rank.
     pub unit_mult: fn(&str, &str) -> String,
     /// Run talents (except the generated unit talents).
     pub talents: Table<Named>,

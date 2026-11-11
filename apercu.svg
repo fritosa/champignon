@@ -64,8 +64,8 @@
 <rect x="253.6" y="61.0" width="8.4" height="17.0" fill="#e5534b"/>
 <rect x="287.2" y="61.0" width="8.4" height="17.0" fill="#e5534b"/>
 <path d="M383.8 61.0L383.8 69.5L383.8 78.0M392.2 61.0L392.2 69.5L392.2 78.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="404.8" y="74" fill="#f0c674" font-weight="bold" xml:space="preserve" textLength="92.4" lengthAdjust="spacingAndGlyphs">☢ 42.00M   </text>
-<text x="497.2" y="74" fill="#8ec07c" xml:space="preserve" textLength="75.6" lengthAdjust="spacingAndGlyphs">+16.82M/s</text>
+<text x="404.8" y="74" fill="#f0c674" font-weight="bold" xml:space="preserve" textLength="92.4" lengthAdjust="spacingAndGlyphs">☢ 42,00M   </text>
+<text x="497.2" y="74" fill="#8ec07c" xml:space="preserve" textLength="75.6" lengthAdjust="spacingAndGlyphs">+16,82M/s</text>
 <path d="M845.8 61.0L845.8 69.5L845.8 78.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 78.0L14.2 86.5L14.2 95.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <rect x="102.4" y="78.0" width="8.4" height="17.0" fill="#e5534b"/>
@@ -79,7 +79,7 @@
 <rect x="253.6" y="78.0" width="8.4" height="17.0" fill="#e5534b"/>
 <rect x="287.2" y="78.0" width="8.4" height="8.5" fill="#e5534b"/>
 <path d="M383.8 78.0L383.8 86.5L383.8 95.0M392.2 78.0L392.2 86.5L392.2 95.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="396.4" y="91" fill="#c5c8c6" xml:space="preserve" textLength="445.2" lengthAdjust="spacingAndGlyphs"> Détonation 2.4   Crit 0%                            </text>
+<text x="396.4" y="91" fill="#c5c8c6" xml:space="preserve" textLength="445.2" lengthAdjust="spacingAndGlyphs"> Détonation 2,4   Crit 0%                            </text>
 <path d="M845.8 78.0L845.8 86.5L845.8 95.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 95.0L14.2 103.5L14.2 112.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <text x="85.6" y="108" fill="#808080" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">*</text>
@@ -106,15 +106,15 @@
 <text x="68.8" y="125" fill="#8ec07c" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">&#x27;</text>
 <text x="77.2" y="125" fill="#f0c674" xml:space="preserve" textLength="16.8" lengthAdjust="spacingAndGlyphs">**</text>
 <text x="94.0" y="125" fill="#808080" xml:space="preserve" textLength="16.8" lengthAdjust="spacingAndGlyphs">%+</text>
-<rect x="110.8" y="112" width="168.0" height="17" fill="#e5534b"/>
-<text x="110.8" y="125" fill="#eaeaea" font-weight="bold" xml:space="preserve" textLength="168.0" lengthAdjust="spacingAndGlyphs"> Croco ! -70 Soldat </text>
-<text x="278.8" y="125" fill="#808080" xml:space="preserve" textLength="16.8" lengthAdjust="spacingAndGlyphs">=*</text>
+<rect x="110.8" y="112" width="176.4" height="17" fill="#e5534b"/>
+<text x="110.8" y="125" fill="#eaeaea" font-weight="bold" xml:space="preserve" textLength="176.4" lengthAdjust="spacingAndGlyphs"> Croco ! -70 Soldats </text>
+<text x="287.2" y="125" fill="#808080" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">*</text>
 <text x="295.6" y="125" fill="#f0c674" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">%</text>
 <text x="304.0" y="125" fill="#808080" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">+</text>
 <text x="312.4" y="125" fill="#f0c674" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">*</text>
 <text x="320.8" y="125" fill="#8ec07c" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">.</text>
 <path d="M383.8 112.0L383.8 120.5L383.8 129.0M392.2 112.0L392.2 120.5L392.2 129.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="396.4" y="125" fill="#c5c8c6" xml:space="preserve" textLength="100.8" lengthAdjust="spacingAndGlyphs"> Combo ×2.4 </text>
+<text x="396.4" y="125" fill="#c5c8c6" xml:space="preserve" textLength="100.8" lengthAdjust="spacingAndGlyphs"> Combo ×2,4 </text>
 <text x="497.2" y="125" fill="#e5534b" font-weight="bold" xml:space="preserve" textLength="117.6" lengthAdjust="spacingAndGlyphs">■■■■■■■■■■■■■■</text>
 <text x="614.8" y="125" fill="#808080" xml:space="preserve" textLength="50.4" lengthAdjust="spacingAndGlyphs">□□□□□□</text>
 <path d="M845.8 112.0L845.8 120.5L845.8 129.0" stroke="#808080" stroke-width="1.2" fill="none"/>
@@ -307,7 +307,7 @@
 <text x="362.8" y="210" fill="#f0c674" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">.</text>
 <path d="M383.8 197.0L383.8 205.5L383.8 214.0M392.2 197.0L392.2 205.5L392.2 214.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <rect x="404.8" y="197" width="428.4" height="17" fill="#eaeaea"/>
-<text x="404.8" y="210" fill="#1d1f21" font-weight="bold" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">▶ Soldat                  x70       178/s 266.04K ☢</text>
+<text x="404.8" y="210" fill="#1d1f21" font-weight="bold" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">▶ Soldat                  x70       178/s 266,04K ☢</text>
 <path d="M845.8 197.0L845.8 205.5L845.8 214.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 214.0L14.2 222.5L14.2 231.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <text x="43.6" y="227" fill="#f0c674" xml:space="preserve" textLength="16.8" lengthAdjust="spacingAndGlyphs">:&#x27;</text>
@@ -333,7 +333,7 @@
 <text x="337.6" y="227" fill="#8ec07c" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">.</text>
 <text x="346.0" y="227" fill="#808080" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">:</text>
 <path d="M383.8 214.0L383.8 222.5L383.8 231.0M392.2 214.0L392.2 222.5L392.2 231.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="404.8" y="227" fill="#808080" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Mortier                 x95     1.94K/s  87.58M ☢</text>
+<text x="404.8" y="227" fill="#808080" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Mortier                 x95     1,94K/s  87,58M ☢</text>
 <path d="M845.8 214.0L845.8 222.5L845.8 231.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 231.0L14.2 239.5L14.2 248.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <text x="169.6" y="244" fill="#f28c28" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">(</text>
@@ -344,7 +344,7 @@
 <text x="211.6" y="244" fill="#808080" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">!</text>
 <text x="220.0" y="244" fill="#f28c28" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">)</text>
 <path d="M383.8 231.0L383.8 239.5L383.8 248.0M392.2 231.0L392.2 239.5L392.2 248.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="404.8" y="244" fill="#eaeaea" font-weight="bold" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Artilleur               x60     9.18K/s   6.58M ☢</text>
+<text x="404.8" y="244" fill="#eaeaea" font-weight="bold" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Artilleur               x60     9,18K/s   6,58M ☢</text>
 <path d="M845.8 231.0L845.8 239.5L845.8 248.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 248.0L14.2 256.5L14.2 265.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <text x="144.4" y="261" fill="#f0c674" font-weight="bold" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">*</text>
@@ -355,7 +355,7 @@
 <text x="211.6" y="261" fill="#f0c674" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">|</text>
 <text x="220.0" y="261" fill="#f28c28" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">)</text>
 <path d="M383.8 248.0L383.8 256.5L383.8 265.0M392.2 248.0L392.2 256.5L392.2 265.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="404.8" y="261" fill="#eaeaea" font-weight="bold" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Tank                    x32    17.95K/s   1.31M ☢</text>
+<text x="404.8" y="261" fill="#eaeaea" font-weight="bold" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Tank                    x32    17,95K/s   1,31M ☢</text>
 <path d="M845.8 248.0L845.8 256.5L845.8 265.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 265.0L14.2 273.5L14.2 282.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <text x="169.6" y="278" fill="#f28c28" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">(</text>
@@ -365,7 +365,7 @@
 <text x="220.0" y="278" fill="#f28c28" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">)</text>
 <text x="287.2" y="278" fill="#f28c28" font-weight="bold" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">°</text>
 <path d="M383.8 265.0L383.8 273.5L383.8 282.0M392.2 265.0L392.2 273.5L392.2 282.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="404.8" y="278" fill="#eaeaea" font-weight="bold" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Bombardier              x12    48.96K/s 856.04K ☢</text>
+<text x="404.8" y="278" fill="#eaeaea" font-weight="bold" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Bombardier              x12    48,96K/s 856,04K ☢</text>
 <path d="M845.8 265.0L845.8 273.5L845.8 282.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 282.0L14.2 290.5L14.2 299.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <text x="169.6" y="295" fill="#f28c28" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">(</text>
@@ -375,7 +375,7 @@
 <text x="211.6" y="295" fill="#f0c674" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">|</text>
 <text x="220.0" y="295" fill="#f28c28" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">)</text>
 <path d="M383.8 282.0L383.8 290.5L383.8 299.0M392.2 282.0L392.2 290.5L392.2 299.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="404.8" y="295" fill="#eaeaea" font-weight="bold" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Sous-marin nucléaire    x8    244.80K/s   5.51M ☢</text>
+<text x="404.8" y="295" fill="#eaeaea" font-weight="bold" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Sous-marin nucléaire    x8    244,80K/s   5,51M ☢</text>
 <path d="M845.8 282.0L845.8 290.5L845.8 299.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 299.0L14.2 307.5L14.2 316.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <text x="85.6" y="312" fill="#8ec07c" font-weight="bold" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">=</text>
@@ -393,7 +393,7 @@
 <text x="278.8" y="312" fill="#70c0b1" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">=</text>
 <text x="287.2" y="312" fill="#eaeaea" xml:space="preserve" textLength="16.8" lengthAdjust="spacingAndGlyphs">-)</text>
 <path d="M383.8 299.0L383.8 307.5L383.8 316.0M392.2 299.0L392.2 307.5L392.2 316.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="404.8" y="312" fill="#eaeaea" font-weight="bold" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Silo ICBM               x3    688.50K/s  30.42M ☢</text>
+<text x="404.8" y="312" fill="#eaeaea" font-weight="bold" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Silo ICBM               x3    688,50K/s  30,42M ☢</text>
 <path d="M845.8 299.0L845.8 307.5L845.8 316.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 316.0L14.2 324.5L14.2 333.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <text x="169.6" y="329" fill="#f28c28" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">(</text>
@@ -403,7 +403,7 @@
 <text x="203.2" y="329" fill="#8ec07c" xml:space="preserve" textLength="16.8" lengthAdjust="spacingAndGlyphs">:|</text>
 <text x="220.0" y="329" fill="#f28c28" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">)</text>
 <path d="M383.8 316.0L383.8 324.5L383.8 333.0M392.2 316.0L392.2 324.5L392.2 333.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="404.8" y="329" fill="#808080" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Réacteur à fusion       x1      1.79M/s 264.50M ☢</text>
+<text x="404.8" y="329" fill="#808080" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Réacteur à fusion       x1      1,79M/s 264,50M ☢</text>
 <path d="M845.8 316.0L845.8 324.5L845.8 333.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 333.0L14.2 341.5L14.2 350.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <text x="35.2" y="346" fill="#808080" xml:space="preserve" textLength="25.2" lengthAdjust="spacingAndGlyphs">(~~</text>
@@ -418,7 +418,7 @@
 <text x="220.0" y="346" fill="#f28c28" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">)</text>
 <text x="287.2" y="346" fill="#f0c674" font-weight="bold" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">*</text>
 <path d="M383.8 333.0L383.8 341.5L383.8 350.0M392.2 333.0L392.2 341.5L392.2 350.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="404.8" y="346" fill="#808080" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Trou noir de poche      x1     14.03M/s   2.99B ☢</text>
+<text x="404.8" y="346" fill="#808080" xml:space="preserve" textLength="428.4" lengthAdjust="spacingAndGlyphs">  Trou noir de poche      x1     14,03M/s   2,99B ☢</text>
 <path d="M845.8 333.0L845.8 341.5L845.8 350.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 350.0L14.2 358.5L14.2 367.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <text x="60.4" y="363" fill="#f28c28" font-weight="bold" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">°</text>
@@ -520,7 +520,7 @@
 <text x="329.2" y="448" fill="#808080" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">~</text>
 <text x="354.4" y="448" fill="#f0c674" font-weight="bold" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">\</text>
 <path d="M383.8 435.0L383.8 443.5L383.8 452.0M392.2 435.0L392.2 443.5L392.2 452.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="396.4" y="448" fill="#c5c8c6" xml:space="preserve" textLength="420.0" lengthAdjust="spacingAndGlyphs"> Soldat : +2.6 ☢/s chacun. Entrée : acheter ×1    </text>
+<text x="396.4" y="448" fill="#c5c8c6" xml:space="preserve" textLength="420.0" lengthAdjust="spacingAndGlyphs"> Soldat : +2,6 ☢/s chacun. Entrée : acheter ×1    </text>
 <text x="816.4" y="448" fill="#8ec07c" font-weight="bold" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">o</text>
 <path d="M845.8 435.0L845.8 443.5L845.8 452.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 452.0L14.2 460.5L14.2 469.0" stroke="#808080" stroke-width="1.2" fill="none"/>

@@ -9,7 +9,7 @@ pub struct MsgTexts {
     pub brawl: fn(&str) -> String,
     pub overheat: &'static str,
     pub max_level: &'static str,
-    /// Count reached, unit name, new production multiplier.
+    /// Count reached, unit name in the plural, new production multiplier.
     pub milestone: fn(u64, &str, &str) -> String,
     /// New max level.
     pub core_grows: fn(&str) -> String,
@@ -35,8 +35,8 @@ pub struct MsgTexts {
     pub challenge_abandoned: &'static str,
     /// The two challenge names.
     pub not_together: fn(&str, &str) -> String,
-    /// Units eaten, unit name.
-    pub crocodile: fn(u64, &str) -> String,
+    /// Units eaten, unit name in the singular and in the plural.
+    pub crocodile: fn(u64, &str, &str) -> String,
     // --- Critical mass
     /// Result of the QTE in the green zone: radiation earned.
     pub qte_perfect: fn(&str) -> String,

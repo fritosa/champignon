@@ -12,6 +12,7 @@ use super::Texts;
 pub static FR: Texts = Texts {
     num,
     dur,
+    decimal: ',',
     suffixes: [
         "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc",
     ],
@@ -43,7 +44,7 @@ fn num(x: f64) -> String {
     if frac.is_empty() {
         grouped
     } else {
-        format!("{grouped},{frac}")
+        format!("{grouped}{}{frac}", FR.decimal)
     }
 }
 

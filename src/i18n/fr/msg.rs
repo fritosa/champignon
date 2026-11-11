@@ -8,7 +8,7 @@ pub(super) const MSG: MsgTexts = MsgTexts {
     brawl: |lost| format!("Baston homérique ! -{lost} ☢"),
     overheat: "SURCHAUFFE ! Doucement sur le détonateur...",
     max_level: "NIVEAU MAX ! Le prestige est disponible (onglet 3).",
-    milestone: |count, unit, mult| format!("Palier : {count} {unit}s, production ×{mult} !"),
+    milestone: |count, units, mult| format!("Palier : {count} {units}, production ×{mult} !"),
     core_grows: |cap| format!("Le cœur s'étend : niveau max {cap} !"),
     achievement: |name, bonus| format!("★ Succès : {name} (+{bonus} % de production)"),
     offline: |minutes, amount| format!("Pendant ton absence ({minutes} min) : +{amount} ☢"),
@@ -24,7 +24,10 @@ pub(super) const MSG: MsgTexts = MsgTexts {
     challenge_failed: |name| format!("Défi {name} échoué : trop lent !"),
     challenge_abandoned: "Défi abandonné.",
     not_together: |a, b| format!("{a} et {b} ne se jouent pas ensemble."),
-    crocodile: |eaten, unit| format!("Croco ! -{eaten} {unit}"),
+    crocodile: |eaten, unit, units| {
+        let name = if eaten > 1 { units } else { unit };
+        format!("Croco ! -{eaten} {name}")
+    },
     qte_perfect: |reward| format!("FUSION PARFAITE ! +{reward} ☢"),
     qte_partial: |reward| format!("Fusion partielle : +{reward} ☢"),
     qte_fizzle: "Pétard mouillé...",

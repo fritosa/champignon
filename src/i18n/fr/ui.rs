@@ -1,5 +1,6 @@
 //! French texts of the game screen.
 
+use crate::i18n::fixed;
 use crate::i18n::ui::{ReportLabels, StatLabels, UiTexts};
 
 pub(super) const UI: UiTexts = UiTexts {
@@ -59,7 +60,7 @@ pub(super) const UI: UiTexts = UiTexts {
     inspector_alert: "⚠ Un inspecteur ! Martèle X ! ⚠",
     enemies: |n| format!("{n} ennemis"),
     enemy_alert: |who| format!("⚠ {who} ! Martèle X ! ⚠"),
-    frozen_banner: |left| format!("❄ PRODUCTION GELÉE {left:.0}s ❄"),
+    frozen_banner: |left| format!("❄ PRODUCTION GELÉE {left:.0} s ❄"),
     inspector_sign: "[ONU]",
     stats_title: "Statistiques",
     level: |level, cap| format!("NIVEAU {level} / {cap}"),
@@ -71,12 +72,12 @@ pub(super) const UI: UiTexts = UiTexts {
     click_stats: |click, crit| format!("Détonation {click}   Crit {crit}%"),
     auto: |per_second| format!("Auto {per_second}/s"),
     pt: |pt| format!("PT {pt}"),
-    overheat: |left| format!("SURCHAUFFE ! {left:.1}s"),
-    combo: |mult| format!("Combo ×{mult:.1}"),
+    overheat: |left| format!("SURCHAUFFE ! {} s", fixed(left, 1)),
+    combo: |mult| format!("Combo ×{}", fixed(mult, 1)),
     gauge_running: "MASSE CRITIQUE EN COURS !",
     gauge_ready: "Masse critique PRÊTE → appuie sur F",
     gauge: "Masse critique",
-    buff: |name, left| format!("{name} {left:.0}s"),
+    buff: |name, left| format!("{name} {left:.0} s"),
     mutations: |names| format!("Mutations : {names}"),
     tab_help: |q, sound| {
         vec![

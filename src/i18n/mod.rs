@@ -24,6 +24,8 @@ pub struct Texts {
     pub num: fn(f64) -> String,
     /// Duration for humans (42 s, 2 min 05 s, 2 h 01 min).
     pub dur: fn(i64) -> String,
+    /// Decimal separator of the short numbers (game::fmt) and of `fixed`.
+    pub decimal: char,
     /// Suffixes of the short numbers (game::fmt), one per power of 1000.
     pub suffixes: [&'static str; SUFFIX_COUNT],
     /// Shown instead of a hidden value: numbers during the Brouillard de guerre challenge, locked tab name.
@@ -62,6 +64,19 @@ pub fn tr() -> &'static Texts {
     &fr::FR
 }
 
+/// `x` with `decimals` decimals, with the decimal separator of the current language (1,5).
+pub fn fixed(x: f64, decimals: usize) -> String {
+    localize_decimal(format!("{x:.decimals$}"))
+}
+
+/// Number written by Rust (decimal point) with the decimal separator of the current language.
+pub fn localize_decimal(s: String) -> String {
+    match tr().decimal {
+        '.' => s,
+        sep => s.replace('.', sep.encode_utf8(&mut [0; 4])),
+    }
+}
+
 /// Number in a sentence, in the current language.
 pub fn num(x: f64) -> String {
     (tr().num)(x)
@@ -93,6 +108,12 @@ pub fn find<'a, T>(table: &'a [(&str, T)], id: &str, what: &str) -> &'a T {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fixed_uses_the_decimal_separator() {
+        assert_eq!(fixed(1.5, 1), "1,5");
+        assert_eq!(fixed(3.0, 0), "3");
+    }
 
     #[test]
     fn test_lang_is_per_thread_and_restored() {

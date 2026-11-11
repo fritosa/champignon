@@ -4,21 +4,21 @@ use crate::i18n::data::{ChallengeText, DataTexts, EnemyText, Named, UnitText};
 
 #[rustfmt::skip]
 const UNITS: &[(&str, UnitText)] = &[
-    ("soldier", UnitText { name: "Soldat", unlock_name: "Conscription", mult_name: "Grenades à fragmentation" }),
-    ("mortar", UnitText { name: "Mortier", unlock_name: "Mortiers", mult_name: "Obus explosifs" }),
-    ("artillery", UnitText { name: "Artilleur", unlock_name: "Artillerie lourde", mult_name: "Obus perforants" }),
-    ("tank", UnitText { name: "Tank", unlock_name: "Divisions blindées", mult_name: "Canons de 120" }),
-    ("bomber", UnitText { name: "Bombardier", unlock_name: "Escadrilles", mult_name: "Bombes au napalm" }),
-    ("sub", UnitText { name: "Sous-marin nucléaire", unlock_name: "Flotte sous-marine", mult_name: "Torpilles atomiques" }),
-    ("icbm", UnitText { name: "Silo ICBM", unlock_name: "Silos ICBM", mult_name: "Têtes multiples" }),
-    ("reactor", UnitText { name: "Réacteur à fusion", unlock_name: "Réacteurs à fusion", mult_name: "Plasma confiné" }),
-    ("blackhole", UnitText { name: "Trou noir de poche", unlock_name: "Singularité", mult_name: "Horizon des événements" }),
-    ("moussaka", UnitText { name: "Moussaka apprivoisée", unlock_name: "Recette de mamie", mult_name: "Béchamel enrichie" }),
-    ("savior", UnitText { name: "Sauveur du monde", unlock_name: "Ceinture noire", mult_name: "Poings de fer" }),
-    ("diamond", UnitText { name: "Diamant blanc", unlock_name: "Mine de diamants", mult_name: "Taille en brillant" }),
-    ("croc", UnitText { name: "Croco en caoutchouc", unlock_name: "Rizière hantée", mult_name: "Mâchoires en mousse" }),
-    ("mummy", UnitText { name: "Momie de la falaise", unlock_name: "Couvercle sans sarcophage", mult_name: "Bandelettes au faux sang" }),
-    ("ninja", UnitText { name: "Ninja d'Interpol", unlock_name: "Opération Pastèque", mult_name: "Baguettes de combat" }),
+    ("soldier", UnitText { name: "Soldat", plural: "Soldats", unlock_name: "Conscription", mult_name: "Grenades à fragmentation" }),
+    ("mortar", UnitText { name: "Mortier", plural: "Mortiers", unlock_name: "Mortiers", mult_name: "Obus explosifs" }),
+    ("artillery", UnitText { name: "Artilleur", plural: "Artilleurs", unlock_name: "Artillerie lourde", mult_name: "Obus perforants" }),
+    ("tank", UnitText { name: "Tank", plural: "Tanks", unlock_name: "Divisions blindées", mult_name: "Canons de 120" }),
+    ("bomber", UnitText { name: "Bombardier", plural: "Bombardiers", unlock_name: "Escadrilles", mult_name: "Bombes au napalm" }),
+    ("sub", UnitText { name: "Sous-marin nucléaire", plural: "Sous-marins nucléaires", unlock_name: "Flotte sous-marine", mult_name: "Torpilles atomiques" }),
+    ("icbm", UnitText { name: "Silo ICBM", plural: "Silos ICBM", unlock_name: "Silos ICBM", mult_name: "Têtes multiples" }),
+    ("reactor", UnitText { name: "Réacteur à fusion", plural: "Réacteurs à fusion", unlock_name: "Réacteurs à fusion", mult_name: "Plasma confiné" }),
+    ("blackhole", UnitText { name: "Trou noir de poche", plural: "Trous noirs de poche", unlock_name: "Singularité", mult_name: "Horizon des événements" }),
+    ("moussaka", UnitText { name: "Moussaka apprivoisée", plural: "Moussakas apprivoisées", unlock_name: "Recette de mamie", mult_name: "Béchamel enrichie" }),
+    ("savior", UnitText { name: "Sauveur du monde", plural: "Sauveurs du monde", unlock_name: "Ceinture noire", mult_name: "Poings de fer" }),
+    ("diamond", UnitText { name: "Diamant blanc", plural: "Diamants blancs", unlock_name: "Mine de diamants", mult_name: "Taille en brillant" }),
+    ("croc", UnitText { name: "Croco en caoutchouc", plural: "Crocos en caoutchouc", unlock_name: "Rizière hantée", mult_name: "Mâchoires en mousse" }),
+    ("mummy", UnitText { name: "Momie de la falaise", plural: "Momies de la falaise", unlock_name: "Couvercle sans sarcophage", mult_name: "Bandelettes au faux sang" }),
+    ("ninja", UnitText { name: "Ninja d'Interpol", plural: "Ninjas d'Interpol", unlock_name: "Opération Pastèque", mult_name: "Baguettes de combat" }),
 ];
 
 #[rustfmt::skip]
@@ -429,7 +429,7 @@ pub(super) const DATA: DataTexts = DataTexts {
     unit_unlock_after: |unit, challenge| {
         format!("Débloque l'unité : {unit}. Après le défi {challenge}.")
     },
-    unit_mult: |unit, mult| format!("Production des {unit}s ×{mult} par rang."),
+    unit_mult: |units, mult| format!("Production des {units} ×{mult} par rang."),
     talents: TALENTS,
     branches: BRANCHES,
     ptalents: PTALENTS,

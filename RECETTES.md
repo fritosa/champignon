@@ -16,8 +16,8 @@ l'introduction et les histoires) : le compilateur signale un champ oublié, le t
 écrit hors du catalogue (voir « Pas de nombre magique » dans [ARCHITECTURE.md](ARCHITECTURE.md#-règles-darchitecture)).
 
 **Nouvelle unité** : ajouter un `unit_def(…)` dans `data::UNITS` (le talent de déblocage `u_<id>` et le
-multiplicateur `m_<id>` sont générés par `unit_talents`) + son nom et ceux de ses deux talents dans
-`tr().data.units` + un sprite dans `art::UNIT_ART` (2 images, lignes
+multiplicateur `m_<id>` sont générés par `unit_talents`) + son nom (singulier et pluriel) et ceux de ses deux
+talents dans `tr().data.units` + un sprite dans `art::UNIT_ART` (2 images, lignes
 alignées en bas, tourné vers la droite ; le miroir est automatique pour le côté droit) + l'identifiant dans la
 liste `UNITS` des tests de `art.rs`. Unité réservée aux joueurs qui ont réussi un défi : `.after_challenge("<id>", MULT)`
 après son `unit_def` (production ×MULT par rang du défi). Le même sprite s'affiche dans l'onglet Unités à côté de la description, en

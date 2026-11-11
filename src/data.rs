@@ -90,6 +90,10 @@ impl Unit {
         tr().data.unit(self.id).name
     }
 
+    pub fn plural(&self) -> &'static str {
+        tr().data.unit(self.id).plural
+    }
+
     /// Name of the talent that unlocks it.
     pub fn unlock_name(&self) -> &'static str {
         tr().data.unit(self.id).unlock_name
@@ -200,7 +204,7 @@ impl Talent {
                 Some((c, _)) => (texts.unit_unlock_after)(unit.name(), challenge(c).name()),
                 None => (texts.unit_unlock)(unit.name()),
             },
-            TalentText::Mult(unit) => (texts.unit_mult)(unit.name(), &num(UNIT_TALENT_MULT)),
+            TalentText::Mult(unit) => (texts.unit_mult)(unit.plural(), &num(UNIT_TALENT_MULT)),
         }
     }
 }
@@ -775,6 +779,10 @@ mod tests {
         let m = talent("m_soldier");
         assert_eq!((m.cost, m.max, m.depth), ((2, 1), 3, 1));
         assert_eq!(m.desc(), "Production des Soldats ×2 par rang.");
+        assert_eq!(
+            talent("m_sub").desc(),
+            "Production des Sous-marins nucléaires ×2 par rang."
+        );
         assert_eq!(talent("m_blackhole").cost, (15, 1));
         assert!(talent("u_soldier").req.is_empty());
         // Challenge units only need the last regular unit, not each other.

@@ -77,7 +77,7 @@ const THOUSANDS: [f64; i18n::SUFFIX_COUNT] = [
     1e0, 1e3, 1e6, 1e9, 1e12, 1e15, 1e18, 1e21, 1e24, 1e27, 1e30, 1e33,
 ];
 
-/// Short number: 2.5, 150, 1.50K, 2.00M... then 1.00e+40.
+/// Short number: 2.5, 150, 1.50K, 2.00M... then 1.00e+40 (with the decimal separator of the language: 2,5).
 pub fn fmt(n: f64) -> String {
     if n == f64::INFINITY {
         return tr().infinity.to_string();
@@ -87,16 +87,16 @@ pub fn fmt(n: f64) -> String {
             return format!("{}", n as i64);
         }
         let s = format!("{n:.1}");
-        return s.trim_end_matches('0').trim_end_matches('.').to_string();
+        return i18n::localize_decimal(s.trim_end_matches('0').trim_end_matches('.').to_string());
     }
     if n < 1000.0 {
         return format!("{}", n as i64);
     }
     let thousands = (n.log10() / 3.0).floor() as usize;
     if let Some(suffix) = tr().suffixes.get(thousands) {
-        return format!("{:.2}{suffix}", n / THOUSANDS[thousands]);
+        return format!("{}{suffix}", i18n::fixed(n / THOUSANDS[thousands], 2));
     }
-    format!("{n:.2e}").replace('e', "e+")
+    i18n::localize_decimal(format!("{n:.2e}").replace('e', "e+"))
 }
 
 /// Radiation needed to go from level `level` to the next one.
@@ -1404,7 +1404,7 @@ impl Game {
                 self.sfx.push_back("milestone");
                 let msg = &tr().msg;
                 let mult = i18n::num(self.milestone_mult());
-                let text = (msg.milestone)(m, data::unit(uid).name(), &mult);
+                let text = (msg.milestone)(m, data::unit(uid).plural(), &mult);
                 self.log(text, MsgKind::Good, Some(msg.titles.milestone));
             }
         }
@@ -1890,7 +1890,8 @@ impl Game {
         let eaten = ((n as f64 * data::CROCODILE_BITE) as u64).clamp(n.min(1), n);
         self.units[uid] -= eaten;
         let msg = &tr().msg;
-        let text = (msg.crocodile)(eaten, data::unit(uid).name());
+        let unit = data::unit(uid);
+        let text = (msg.crocodile)(eaten, unit.name(), unit.plural());
         self.log(text, MsgKind::Bad, Some(msg.titles.crocodile));
     }
 
@@ -2340,7 +2341,7 @@ pub(crate) mod tests {
     #[test]
     fn small_numbers() {
         assert_eq!(fmt(5.0), "5");
-        assert_eq!(fmt(2.5), "2.5");
+        assert_eq!(fmt(2.5), "2,5");
         assert_eq!(fmt(150.0), "150");
         assert_eq!(fmt(99.95), "100");
         assert_eq!(fmt(0.04), "0");
@@ -2349,10 +2350,10 @@ pub(crate) mod tests {
 
     #[test]
     fn suffixes() {
-        assert_eq!(fmt(1500.0), "1.50K");
-        assert_eq!(fmt(2e6), "2.00M");
-        assert_eq!(fmt(999_999.0), "1000.00K");
-        assert_eq!(fmt(1e40), "1.00e+40");
+        assert_eq!(fmt(1500.0), "1,50K");
+        assert_eq!(fmt(2e6), "2,00M");
+        assert_eq!(fmt(999_999.0), "1000,00K");
+        assert_eq!(fmt(1e40), "1,00e+40");
     }
 
     #[test]
@@ -2837,6 +2838,31 @@ pub(crate) mod tests {
         assert_eq!(
             g.units["soldier"],
             11 - (11.0 * data::CROCODILE_BITE) as u64
+        );
+    }
+
+    #[test]
+    fn crocodile_and_milestone_messages_use_the_plural() {
+        let mut g = exploded_game();
+        g.units["sub"] = 1;
+        g.crocodile_bite("sub");
+        assert_eq!(
+            g.messages.back().unwrap().text,
+            "Croco ! -1 Sous-marin nucléaire"
+        );
+        g.units["sub"] = 10;
+        g.crocodile_bite("sub");
+        assert_eq!(
+            g.messages.back().unwrap().text,
+            "Croco ! -5 Sous-marins nucléaires"
+        );
+        g.add_units("sub", 50);
+        assert!(
+            g.messages
+                .back()
+                .unwrap()
+                .text
+                .starts_with("Palier : 50 Sous-marins nucléaires,")
         );
     }
 
@@ -3361,7 +3387,7 @@ pub(crate) mod tests {
     #[test]
     fn game_fmt_masks() {
         let mut g = exploded_game();
-        assert_eq!(g.fmt(1500.0), "1.50K");
+        assert_eq!(g.fmt(1500.0), "1,50K");
         g.challenge = Some("blind");
         assert_eq!(g.fmt(1500.0), "???");
     }
