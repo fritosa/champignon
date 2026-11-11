@@ -29,7 +29,10 @@ la liste `ENEMIES` des tests de `art.rs`. Les tests `every_enemy_has_spec_and_ne
 palette dans `art::PALETTES` (et dans la liste du test `known_skins`) + la contrainte
 (`g.in_challenge("<id>")`, pour qu'il marche aussi en double défi) et la récompense par rang (`g.reward_pow("<id>", MULT)` ou `X * g.challenge_rank("<id>")`)
 dans le code, leurs valeurs en constantes `<DÉFI>_…` dans `data.rs` citées par `desc` et `reward` (« … par rang »).
-Vérifier ses trois rangs avec `cargo run --release --bin sim -- <runs> 6 defis`. Si le défi
+Si sa contrainte agit avec le temps du run (fonte, croissance, morsures), ajouter `.no_offline()` à son entrée ;
+si sa cible doit grandir moins vite, `.rank_mult(n)`. Vérifier ses trois rangs avec
+`cargo run --release --bin sim -- <runs> 6 defis`, et les paires avec `-- <runs> 6 doubles` (ajouter à
+`DOUBLE_FORBIDDEN` ou `DOUBLE_SOLO` ce qui ne peut pas marcher). Si le défi
 change une échéance de début de run, penser à la fin de `Game::from_save`. Le succès « Maître des défis » suit
 automatiquement `CHALLENGES.len()`, comme « Légende vivante ». Obligatoire (test
 `every_challenge_has_both_stories`) : une histoire de lancement et de réussite dans `screens::STORIES` (clés

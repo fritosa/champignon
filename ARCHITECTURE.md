@@ -133,6 +133,8 @@ le jeu ne rattrape pas tout d'un coup.
   (un double défi réussi, compteur `Stats::doubles`).
 - **Défis** (`data::CHALLENGES`) : contraintes codées en dur là où elles s'appliquent, toujours testées par
   `g.in_challenge("<id>")` (dans `Game`, `events.rs` comme dans `ui.rs`), jamais en comparant `g.challenge`.
+  Ce qui vaut pour plusieurs défis est déclaré dans leur entrée de la table plutôt que codé par identifiant :
+  `.rank_mult(n)` (cible par rang), `.no_offline()` (pas de gains hors ligne, lu par `Game::apply_offline`).
   Pendant un défi qui débloque une unité (moussaka, nanars), son monstre (le sprite de l'unité) traverse le
   terrain de droite à gauche en boucle (`UI::draw_challenge_monsters`, `MONSTER_CROSSING`). L'onglet Prestige
   range ces défis, dont le monstre rejoint l'armée, sous leur propre titre « MONSTRES » ; les défis terminés
@@ -178,7 +180,7 @@ le jeu ne rattrape pas tout d'un coup.
   `all_files` ; écriture atomique `.tmp` puis `fs::rename`, dossier créé au besoin) ; `game.rs` gère le
   contenu : `Game::save_data` remplit un `SaveData` (struct serde, un champ par clé JSON),
   `Game::save` / `Game::load` l'écrivent et le relisent, `Game::from_save` reconstruit la partie.
-- **Version du format** : clé `version` (`saves::SAVE_VERSION`, actuellement 3), à incrémenter quand le format
+- **Version du format** : clé `version` (`saves::SAVE_VERSION`, actuellement 4), à incrémenter quand le format
   change. Une sauvegarde est lisible si sa version est entre `MIN_SAVE_VERSION` et `SAVE_VERSION`
   (`saves::supported`). Au lancement, `purge_obsolete` efface celles qui sont plus anciennes (message en
   jeu). Celles d'une version plus récente sont ignorées sans être touchées : réécrites ici, elles prendraient

@@ -523,6 +523,8 @@ pub struct Challenge {
     pub reward: Desc,
     /// Target level multiplier from one rank to the next.
     pub rank_mult: u32,
+    /// Offline gains allowed during the challenge (false when its constraint would keep acting while away).
+    pub offline: bool,
 }
 
 /// Ranks of each challenge; the target level is ×CHALLENGE_TARGET_MULT at each rank (unless the challenge sets
@@ -563,6 +565,15 @@ impl Challenge {
         }
     }
 
+    /// Same challenge, without offline gains: its constraint (decay, growth, bites) runs on the run time,
+    /// which does not advance while away.
+    const fn no_offline(self) -> Challenge {
+        Challenge {
+            offline: false,
+            ..self
+        }
+    }
+
     /// Time limit of the rank after `done` ranks: the base limit ×(rank number).
     pub fn time_at(&self, done: u32) -> Option<f64> {
         self.time.map(|t| t * f64::from(done + 1))
@@ -593,7 +604,7 @@ const fn challenge_def(
     reward: Desc,
 ) -> Challenge {
     let desc = Desc::after(desc, &[target as f64], desc_values);
-    Challenge { id, name, target, time, skin, desc, reward, rank_mult: CHALLENGE_TARGET_MULT }
+    Challenge { id, name, target, time, skin, desc, reward, rank_mult: CHALLENGE_TARGET_MULT, offline: true }
 }
 
 // Challenge constraints.
@@ -719,7 +730,8 @@ pub const CHALLENGES: [Challenge; 21] = [
                   "Radiation stockée et progression du niveau fondent de moitié toutes les {1} s, l'armée perd {2} % \
                    de ses unités par seconde. Atteins le niveau {0}.",
                   &[HALFLIFE_SECONDS, percent(HALFLIFE_UNIT_DECAY)],
-                  Desc::new("Combo max +{} par rang + skin Uranium", &[HALFLIFE_COMBO as f64])),
+                  Desc::new("Combo max +{} par rang + skin Uranium", &[HALFLIFE_COMBO as f64]))
+        .no_offline(),
     challenge_def("strike", "Grève générale", 100, None, "sunset",
                   "L'armée ne produit que {1} s après chaque appui sur ESPACE (l'auto-détonateur ne compte pas). \
                    Atteins le niveau {0}.",
@@ -730,7 +742,8 @@ pub const CHALLENGES: [Challenge; 21] = [
                    toutes les {1} s. Atteins le niveau {0}.",
                   &[MOUSSAKA_GROWTH],
                   Desc::new("Débloque la Moussaka apprivoisée, sa production ×{} par rang + skin Moussaka géante",
-                            &[MOUSSAKA_PROD_MULT])),
+                            &[MOUSSAKA_PROD_MULT]))
+        .no_offline(),
     challenge_def("savior", "L'homme qui sauve le monde", 100, None, "savior",
                   "Le héros fait tout lui-même : l'armée ne produit rien seule, chaque appui sur ESPACE \
                    (auto-détonateur compris) lui fait cracher {1} s de production. Atteins le niveau {0}.",
@@ -749,7 +762,8 @@ pub const CHALLENGES: [Challenge; 21] = [
                    Atteins le niveau {0}.",
                   &[CROCODILE_PERIOD, percent(CROCODILE_BITE)],
                   Desc::new("Débloque le Croco en caoutchouc, sa production ×{} par rang + skin Rizière",
-                            &[NANAR_UNIT_MULT])),
+                            &[NANAR_UNIT_MULT]))
+        .no_offline(),
     challenge_def("devil", "Devil Story", 100, None, "goremandie",
                   "Le stock-shot du cheval noir repasse en boucle : une seule unité à la fois, toutes les {1} s \
                    au plus. Atteins le niveau {0}.",

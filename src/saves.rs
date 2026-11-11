@@ -20,7 +20,7 @@ pub const MAIN_SLOT: u32 = 1;
 // Format version. On a format change, increment SAVE_VERSION. If supporting older saves becomes
 // too complicated, also raise MIN_SAVE_VERSION: older files are then deleted at startup
 // (purge_obsolete) instead of being converted.
-pub const SAVE_VERSION: i64 = 3;
+pub const SAVE_VERSION: i64 = 4;
 pub const MIN_SAVE_VERSION: i64 = 2;
 
 /// Save directory: $CHAMPIGNON_SAVE_DIR, otherwise ~/.champignon.

@@ -2272,14 +2272,14 @@ impl Game {
 
     pub fn apply_offline(&mut self, elapsed: f64) {
         let rank = self.pr("p_offline");
-        // Demi-vie: the stored radiation would have melted away during the absence; moussaka: it would have
-        // kept growing, crocodile: it would have kept eating (run_time does not advance offline).
+        // Challenges marked no_offline: their constraint would have kept acting during the absence.
         if rank == 0
             || elapsed < OFFLINE_MIN
             || !self.exploded
-            || ["halflife", "moussaka", "crocodile"]
+            || self
+                .active_challenges()
                 .iter()
-                .any(|c| self.in_challenge(c))
+                .any(|c| !data::challenge(c).offline)
         {
             return;
         }
@@ -3678,11 +3678,25 @@ pub(crate) mod tests {
         assert!(approx(g.radiation, 5.0 * 3600.0 * 0.25));
         assert_eq!(last_kind(&g), MsgKind::Good);
         let before = g.radiation;
-        for ch in ["halflife", "moussaka", "crocodile"] {
+        let no_offline = data::CHALLENGES.iter().filter(|c| !c.offline).map(|c| c.id);
+        assert_eq!(
+            no_offline.clone().collect::<Vec<_>>(),
+            ["halflife", "moussaka", "crocodile"]
+        );
+        for ch in no_offline {
             g.challenge = Some(ch);
             g.apply_offline(3600.0);
             assert_eq!(g.radiation, before, "{ch}");
+            // Also as the second challenge of a double challenge.
+            (g.challenge, g.challenge2) = (Some("sterile"), Some(ch));
+            g.apply_offline(3600.0);
+            assert_eq!(g.radiation, before, "sterile + {ch}");
+            g.challenge2 = None;
         }
+        // A challenge without the mark keeps its offline gains.
+        g.challenge = Some("sterile");
+        g.apply_offline(3600.0);
+        assert!(g.radiation > before);
     }
 
     #[test]
