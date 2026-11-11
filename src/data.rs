@@ -3,10 +3,9 @@
 //! The effect values of talents and challenges are named constants next to their table; descriptions quote
 //! them (i18n::num, Desc) so that rebalancing touches one place.
 
-use std::fmt;
 use std::sync::LazyLock;
 
-use crate::i18n::num;
+use crate::i18n::{num, tr};
 
 pub const BASE_CAP: u32 = 100;
 pub const MAX_CAP: u32 = 1_000_000;
@@ -14,23 +13,22 @@ pub const MAX_CAP: u32 = 1_000_000;
 /// Most values a Desc can quote.
 const DESC_VALUES: usize = 3;
 
-/// Player text of a const table quoting tuning values: like `format!`, each `{}` shows the next value and
-/// `{n}` the n-th one, written by i18n::num. Displayed with `{}`, like a string.
+/// Values quoted by a player text of a const table: the text itself is a template of the catalog
+/// (`i18n::tr().data`), where each `{}` shows the next value and `{n}` the n-th one, written by i18n::num.
 #[derive(Clone, Copy, Debug)]
 pub struct Desc {
-    pub template: &'static str,
     pub values: [f64; DESC_VALUES],
     /// Values given (the others are unused padding).
     pub len: usize,
 }
 
 impl Desc {
-    pub const fn new(template: &'static str, values: &[f64]) -> Desc {
-        Desc::after(template, &[], values)
+    pub const fn new(values: &[f64]) -> Desc {
+        Desc::after(&[], values)
     }
 
     /// Values `first` then `rest` (a field of the table entry, then the values of its text).
-    const fn after(template: &'static str, first: &[f64], rest: &[f64]) -> Desc {
+    const fn after(first: &[f64], rest: &[f64]) -> Desc {
         let mut values = [0.0; DESC_VALUES];
         let len = first.len() + rest.len();
         let mut i = 0;
@@ -42,17 +40,13 @@ impl Desc {
             };
             i += 1;
         }
-        Desc {
-            template,
-            values,
-            len,
-        }
+        Desc { values, len }
     }
-}
 
-impl fmt::Display for Desc {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut rest = self.template;
+    /// The template with its values.
+    pub fn render(&self, template: &str) -> String {
+        let mut out = String::new();
+        let mut rest = template;
         let mut next = 0;
         while let Some(open) = rest.find('{') {
             let close = open + rest[open..].find('}').expect("unclosed { in a Desc");
@@ -65,11 +59,13 @@ impl fmt::Display for Desc {
             };
             let value = self.values[..self.len]
                 .get(index)
-                .unwrap_or_else(|| panic!("no value {index} in the Desc {:?}", self.template));
-            write!(f, "{}{}", &rest[..open], num(*value))?;
+                .unwrap_or_else(|| panic!("no value {index} in the Desc {template:?}"));
+            out.push_str(&rest[..open]);
+            out.push_str(&num(*value));
             rest = &rest[close + 1..];
         }
-        f.write_str(rest)
+        out.push_str(rest);
+        out
     }
 }
 
@@ -78,21 +74,32 @@ impl fmt::Display for Desc {
 #[derive(Debug)]
 pub struct Unit {
     pub id: &'static str,
-    pub name: &'static str,
     pub icon: &'static str,
     pub cost: f64,
     pub prod: f64,
     pub proj: &'static str,
     pub color: &'static str,
-    pub unlock_name: &'static str,
     pub unlock_cost: u32,
-    pub mult_name: &'static str,
     /// Challenge to complete (rank I) before its unlock talent can be bought, and the production
     /// multiplier per rank of that challenge.
     pub challenge: Option<(&'static str, f64)>,
 }
 
 impl Unit {
+    pub fn name(&self) -> &'static str {
+        tr().data.unit(self.id).name
+    }
+
+    /// Name of the talent that unlocks it.
+    pub fn unlock_name(&self) -> &'static str {
+        tr().data.unit(self.id).unlock_name
+    }
+
+    /// Name of the talent that boosts it.
+    pub fn mult_name(&self) -> &'static str {
+        tr().data.unit(self.id).mult_name
+    }
+
     /// Same unit, unlockable only once this challenge is done, its production ×`mult` per rank of it.
     const fn after_challenge(self, challenge: &'static str, mult: f64) -> Unit {
         Unit {
@@ -106,45 +113,33 @@ impl Unit {
 #[allow(clippy::too_many_arguments)]
 const fn unit_def(
     id: &'static str,
-    name: &'static str,
     icon: &'static str,
     cost: f64,
     prod: f64,
     proj: &'static str,
     color: &'static str,
-    unlock_name: &'static str,
     unlock_cost: u32,
-    mult_name: &'static str,
 ) -> Unit {
-    Unit { id, name, icon, cost, prod, proj, color, unlock_name, unlock_cost, mult_name, challenge: None }
+    Unit { id, icon, cost, prod, proj, color, unlock_cost, challenge: None }
 }
 
 #[rustfmt::skip]
 pub const UNITS: [Unit; 15] = [
-    unit_def("soldier", "Soldat", "i", 15.0, 0.5, "o", "green", "Conscription", 1, "Grenades à fragmentation"),
-    unit_def("mortar", "Mortier", "y", 150.0, 4.0, "*", "yellow", "Mortiers", 3, "Obus explosifs"),
-    unit_def("artillery", "Artilleur", "F", 1_500.0, 30.0, "°", "orange", "Artillerie lourde", 5, "Obus perforants"),
-    unit_def("tank", "Tank", "T", 15_000.0, 220.0, "=", "green", "Divisions blindées", 8, "Canons de 120"),
-    unit_def("bomber", "Bombardier", ">", 160_000.0, 1_600.0, "v", "cyan", "Escadrilles", 12, "Bombes au napalm"),
-    unit_def("sub", "Sous-marin nucléaire", "D", 1.8e6, 12_000.0, "^", "blue", "Flotte sous-marine", 16,
-             "Torpilles atomiques"),
-    unit_def("icbm", "Silo ICBM", "!", 2e7, 90_000.0, "!", "red", "Silos ICBM", 20, "Têtes multiples"),
-    unit_def("reactor", "Réacteur à fusion", "@", 2.3e8, 700_000.0, "+", "magenta", "Réacteurs à fusion", 25,
-             "Plasma confiné"),
-    unit_def("blackhole", "Trou noir de poche", "O", 2.6e9, 5.5e6, "·", "white", "Singularité", 30,
-             "Horizon des événements"),
-    unit_def("moussaka", "Moussaka apprivoisée", "#", 3e10, 1.4e7, "~", "orange", "Recette de mamie", 35,
-             "Béchamel enrichie").after_challenge("moussaka", MOUSSAKA_PROD_MULT),
-    unit_def("savior", "Sauveur du monde", "&", 3.5e11, 1.1e8, "*", "yellow", "Ceinture noire", 40,
-             "Poings de fer").after_challenge("savior", NANAR_UNIT_MULT),
-    unit_def("diamond", "Diamant blanc", "$", 4e12, 8e8, "'", "white", "Mine de diamants", 45,
-             "Taille en brillant").after_challenge("whitefire", NANAR_UNIT_MULT),
-    unit_def("croc", "Croco en caoutchouc", "C", 4.6e13, 6e9, "w", "green", "Rizière hantée", 50,
-             "Mâchoires en mousse").after_challenge("crocodile", NANAR_UNIT_MULT),
-    unit_def("mummy", "Momie de la falaise", "M", 5.3e14, 4.7e10, "#", "red", "Couvercle sans sarcophage", 55,
-             "Bandelettes au faux sang").after_challenge("devil", NANAR_UNIT_MULT),
-    unit_def("ninja", "Ninja d'Interpol", "N", 6.1e15, 3.5e11, "x", "magenta", "Opération Pastèque", 60,
-             "Baguettes de combat").after_challenge("ninja", NANAR_UNIT_MULT),
+    unit_def("soldier", "i", 15.0, 0.5, "o", "green", 1),
+    unit_def("mortar", "y", 150.0, 4.0, "*", "yellow", 3),
+    unit_def("artillery", "F", 1_500.0, 30.0, "°", "orange", 5),
+    unit_def("tank", "T", 15_000.0, 220.0, "=", "green", 8),
+    unit_def("bomber", ">", 160_000.0, 1_600.0, "v", "cyan", 12),
+    unit_def("sub", "D", 1.8e6, 12_000.0, "^", "blue", 16),
+    unit_def("icbm", "!", 2e7, 90_000.0, "!", "red", 20),
+    unit_def("reactor", "@", 2.3e8, 700_000.0, "+", "magenta", 25),
+    unit_def("blackhole", "O", 2.6e9, 5.5e6, "·", "white", 30),
+    unit_def("moussaka", "#", 3e10, 1.4e7, "~", "orange", 35).after_challenge("moussaka", MOUSSAKA_PROD_MULT),
+    unit_def("savior", "&", 3.5e11, 1.1e8, "*", "yellow", 40).after_challenge("savior", NANAR_UNIT_MULT),
+    unit_def("diamond", "$", 4e12, 8e8, "'", "white", 45).after_challenge("whitefire", NANAR_UNIT_MULT),
+    unit_def("croc", "C", 4.6e13, 6e9, "w", "green", 50).after_challenge("crocodile", NANAR_UNIT_MULT),
+    unit_def("mummy", "M", 5.3e14, 4.7e10, "#", "red", 55).after_challenge("devil", NANAR_UNIT_MULT),
+    unit_def("ninja", "N", 6.1e15, 3.5e11, "x", "magenta", 60).after_challenge("ninja", NANAR_UNIT_MULT),
 ];
 pub const UNIT_COUNT: usize = UNITS.len();
 pub const UNIT_COST_GROWTH: f64 = 1.15;
@@ -169,28 +164,81 @@ pub fn unit(id: &str) -> &'static Unit {
 #[derive(Debug)]
 pub struct Talent {
     pub id: &'static str,
-    pub name: &'static str,
     pub branch: &'static str,
     pub depth: u32,
     pub max: u32,
     pub cost: (i64, i64),
-    pub desc: &'static str,
+    pub text: TalentText,
     pub req: Vec<(&'static str, u32)>,
+}
+
+/// Where the name and description of a talent come from.
+#[derive(Debug)]
+pub enum TalentText {
+    /// Its entry in the catalog (`i18n::tr().data.talents`), with the values its description quotes.
+    Table(Desc),
+    /// "u_<id>": unlocks this unit.
+    Unlock(&'static Unit),
+    /// "m_<id>": boosts this unit.
+    Mult(&'static Unit),
+}
+
+impl Talent {
+    pub fn name(&self) -> &'static str {
+        match self.text {
+            TalentText::Table(_) => tr().data.talent(self.id).name,
+            TalentText::Unlock(unit) => unit.unlock_name(),
+            TalentText::Mult(unit) => unit.mult_name(),
+        }
+    }
+
+    pub fn desc(&self) -> String {
+        let texts = &tr().data;
+        match self.text {
+            TalentText::Table(desc) => desc.render(texts.talent(self.id).desc),
+            TalentText::Unlock(unit) => match unit.challenge {
+                Some((c, _)) => (texts.unit_unlock_after)(unit.name(), challenge(c).name()),
+                None => (texts.unit_unlock)(unit.name()),
+            },
+            TalentText::Mult(unit) => (texts.unit_mult)(unit.name(), &num(UNIT_TALENT_MULT)),
+        }
+    }
 }
 
 #[rustfmt::skip]
 #[allow(clippy::too_many_arguments)]
 fn talent_def(
     id: &'static str,
-    name: &'static str,
     branch: &'static str,
     depth: u32,
     max: u32,
     cost: (i64, i64),
-    desc: String,
+    text: TalentText,
     req: &[(&'static str, u32)],
 ) -> Talent {
-    Talent { id, name, branch, depth, max, cost, desc: leak(desc), req: req.to_vec() }
+    Talent { id, branch, depth, max, cost, text, req: req.to_vec() }
+}
+
+/// Run talent described by its catalog entry, quoting `values`.
+#[allow(clippy::too_many_arguments)]
+fn table_talent(
+    id: &'static str,
+    branch: &'static str,
+    depth: u32,
+    max: u32,
+    cost: (i64, i64),
+    values: &[f64],
+    req: &[(&'static str, u32)],
+) -> Talent {
+    talent_def(
+        id,
+        branch,
+        depth,
+        max,
+        cost,
+        TalentText::Table(Desc::new(values)),
+        req,
+    )
 }
 
 /// Generated strings live as long as the program (the tables are built once).
@@ -217,24 +265,15 @@ fn unit_talents() -> Vec<Talent> {
         };
         talents.push(talent_def(
             unlock_id,
-            unit.unlock_name,
             "inf",
             0,
             1,
             (unit.unlock_cost as i64, 0),
-            match unit.challenge {
-                Some((c, _)) => format!(
-                    "Débloque l'unité : {}. Après le défi {}.",
-                    unit.name,
-                    challenge(c).name
-                ),
-                None => format!("Débloque l'unité : {}.", unit.name),
-            },
+            TalentText::Unlock(unit),
             &unlock_req,
         ));
         talents.push(talent_def(
             leak(format!("m_{}", unit.id)),
-            unit.mult_name,
             "inf",
             1,
             UNIT_TALENT_RANKS,
@@ -242,11 +281,7 @@ fn unit_talents() -> Vec<Talent> {
                 (unit.unlock_cost as i64 / 2).max(UNIT_TALENT_MIN_COST),
                 UNIT_TALENT_COST_STEP,
             ),
-            format!(
-                "Production des {}s ×{} par rang.",
-                unit.name,
-                num(UNIT_TALENT_MULT)
-            ),
+            TalentText::Mult(unit),
             &[(unlock_id, 1)],
         ));
         if unit.challenge.is_none() {
@@ -290,44 +325,24 @@ pub const fn percent(share: f64) -> f64 {
 #[rustfmt::skip]
 fn build_talents() -> Vec<Talent> {
     let mut talents = vec![
-        talent_def("t_click", "Détonateur renforcé", "det", 0, 10, (1, 1),
-                   format!("+{} de puissance de détonation de base par rang.", num(T_CLICK_POWER)), &[]),
-        talent_def("t_crit", "Fission critique", "det", 1, 5, (2, 1),
-                   format!("+{} % de chance de détonation critique par rang.", num(percent(T_CRIT_CHANCE))),
-                   &[("t_click", 1)]),
-        talent_def("t_combo", "Réaction en chaîne", "det", 1, T_COMBO_RANKS, (2, 2),
-                   format!("Combo max +{} par rang (×{} → ×{}).", T_COMBO_MAX, BASE_MAX_COMBO,
-                           BASE_MAX_COMBO + T_COMBO_MAX * T_COMBO_RANKS),
-                   &[("t_click", 1)]),
-        talent_def("t_cool", "Refroidissement", "det", 2, 3, (2, 1),
-                   format!("Seuil de surchauffe +{T_COOL_THRESHOLD} appuis/s par rang."), &[("t_combo", 1)]),
-        talent_def("t_auto", "Auto-détonateur", "det", 1, 5, (3, 2),
-                   format!("Appuie tout seul sur ESPACE : {} fois/s par rang.", num(T_AUTO_RATE)),
-                   &[("t_click", 2)]),
-        talent_def("t_shock", "Onde de choc", "det", 1, 5, (3, 2),
-                   format!("Chaque appui ajoute {} % de la production/s par rang.", num(percent(T_SHOCK_SHARE))),
-                   &[("t_click", 3)]),
+        table_talent("t_click", "det", 0, 10, (1, 1), &[T_CLICK_POWER], &[]),
+        table_talent("t_crit", "det", 1, 5, (2, 1), &[percent(T_CRIT_CHANCE)], &[("t_click", 1)]),
+        table_talent("t_combo", "det", 1, T_COMBO_RANKS, (2, 2),
+                     &[T_COMBO_MAX as f64, BASE_MAX_COMBO as f64, (BASE_MAX_COMBO + T_COMBO_MAX * T_COMBO_RANKS) as f64],
+                     &[("t_click", 1)]),
+        table_talent("t_cool", "det", 2, 3, (2, 1), &[T_COOL_THRESHOLD as f64], &[("t_combo", 1)]),
+        table_talent("t_auto", "det", 1, 5, (3, 2), &[T_AUTO_RATE], &[("t_click", 2)]),
+        table_talent("t_shock", "det", 1, 5, (3, 2), &[percent(T_SHOCK_SHARE)], &[("t_click", 3)]),
     ];
     talents.extend(unit_talents());
     talents.extend([
-        talent_def("l_global", "Propagande", "log", 0, 10, (2, 1),
-                   format!("Production globale +{} % par rang.", num(percent(L_GLOBAL_PROD))), &[]),
-        talent_def("l_synergy", "Esprit de corps", "log", 1, 3, (4, 2),
-                   format!("+{} % de production par unité possédée, par rang.", num(percent(L_SYNERGY_PROD))),
-                   &[("l_global", 2)]),
-        talent_def("l_guard", "Gardes", "log", 1, 1, (4, 0),
-                   "Des gardes chassent automatiquement les inspecteurs de l'ONU.".to_string(), &[("l_global", 1)]),
-        talent_def("l_discount", "Marché noir", "log", 0, 5, (2, 1),
-                   format!("Coût des unités -{} % par rang.", num(percent(L_DISCOUNT))), &[]),
-        talent_def("l_autobuy", "Quartier-maître", "log", 1, 3, (5, 3),
-                   format!("Achète automatiquement les unités ({L_AUTOBUY_TYPES} types de plus par rang)."),
-                   &[("l_discount", 1)]),
-        talent_def("l_radar", "Radar", "log", 0, 3, (2, 1),
-                   format!("Ravitaillements +{} % plus fréquents et avions plus lents.", num(percent(L_RADAR_FREQ))),
-                   &[]),
-        talent_def("l_enrich", "Enrichissement", "log", 0, 3, (3, 1),
-                   format!("La masse critique se charge {} % plus vite par rang.", num(percent(L_ENRICH_SPEED))),
-                   &[]),
+        table_talent("l_global", "log", 0, 10, (2, 1), &[percent(L_GLOBAL_PROD)], &[]),
+        table_talent("l_synergy", "log", 1, 3, (4, 2), &[percent(L_SYNERGY_PROD)], &[("l_global", 2)]),
+        table_talent("l_guard", "log", 1, 1, (4, 0), &[], &[("l_global", 1)]),
+        table_talent("l_discount", "log", 0, 5, (2, 1), &[percent(L_DISCOUNT)], &[]),
+        table_talent("l_autobuy", "log", 1, 3, (5, 3), &[L_AUTOBUY_TYPES as f64], &[("l_discount", 1)]),
+        table_talent("l_radar", "log", 0, 3, (2, 1), &[percent(L_RADAR_FREQ)], &[]),
+        table_talent("l_enrich", "log", 0, 3, (3, 1), &[percent(L_ENRICH_SPEED)], &[]),
     ]);
     talents
 }
@@ -352,11 +367,8 @@ pub fn talent(id: &str) -> &'static Talent {
     find_talent(id).unwrap_or_else(|| panic!("unknown talent {id}"))
 }
 
-pub const BRANCHES: [(&str, &str); 3] = [
-    ("det", "DÉTONATION"),
-    ("inf", "INFANTERIE"),
-    ("log", "LOGISTIQUE"),
-];
+/// Talent branches (names: i18n).
+pub const BRANCHES: [&str; 3] = ["det", "inf", "log"];
 /// Talents kept on reset with "Automates persistants".
 pub const KEPT_TALENTS: [&str; 3] = ["t_auto", "l_autobuy", "l_discount"];
 
@@ -365,25 +377,17 @@ pub const KEPT_TALENTS: [&str; 3] = ["t_auto", "l_autobuy", "l_discount"];
 #[derive(Debug)]
 pub struct Perk {
     pub id: &'static str,
-    pub name: &'static str,
     pub max: u32,
+    /// Values of its description.
     pub desc: Desc,
     pub base: f64,
     pub growth: f64,
     pub costs: Option<&'static [i64]>,
 }
 
-const fn perk(
-    id: &'static str,
-    name: &'static str,
-    max: u32,
-    desc: Desc,
-    base: f64,
-    growth: f64,
-) -> Perk {
+const fn perk(id: &'static str, max: u32, desc: Desc, base: f64, growth: f64) -> Perk {
     Perk {
         id,
-        name,
         max,
         desc,
         base,
@@ -394,8 +398,8 @@ const fn perk(
 
 /// Perk with a fixed cost per rank (base and growth are then unused).
 #[rustfmt::skip]
-const fn perk_costs(id: &'static str, name: &'static str, max: u32, desc: Desc, costs: &'static [i64]) -> Perk {
-    Perk { id, name, max, desc, base: 0.0, growth: 0.0, costs: Some(costs) }
+const fn perk_costs(id: &'static str, max: u32, desc: Desc, costs: &'static [i64]) -> Perk {
+    Perk { id, max, desc, base: 0.0, growth: 0.0, costs: Some(costs) }
 }
 
 // Prestige talent effects, per rank.
@@ -420,30 +424,39 @@ pub const P_DNA_CHOICES: usize = 1;
 /// Prestige talents, paid in isotopes.
 #[rustfmt::skip]
 pub const PTALENTS: [Perk; 10] = [
-    perk_costs("p_cap", "Expansion du cœur", 4,
-               Desc::new("Niveau max ×{} ({} → {}).", &[P_CAP_MULT as f64, BASE_CAP as f64, MAX_CAP as f64]),
+    perk_costs("p_cap", 4,
+               Desc::new(&[P_CAP_MULT as f64, BASE_CAP as f64, MAX_CAP as f64]),
                &[20, 100, 400, 1_600]),
-    perk("p_prod", "Uranium appauvri", 25, Desc::new("Production ×{} par rang (multiplicatif).", &[P_PROD_MULT]),
+    perk("p_prod", 25, Desc::new(&[P_PROD_MULT]),
          2.0, 2.0),
-    perk("p_click", "Doigt nucléaire", 15, Desc::new("Puissance de détonation ×{} par rang.", &[P_CLICK_MULT]),
+    perk("p_click", 15, Desc::new(&[P_CLICK_MULT]),
          1.0, 1.5),
-    perk("p_pt", "Mémoire génétique", 10, Desc::new("Commence chaque run avec +{} PT par rang.", &[P_PT_BONUS as f64]),
+    perk("p_pt", 10, Desc::new(&[P_PT_BONUS as f64]),
          3.0, 1.6),
-    perk("p_vets", "Vétérans", 5,
-         Desc::new("Commence avec la Conscription et {} soldats par rang.", &[P_VETS_SOLDIERS as f64]), 4.0, 2.0),
-    perk_costs("p_keep", "Automates persistants", 1,
-               Desc::new("Auto-détonateur, Quartier-maître et Marché noir sont conservés au reset.", &[]), &[15]),
-    perk("p_iso", "Centrifugeuses", 10, Desc::new("+{} % d'isotopes gagnés par rang.", &[percent(P_ISO_BONUS)]),
+    perk("p_vets", 5,
+         Desc::new(&[P_VETS_SOLDIERS as f64]), 4.0, 2.0),
+    perk_costs("p_keep", 1,
+               Desc::new(&[]), &[15]),
+    perk("p_iso", 10, Desc::new(&[percent(P_ISO_BONUS)]),
          5.0, 1.7),
-    perk("p_drop", "Contrebandiers", 3,
-         Desc::new("Ravitaillements +{} % plus efficaces par rang.", &[percent(P_DROP_POWER)]), 5.0, 2.0),
-    perk("p_offline", "Sommeil radioactif", 4,
-         Desc::new("Progression hors-ligne : {} % de la production par rang ({} h max).",
-                   &[percent(P_OFFLINE_SHARE), OFFLINE_MAX / 3600.0]),
+    perk("p_drop", 3,
+         Desc::new(&[percent(P_DROP_POWER)]), 5.0, 2.0),
+    perk("p_offline", 4,
+         Desc::new(&[percent(P_OFFLINE_SHARE), OFFLINE_MAX / 3600.0]),
          4.0, 2.0),
-    perk("p_dna", "ADN instable", 2,
-         Desc::new("+{} mutation proposée au choix par rang.", &[P_DNA_CHOICES as f64]), 20.0, 3.0),
+    perk("p_dna", 2,
+         Desc::new(&[P_DNA_CHOICES as f64]), 20.0, 3.0),
 ];
+
+impl Perk {
+    pub fn name(&self) -> &'static str {
+        tr().data.perk(self.id).name
+    }
+
+    pub fn desc(&self) -> String {
+        self.desc.render(tr().data.perk(self.id).desc)
+    }
+}
 
 pub fn find_ptalent(id: &str) -> Option<&'static Perk> {
     PTALENTS.iter().find(|p| p.id == id)
@@ -466,16 +479,16 @@ pub const S_KEEP_CORE: u32 = 1;
 /// Supernova talents, paid in stars (✦). Never reset.
 #[rustfmt::skip]
 pub const STALENTS: [Perk; 6] = [
-    perk("s_prod", "Fusion stellaire", 10, Desc::new("Production ×{} par rang.", &[S_PROD_MULT]), 1.0, 2.0),
-    perk("s_iso", "Nucléosynthèse", 10, Desc::new("Isotopes gagnés ×{} par rang.", &[S_ISO_MULT]), 1.0, 2.0),
-    perk_costs("s_core", "Cœur dense", 4,
-               Desc::new("Expansion du cœur coûte {} % de moins par rang.", &[percent(S_CORE_DISCOUNT)]),
+    perk("s_prod", 10, Desc::new(&[S_PROD_MULT]), 1.0, 2.0),
+    perk("s_iso", 10, Desc::new(&[S_ISO_MULT]), 1.0, 2.0),
+    perk_costs("s_core", 4,
+               Desc::new(&[percent(S_CORE_DISCOUNT)]),
                &[2, 5, 10, 20]),
-    perk("s_crit", "Pulsar", 3, Desc::new("La masse critique se charge {}× plus vite par rang.", &[S_CRIT_MULT]),
+    perk("s_crit", 3, Desc::new(&[S_CRIT_MULT]),
          3.0, 2.0),
-    perk_costs("s_auto", "Chaîne de montage", 1, Desc::new("Achète automatiquement les talents de run.", &[]), &[5]),
-    perk_costs("s_keep", "Cœur stellaire", 2,
-               Desc::new("Garde {} rang d'Expansion du cœur après une supernova, par rang.", &[S_KEEP_CORE as f64]),
+    perk_costs("s_auto", 1, Desc::new(&[]), &[5]),
+    perk_costs("s_keep", 2,
+               Desc::new(&[S_KEEP_CORE as f64]),
                &[8, 10]),
 ];
 
@@ -492,15 +505,14 @@ pub const SUPERNOVA_DIVISOR: f64 = 500.0;
 #[derive(Debug)]
 pub struct Challenge {
     pub id: &'static str,
-    pub name: &'static str,
     pub target: u32,
     /// Time limit of rank I in seconds (None: untimed), ×(rank number) at the next ranks; shown as `{1}` (in
     /// minutes) in the description.
     pub time: Option<f64>,
     pub skin: &'static str,
-    /// `{0}` is the target level, `{1}`... the values given to challenge_def.
+    /// Values of the description: `{0}` is the target level, `{1}`... the values given to challenge_def.
     pub desc: Desc,
-    /// Effect of each rank.
+    /// Values of the effect of each rank.
     pub reward: Desc,
     /// Target level multiplier from one rank to the next.
     pub rank_mult: u32,
@@ -532,6 +544,15 @@ pub fn double_forbidden(a: &str, b: &str) -> bool {
 pub const RANK_NAMES: [&str; CHALLENGE_RANKS as usize] = ["I", "II", "III"];
 
 impl Challenge {
+    pub fn name(&self) -> &'static str {
+        tr().data.challenge(self.id).name
+    }
+
+    /// Effect of each rank.
+    pub fn reward_text(&self) -> String {
+        self.reward.render(tr().data.challenge(self.id).reward)
+    }
+
     /// Target level of the rank after `done` ranks.
     pub fn target_at(&self, done: u32) -> u32 {
         self.target
@@ -562,13 +583,13 @@ impl Challenge {
 
     /// Description of the rank after `done` ranks: its target level (`{0}`) and, for a timed challenge, its
     /// time limit in minutes (`{1}`).
-    pub fn desc_at(&self, done: u32) -> Desc {
+    pub fn desc_at(&self, done: u32) -> String {
         let mut desc = self.desc;
         desc.values[0] = self.target_at(done) as f64;
         if let Some(t) = self.time_at(done) {
             desc.values[1] = t / 60.0;
         }
-        desc
+        desc.render(tr().data.challenge(self.id).desc)
     }
 }
 
@@ -576,16 +597,14 @@ impl Challenge {
 #[allow(clippy::too_many_arguments)]
 const fn challenge_def(
     id: &'static str,
-    name: &'static str,
     target: u32,
     time: Option<f64>,
     skin: &'static str,
-    desc: &'static str,
     desc_values: &[f64],
     reward: Desc,
 ) -> Challenge {
-    let desc = Desc::after(desc, &[target as f64], desc_values);
-    Challenge { id, name, target, time, skin, desc, reward, rank_mult: CHALLENGE_TARGET_MULT, offline: true }
+    let desc = Desc::after(&[target as f64], desc_values);
+    Challenge { id, target, time, skin, desc, reward, rank_mult: CHALLENGE_TARGET_MULT, offline: true }
 }
 
 // Challenge constraints.
@@ -656,106 +675,55 @@ pub const NANAR_UNIT_MULT: f64 = 2.0;
 
 #[rustfmt::skip]
 pub const CHALLENGES: [Challenge; 21] = [
-    challenge_def("pacifist", "Pacifiste", 45, None, "toxic", "Aucune unité autorisée. Atteins le niveau {0}.", &[],
-                  Desc::new("Détonation ×{} par rang + skin Vert radioactif", &[PACIFIST_CLICK_MULT]))
+    challenge_def("pacifist", 45, None, "toxic", &[],
+                  Desc::new(&[PACIFIST_CLICK_MULT]))
         .rank_mult(PACIFIST_RANK_MULT),
-    challenge_def("onearm", "Manchot", 100, None, "rainbow",
-                  "Ni ESPACE ni auto-détonateur ({1} soldats offerts). Atteins le niveau {0}.",
-                  &[ONEARM_SOLDIERS as f64],
-                  Desc::new("Production ×{} par rang + skin Arc-en-ciel", &[ONEARM_PROD_MULT])),
-    challenge_def("race", "Course", 100, Some(RACE_TIME), "mario", "Atteins le niveau {0} en moins de {1} minutes.",
-                  &[RACE_TIME / 60.0],
-                  Desc::new("Isotopes ×{} par rang + skin Champignon de Mario", &[RACE_ISO_MULT]))
+    challenge_def("onearm", 100, None, "rainbow", &[ONEARM_SOLDIERS as f64],
+                  Desc::new(&[ONEARM_PROD_MULT])),
+    challenge_def("race", 100, Some(RACE_TIME), "mario", &[RACE_TIME / 60.0],
+                  Desc::new(&[RACE_ISO_MULT]))
         .no_offline(),
-    challenge_def("inflation", "Inflation", 100, None, "gold",
-                  "Les unités coûtent {1} fois plus cher. Atteins le niveau {0}.", &[INFLATION_COST_MULT],
-                  Desc::new("Coût des unités ×{} par rang + skin Or", &[INFLATION_COST_REWARD])),
-    challenge_def("blind", "Brouillard de guerre", 100, None, "ghost",
-                  "Niveau, radiation et production sont masqués. Atteins le niveau {0}.", &[],
-                  Desc::new("+{} mutation proposée par rang + skin Fantôme", &[BLIND_CHOICES as f64])),
-    challenge_def("watched", "Sous surveillance", 100, None, "neon",
-                  "Un inspecteur toutes les {1} à {2} s, gardes et brouillard inefficaces. Atteins le niveau {0}.",
-                  &[WATCHED_INSPECTOR_DELAY.0, WATCHED_INSPECTOR_DELAY.1],
-                  Desc::new("Butin des inspecteurs chassés ×{} par rang + skin Néon", &[WATCHED_LOOT_MULT])),
-    challenge_def("ascete", "Ascète", 100, None, "ice",
-                  "Seuls les talents qui débloquent des unités sont autorisés. Atteins le niveau {0}.", &[],
-                  Desc::new("+{} PT au début de chaque run par rang + skin Glace", &[ASCETE_PT as f64])),
-    challenge_def("hothead", "Tête brûlée", 100, None, "lava",
-                  "Surchauffe dès {1} appuis/s, pendant {2} s, même avec les Doigts d'amiante. Atteins le niveau {0}.",
-                  &[HOTHEAD_THRESHOLD as f64, HOTHEAD_OVERHEAT],
-                  Desc::new("Seuil de surchauffe +{} appuis/s par rang + skin Lave", &[HOTHEAD_THRESHOLD_BONUS as f64])),
-    challenge_def("invasion", "Invasion", 100, None, "camo",
-                  "Un ennemi toutes les {1} à {2} s, tous types dès le début. Atteins le niveau {0}.",
-                  &[INVASION_ENEMY_DELAY.0, INVASION_ENEMY_DELAY.1],
-                  Desc::new("Marche des ennemis ×{} par rang + skin Camouflage",
-                            &[INVASION_ENEMY_SLOWDOWN])),
-    challenge_def("sterile", "Stérile", 100, None, "crystal",
-                  "Aucune mutation ne t'est proposée. Atteins le niveau {0}.", &[],
-                  Desc::new("Masse critique ×{} plus rapide par rang + skin Cristal",
-                            &[STERILE_CRIT_SPEED])),
-    challenge_def("unlucky", "Chat noir", 100, None, "obsidian",
-                  "Ni critiques, ni masse critique, ni ravitaillements. Atteins le niveau {0}.", &[],
-                  Desc::new("Chance de critique +{} % par rang + skin Obsidienne", &[percent(UNLUCKY_CRIT_CHANCE)]))
+    challenge_def("inflation", 100, None, "gold", &[INFLATION_COST_MULT],
+                  Desc::new(&[INFLATION_COST_REWARD])),
+    challenge_def("blind", 100, None, "ghost", &[],
+                  Desc::new(&[BLIND_CHOICES as f64])),
+    challenge_def("watched", 100, None, "neon", &[WATCHED_INSPECTOR_DELAY.0, WATCHED_INSPECTOR_DELAY.1],
+                  Desc::new(&[WATCHED_LOOT_MULT])),
+    challenge_def("ascete", 100, None, "ice", &[],
+                  Desc::new(&[ASCETE_PT as f64])),
+    challenge_def("hothead", 100, None, "lava", &[HOTHEAD_THRESHOLD as f64, HOTHEAD_OVERHEAT],
+                  Desc::new(&[HOTHEAD_THRESHOLD_BONUS as f64])),
+    challenge_def("invasion", 100, None, "camo", &[INVASION_ENEMY_DELAY.0, INVASION_ENEMY_DELAY.1],
+                  Desc::new(&[INVASION_ENEMY_SLOWDOWN])),
+    challenge_def("sterile", 100, None, "crystal", &[],
+                  Desc::new(&[STERILE_CRIT_SPEED])),
+    challenge_def("unlucky", 100, None, "obsidian", &[],
+                  Desc::new(&[percent(UNLUCKY_CRIT_CHANCE)]))
         .rank_mult(UNLUCKY_RANK_MULT),
-    challenge_def("nanar", "Nanarland", 100, None, "carton",
-                  "Effets spéciaux en carton : 1 détonation sur {1} fait pschitt, budget de série Z (production ÷{2}). \
-                   Atteins le niveau {0}.",
-                  &[NANAR_FIZZLE_EVERY, NANAR_PROD_DIVISOR],
-                  Desc::new("Critiques +{} par rang (×{} sans) + skin Carton-pâte",
-                            &[NANAR_CRIT_BONUS, BASE_CRIT_MULT])),
-    challenge_def("mono", "Monoculture", 100, None, "moss",
-                  "Une seule sorte d'unité, la première que tu achètes (sans Vétérans). Atteins le niveau {0}.", &[],
-                  Desc::new("Paliers d'unités +{} par rang (×{} sans) + skin Mousse",
-                            &[MONO_MILESTONE_BONUS, MILESTONE_MULT]))
+    challenge_def("nanar", 100, None, "carton", &[NANAR_FIZZLE_EVERY, NANAR_PROD_DIVISOR],
+                  Desc::new(&[NANAR_CRIT_BONUS, BASE_CRIT_MULT])),
+    challenge_def("mono", 100, None, "moss", &[],
+                  Desc::new(&[MONO_MILESTONE_BONUS, MILESTONE_MULT]))
         .rank_mult(MONO_RANK_MULT),
-    challenge_def("halflife", "Demi-vie", 100, None, "uranium",
-                  "Radiation stockée et progression du niveau fondent de moitié toutes les {1} s, l'armée perd {2} % \
-                   de ses unités par seconde. Atteins le niveau {0}.",
-                  &[HALFLIFE_SECONDS, percent(HALFLIFE_UNIT_DECAY)],
-                  Desc::new("Combo max +{} par rang + skin Uranium", &[HALFLIFE_COMBO as f64]))
+    challenge_def("halflife", 100, None, "uranium", &[HALFLIFE_SECONDS, percent(HALFLIFE_UNIT_DECAY)],
+                  Desc::new(&[HALFLIFE_COMBO as f64]))
         .no_offline(),
-    challenge_def("strike", "Grève générale", 100, None, "sunset",
-                  "L'armée ne produit que {1} s après chaque appui sur ESPACE (l'auto-détonateur ne compte pas). \
-                   Atteins le niveau {0}.",
-                  &[STRIKE_WINDOW],
-                  Desc::new("Onde de choc ×{} par rang + skin Crépuscule", &[STRIKE_SHOCK_MULT])),
-    challenge_def("moussaka", "L'attaque de la moussaka géante", 100, None, "moussaka",
-                  "Une moussaka géante dévore la ville : production divisée par sa taille, qui grossit de 1 \
-                   toutes les {1} s. Atteins le niveau {0}.",
-                  &[MOUSSAKA_GROWTH],
-                  Desc::new("Débloque la Moussaka apprivoisée, sa production ×{} par rang + skin Moussaka géante",
-                            &[MOUSSAKA_PROD_MULT]))
+    challenge_def("strike", 100, None, "sunset", &[STRIKE_WINDOW],
+                  Desc::new(&[STRIKE_SHOCK_MULT])),
+    challenge_def("moussaka", 100, None, "moussaka", &[MOUSSAKA_GROWTH],
+                  Desc::new(&[MOUSSAKA_PROD_MULT]))
         .no_offline(),
-    challenge_def("savior", "L'homme qui sauve le monde", 100, None, "savior",
-                  "Le héros fait tout lui-même : l'armée ne produit rien seule, chaque appui sur ESPACE \
-                   (auto-détonateur compris) lui fait cracher {1} s de production. Atteins le niveau {0}.",
-                  &[SAVIOR_PUNCH],
-                  Desc::new("Débloque le Sauveur du monde, sa production ×{} par rang + skin Sauveur du monde",
-                            &[NANAR_UNIT_MULT])),
-    challenge_def("whitefire", "White Fire", 100, None, "whitefire",
-                  "Baston homérique : chaque appui sur ESPACE a {1} % de risque de déclencher une bagarre qui \
-                   coûte {2} % de ta radiation. Atteins le niveau {0}.",
-                  &[percent(WHITEFIRE_BRAWL_CHANCE), percent(WHITEFIRE_BRAWL_LOSS)],
-                  Desc::new("Débloque le Diamant blanc, sa production ×{} par rang + skin Feu blanc",
-                            &[NANAR_UNIT_MULT])),
-    challenge_def("crocodile", "Crocodile Fury", 100, None, "ricefield",
-                  "Toutes les {1} s, le crocodile en caoutchouc dévore {2} % d'une sorte d'unité au hasard \
-                   (une unité seule est épargnée). \
-                   Atteins le niveau {0}.",
-                  &[CROCODILE_PERIOD, percent(CROCODILE_BITE)],
-                  Desc::new("Débloque le Croco en caoutchouc, sa production ×{} par rang + skin Rizière",
-                            &[NANAR_UNIT_MULT]))
+    challenge_def("savior", 100, None, "savior", &[SAVIOR_PUNCH],
+                  Desc::new(&[NANAR_UNIT_MULT])),
+    challenge_def("whitefire", 100, None, "whitefire", &[percent(WHITEFIRE_BRAWL_CHANCE), percent(WHITEFIRE_BRAWL_LOSS)],
+                  Desc::new(&[NANAR_UNIT_MULT])),
+    challenge_def("crocodile", 100, None, "ricefield", &[CROCODILE_PERIOD, percent(CROCODILE_BITE)],
+                  Desc::new(&[NANAR_UNIT_MULT]))
         .no_offline(),
-    challenge_def("devil", "Devil Story", 100, None, "goremandie",
-                  "Le stock-shot du cheval noir repasse en boucle : une seule unité à la fois, toutes les {1} s \
-                   au plus. Atteins le niveau {0}.",
-                  &[DEVIL_BUY_GAP],
-                  Desc::new("Débloque la Momie de la falaise, sa production ×{} par rang + skin Gore-mandie",
-                            &[NANAR_UNIT_MULT])),
-    challenge_def("ninja", "Black Ninja", 100, None, "carambar",
-                  "Ninja: Silent Assassin : pas de combo, chaque appui frappe seul. Atteins le niveau {0}.", &[],
-                  Desc::new("Débloque le Ninja d'Interpol, sa production ×{} par rang + skin Black Carambar",
-                            &[NANAR_UNIT_MULT])),
+    challenge_def("devil", 100, None, "goremandie", &[DEVIL_BUY_GAP],
+                  Desc::new(&[NANAR_UNIT_MULT])),
+    challenge_def("ninja", 100, None, "carambar", &[],
+                  Desc::new(&[NANAR_UNIT_MULT])),
 ];
 
 pub fn find_challenge(id: &str) -> Option<&'static Challenge> {
@@ -776,36 +744,22 @@ pub fn challenge(id: &str) -> &'static Challenge {
 /// Prestiges that unlock the "plasma" skin.
 pub const PLASMA_PRESTIGES: u64 = 5;
 
-/// (id, name), in cycling order.
-pub const SKINS: [(&str, &str); 23] = [
-    ("classic", "Classique (feu)"),
-    ("toxic", "Vert radioactif"),
-    ("rainbow", "Arc-en-ciel"),
-    ("mario", "Champignon de Mario"),
-    ("plasma", "Plasma (5 prestiges)"),
-    ("gold", "Or massif"),
-    ("ghost", "Fantôme"),
-    ("neon", "Néon"),
-    ("ice", "Glace"),
-    ("lava", "Lave"),
-    ("camo", "Camouflage"),
-    ("crystal", "Cristal"),
-    ("obsidian", "Obsidienne"),
-    ("carton", "Carton-pâte"),
-    ("moss", "Mousse"),
-    ("uranium", "Uranium"),
-    ("sunset", "Crépuscule"),
-    ("moussaka", "Moussaka géante"),
-    ("savior", "Sauveur du monde"),
-    ("whitefire", "Feu blanc"),
-    ("ricefield", "Rizière"),
-    ("goremandie", "Gore-mandie"),
-    ("carambar", "Black Carambar"),
+/// Skin ids, in cycling order (names: i18n).
+#[rustfmt::skip]
+pub const SKINS: [&str; 23] = [
+    "classic", "toxic", "rainbow", "mario", "plasma", "gold", "ghost", "neon", "ice", "lava", "camo", "crystal",
+    "obsidian", "carton", "moss", "uranium", "sunset", "moussaka", "savior", "whitefire", "ricefield", "goremandie",
+    "carambar",
 ];
+
+/// Name of a skin.
+pub fn skin_name(id: &str) -> &'static str {
+    tr().data.skin(id)
+}
 
 /// Skin id as a static string (None if unknown).
 pub fn find_skin(id: &str) -> Option<&'static str> {
-    SKINS.iter().find(|s| s.0 == id).map(|s| s.0)
+    SKINS.iter().find(|&&s| s == id).copied()
 }
 
 #[cfg(test)]
@@ -817,10 +771,10 @@ mod tests {
         let u = talent("u_mortar");
         assert_eq!(u.req, vec![("u_soldier", 1)]);
         assert_eq!(u.cost, (3, 0));
-        assert_eq!(u.desc, "Débloque l'unité : Mortier.");
+        assert_eq!(u.desc(), "Débloque l'unité : Mortier.");
         let m = talent("m_soldier");
         assert_eq!((m.cost, m.max, m.depth), ((2, 1), 3, 1));
-        assert_eq!(m.desc, "Production des Soldats ×2 par rang.");
+        assert_eq!(m.desc(), "Production des Soldats ×2 par rang.");
         assert_eq!(talent("m_blackhole").cost, (15, 1));
         assert!(talent("u_soldier").req.is_empty());
         // Challenge units only need the last regular unit, not each other.
@@ -828,7 +782,7 @@ mod tests {
         assert_eq!(talent("u_moussaka").req, vec![("u_blackhole", 1)]);
         assert_eq!(TALENTS.len(), 6 + 2 * UNIT_COUNT + 7);
         assert_eq!(
-            talent("u_moussaka").desc,
+            talent("u_moussaka").desc(),
             "Débloque l'unité : Moussaka apprivoisée. Après le défi L'attaque de la moussaka géante."
         );
         assert_eq!(UNIT_TALENT_IDS[1], ("u_mortar", "m_mortar"));
@@ -863,45 +817,27 @@ mod tests {
     #[test]
     fn descriptions_quote_their_values() {
         assert_eq!(
-            ptalent("p_prod").desc.to_string(),
+            ptalent("p_prod").desc(),
             "Production ×1,5 par rang (multiplicatif)."
         );
+        assert_eq!(ptalent("p_cap").desc(), "Niveau max ×10 (100 → 1 000 000).");
         assert_eq!(
-            ptalent("p_cap").desc.to_string(),
-            "Niveau max ×10 (100 → 1 000 000)."
-        );
-        assert_eq!(
-            ptalent("p_offline").desc.to_string(),
+            ptalent("p_offline").desc(),
             "Progression hors-ligne : 25 % de la production par rang (2 h max)."
         );
         let race = challenge("race");
         assert_eq!(
-            race.desc.to_string(),
+            race.desc_at(0),
             "Atteins le niveau 100 en moins de 10 minutes."
         );
         assert_eq!(
-            challenge("pacifist").desc.to_string(),
+            challenge("pacifist").desc_at(0),
             "Aucune unité autorisée. Atteins le niveau 45."
         );
         assert_eq!(
-            challenge("nanar").reward.to_string(),
+            challenge("nanar").reward_text(),
             "Critiques +5 par rang (×10 sans) + skin Carton-pâte"
         );
-        assert_eq!(talent("t_combo").desc, "Combo max +1 par rang (×3 → ×5).");
-    }
-
-    #[test]
-    fn every_desc_has_its_values() {
-        let descs = PTALENTS
-            .iter()
-            .chain(&STALENTS)
-            .map(|p| p.desc)
-            .chain(CHALLENGES.iter().flat_map(|c| [c.desc, c.reward]))
-            .chain(crate::events::SYNERGIES.iter().map(|s| s.effect));
-        for d in descs {
-            let quoted = d.template.matches('{').count();
-            assert!(quoted >= d.len, "{}", d.template);
-            let _ = d.to_string(); // panics on a bad placeholder or a missing value
-        }
+        assert_eq!(talent("t_combo").desc(), "Combo max +1 par rang (×3 → ×5).");
     }
 }

@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 
 use crate::data::{self, Desc, percent};
 use crate::game::{BuffKind, Enemy, Game, Inspector, MsgKind, Plane, Qte, QteResult};
-use crate::i18n::num;
+use crate::i18n::{num, tr};
 use crate::rng::RandomExt;
 
 /// Letters usable to catch a supply drop (no control keys).
@@ -12,13 +12,25 @@ pub const DROP_LETTERS: &str = "abcdeghilnoprstuvwyz";
 
 pub struct Mutation {
     pub id: &'static str,
-    pub name: &'static str,
-    pub effect: &'static str,
+    /// Values quoted by its effect.
+    pub effect: Desc,
 }
 
-fn mutation_def(id: &'static str, name: &'static str, effect: String) -> Mutation {
-    let effect = data::leak(effect);
-    Mutation { id, name, effect }
+impl Mutation {
+    pub fn name(&self) -> &'static str {
+        tr().data.mutation(self.id).name
+    }
+
+    pub fn effect(&self) -> String {
+        self.effect.render(tr().data.mutation(self.id).desc)
+    }
+}
+
+const fn mutation_def(id: &'static str, values: &[f64]) -> Mutation {
+    Mutation {
+        id,
+        effect: Desc::new(values),
+    }
 }
 
 // Mutation effects (shares are fractions: 0.01 = +1 %).
@@ -41,27 +53,20 @@ pub const GAMBLE_PROD_MULT: f64 = 3.0;
 pub const GAMBLE_FREEZE_MULT: u32 = 2;
 
 #[rustfmt::skip]
-pub static MUTATIONS: LazyLock<[Mutation; 12]> = LazyLock::new(|| [
-    mutation_def("spores", "Spores radioactives",
-                 format!("+{} % de production par soldat.", num(percent(SPORES_PER_SOLDIER)))),
-    mutation_def("twin", "Champignon jumeau",
-                 format!("Détonation ×{} (et un deuxième chapeau !).", num(TWIN_CLICK_MULT))),
-    mutation_def("acid", "Pluie acide", format!("Unités -{} % de coût, mais détonation ÷{}.",
-                 num(percent(1.0 - ACID_COST_MULT)), num(1.0 / ACID_CLICK_MULT))),
-    mutation_def("unstable", "Cœur instable",
-                 format!("La masse critique se charge {}× plus vite.", num(UNSTABLE_CRIT_SPEED))),
-    mutation_def("fallout", "Retombées massives", format!("Production ×{}.", num(FALLOUT_PROD_MULT))),
-    mutation_def("magnet", "Aimant à colis",
-                 format!("Ravitaillements {}× plus fréquents.", num(MAGNET_DROP_FREQ))),
-    mutation_def("berserk", "Rage atomique", format!("Combo max +{BERSERK_COMBO}.")),
-    mutation_def("fog", "Brouillard radioactif", "Les inspecteurs ne trouvent plus le champignon.".to_string()),
-    mutation_def("mitosis", "Mitose", format!("+{MITOSIS_PT} PT supplémentaire par niveau.")),
-    mutation_def("asbestos", "Doigts d'amiante", "Plus jamais de surchauffe.".to_string()),
-    mutation_def("glow", "Lueur verte",
-                 format!("+{} % de chance de détonation critique.", num(percent(GLOW_CRIT_CHANCE)))),
-    mutation_def("gamble", "Roulette russe", format!("Production ×{}, mais les inspecteurs gèlent {}× plus longtemps.",
-                 num(GAMBLE_PROD_MULT), GAMBLE_FREEZE_MULT)),
-]);
+pub const MUTATIONS: [Mutation; 12] = [
+    mutation_def("spores", &[percent(SPORES_PER_SOLDIER)]),
+    mutation_def("twin", &[TWIN_CLICK_MULT]),
+    mutation_def("acid", &[percent(1.0 - ACID_COST_MULT), 1.0 / ACID_CLICK_MULT]),
+    mutation_def("unstable", &[UNSTABLE_CRIT_SPEED]),
+    mutation_def("fallout", &[FALLOUT_PROD_MULT]),
+    mutation_def("magnet", &[MAGNET_DROP_FREQ]),
+    mutation_def("berserk", &[BERSERK_COMBO as f64]),
+    mutation_def("fog", &[]),
+    mutation_def("mitosis", &[MITOSIS_PT as f64]),
+    mutation_def("asbestos", &[]),
+    mutation_def("glow", &[percent(GLOW_CRIT_CHANCE)]),
+    mutation_def("gamble", &[GAMBLE_PROD_MULT, GAMBLE_FREEZE_MULT as f64]),
+];
 
 pub fn find_mutation(id: &str) -> Option<&'static Mutation> {
     MUTATIONS.iter().find(|m| m.id == id)
@@ -74,23 +79,27 @@ pub fn mutation(id: &str) -> &'static Mutation {
 /// Two specific mutations unlock a hidden bonus. Each mutation belongs to only one pair.
 pub struct Synergy {
     pub id: &'static str,
-    pub name: &'static str,
     pub pair: (&'static str, &'static str),
+    /// Values quoted by its effect.
     pub effect: Desc,
+}
+
+impl Synergy {
+    pub fn name(&self) -> &'static str {
+        tr().data.synergy(self.id).name
+    }
+
+    pub fn effect(&self) -> String {
+        self.effect.render(tr().data.synergy(self.id).desc)
+    }
 }
 
 const fn synergy_def(
     id: &'static str,
-    name: &'static str,
     pair: (&'static str, &'static str),
     effect: Desc,
 ) -> Synergy {
-    Synergy {
-        id,
-        name,
-        pair,
-        effect,
-    }
+    Synergy { id, pair, effect }
 }
 
 // Synergy effects.
@@ -108,20 +117,18 @@ pub const TWINS_PROD_MULT: f64 = 1.5;
 
 #[rustfmt::skip]
 pub const SYNERGIES: [Synergy; 6] = [
-    synergy_def("proliferation", "Prolifération", ("spores", "mitosis"),
-                Desc::new("Spores : +{} % de production par soldat au lieu de {} %.",
-                          &[percent(PROLIFERATION_PER_SOLDIER), percent(SPORES_PER_SOLDIER)])),
-    synergy_def("chain", "Fission en cascade", ("unstable", "glow"),
-                Desc::new("Chaque détonation critique charge {} % de la masse critique.", &[percent(CHAIN_CRIT_CHARGE)])),
-    synergy_def("storm", "Orage acide", ("acid", "fallout"),
-                Desc::new("La pluie acide ne divise plus la détonation.", &[])),
-    synergy_def("berserker", "Berserker", ("berserk", "asbestos"),
-                Desc::new("Le combo retombe {} fois moins vite.", &[COMBO_DECAY / BERSERKER_COMBO_DECAY])),
-    synergy_def("smuggling", "Réseau de contrebande", ("magnet", "fog"),
-                Desc::new("Les coffres proposent {} choix au lieu de {}.",
-                          &[SMUGGLING_CHEST_CHOICES as f64, CHEST_CHOICES as f64])),
-    synergy_def("twins", "Jumeaux maudits", ("twin", "gamble"),
-                Desc::new("Production ×{} supplémentaire.", &[TWINS_PROD_MULT])),
+    synergy_def("proliferation", ("spores", "mitosis"),
+                Desc::new(&[percent(PROLIFERATION_PER_SOLDIER), percent(SPORES_PER_SOLDIER)])),
+    synergy_def("chain", ("unstable", "glow"),
+                Desc::new(&[percent(CHAIN_CRIT_CHARGE)])),
+    synergy_def("storm", ("acid", "fallout"),
+                Desc::new(&[])),
+    synergy_def("berserker", ("berserk", "asbestos"),
+                Desc::new(&[COMBO_DECAY / BERSERKER_COMBO_DECAY])),
+    synergy_def("smuggling", ("magnet", "fog"),
+                Desc::new(&[SMUGGLING_CHEST_CHOICES as f64, CHEST_CHOICES as f64])),
+    synergy_def("twins", ("twin", "gamble"),
+                Desc::new(&[TWINS_PROD_MULT])),
 ];
 
 pub fn find_synergy(id: &str) -> Option<&'static Synergy> {
@@ -163,170 +170,114 @@ pub fn mutation_milestone(i: u32) -> u64 {
 
 pub struct Achievement {
     pub id: &'static str,
-    pub name: &'static str,
-    /// Displayed condition.
-    pub desc: &'static str,
     pub check: fn(&Game) -> bool,
 }
 
-const fn achievement(
-    id: &'static str,
-    name: &'static str,
-    desc: &'static str,
-    check: fn(&Game) -> bool,
-) -> Achievement {
-    Achievement {
-        id,
-        name,
-        desc,
-        check,
+impl Achievement {
+    pub fn name(&self) -> &'static str {
+        tr().data.achievement(self.id).name
     }
+
+    /// Displayed condition.
+    pub fn desc(&self) -> &'static str {
+        tr().data.achievement(self.id).desc
+    }
+}
+
+const fn achievement(id: &'static str, check: fn(&Game) -> bool) -> Achievement {
+    Achievement { id, check }
 }
 
 /// Production bonus of each achievement (0.02 = +2 %).
 pub const ACHIEVEMENT_BONUS: f64 = 0.02;
 
-/// Thresholds are written in each entry, with the condition that quotes them.
+/// Thresholds are written in each entry (and quoted by its condition in the catalog).
 #[rustfmt::skip]
 pub const ACHIEVEMENTS: [Achievement; 44] = [
-    achievement("boom", "Premier boom", "Déclenche l'explosion.", |g| g.exploded),
-    achievement("lvl10", "Ça chauffe", "Niveau 10.", |g| g.stats.max_level >= 10),
-    achievement("lvl25", "Petit nuage", "Niveau 25.", |g| g.stats.max_level >= 25),
-    achievement("lvl50", "Ça se voit de loin", "Niveau 50.", |g| g.stats.max_level >= 50),
-    achievement("lvl100", "Masse maximale", "Niveau 100.", |g| g.stats.max_level >= 100),
-    achievement("lvl1k", "Stratosphère", "Niveau 1 000.", |g| g.stats.max_level >= 1_000),
-    achievement("lvl10k", "Orbite basse", "Niveau 10 000.", |g| g.stats.max_level >= 10_000),
-    achievement("lvl100k", "Visible depuis Mars", "Niveau 100 000.", |g| g.stats.max_level >= 100_000),
-    achievement("lvl1m", "Le champignon ultime", "Niveau 1 000 000.", |g| g.stats.max_level >= 1_000_000),
-    achievement("clicks100", "Index musclé", "100 appuis sur ESPACE.", |g| g.stats.clicks >= 100),
-    achievement("clicks1k", "Tendinite", "1 000 appuis sur ESPACE.", |g| g.stats.clicks >= 1_000),
-    achievement("clicks10k", "Barre d'espace usée", "10 000 appuis sur ESPACE.", |g| g.stats.clicks >= 10_000),
-    achievement("soldiers50", "Section", "50 soldats.", |g| g.units["soldier"] >= 50),
-    achievement("soldiers100", "Compagnie", "100 soldats.", |g| g.units["soldier"] >= 100),
-    achievement("tanks50", "Division blindée", "50 tanks.", |g| g.units["tank"] >= 50),
-    achievement("army", "Armée complète", "Au moins une unité de chaque type.", |g| g.units.all()),
-    achievement("units500", "Mobilisation générale", "500 unités au total.", |g| g.units.total() >= 500),
-    achievement("prod1k", "Mille par seconde", "1 000 ☢/s.", |g| g.production() >= 1e3),
-    achievement("prod1m", "Mégatonne", "1 M ☢/s.", |g| g.production() >= 1e6),
-    achievement("prod1b", "Gigatonne", "1 B ☢/s.", |g| g.production() >= 1e9),
-    achievement("rich", "Réserve stratégique", "1 T ☢ en stock.", |g| g.radiation >= 1e12),
-    achievement("combo", "Réaction en chaîne", "Atteins le combo maximum.", |g| g.stats.max_combo),
-    achievement("overheat", "Doigts brûlés", "Provoque une surchauffe.", |g| g.stats.overheats >= 1),
-    achievement("drop1", "Colis reçu", "Attrape un ravitaillement.", |g| g.stats.drops >= 1),
-    achievement("drop25", "Contrebandier", "Attrape 25 ravitaillements.", |g| g.stats.drops >= 25),
-    achievement("perfect", "Timing parfait", "Masse critique en zone verte.", |g| g.stats.perfects >= 1),
-    achievement("perfect10", "Maître de la fission", "10 masses critiques parfaites.", |g| g.stats.perfects >= 10),
-    achievement("inspector", "Circulez !", "Chasse un inspecteur de l'ONU.", |g| g.stats.inspectors >= 1),
-    achievement("inspector25", "Persona non grata", "Chasse 25 inspecteurs.", |g| g.stats.inspectors >= 25),
-    achievement("enemy1", "Légitime défense", "Repousse un ennemi (saboteur, drone...).", |g| g.stats.enemies >= 1),
-    achievement("enemy25", "Forteresse", "Repousse 25 ennemis.", |g| g.stats.enemies >= 25),
-    achievement("frozen", "Visite surprise", "Laisse un inspecteur geler ta production.", |g| g.stats.frozen >= 1),
-    achievement("mutant", "Mutant", "Choisis 10 mutations.", |g| g.stats.mutations >= 10),
-    achievement("prestige1", "Renaissance", "Premier prestige.", |g| g.prestige_count >= 1),
-    achievement("prestige10", "Cycle éternel", "10 prestiges.", |g| g.prestige_count >= 10),
-    achievement("supernova", "Supernova", "Déclenche une supernova.", |g| g.supernova_count >= 1),
-    achievement("synergy1", "Alchimiste", "Découvre une synergie de mutations.", |g| !g.synergies_found.is_empty()),
-    achievement("synergy_all", "Généticien fou", "Découvre toutes les synergies.",
+    achievement("boom", |g| g.exploded),
+    achievement("lvl10", |g| g.stats.max_level >= 10),
+    achievement("lvl25", |g| g.stats.max_level >= 25),
+    achievement("lvl50", |g| g.stats.max_level >= 50),
+    achievement("lvl100", |g| g.stats.max_level >= 100),
+    achievement("lvl1k", |g| g.stats.max_level >= 1_000),
+    achievement("lvl10k", |g| g.stats.max_level >= 10_000),
+    achievement("lvl100k", |g| g.stats.max_level >= 100_000),
+    achievement("lvl1m", |g| g.stats.max_level >= 1_000_000),
+    achievement("clicks100", |g| g.stats.clicks >= 100),
+    achievement("clicks1k", |g| g.stats.clicks >= 1_000),
+    achievement("clicks10k", |g| g.stats.clicks >= 10_000),
+    achievement("soldiers50", |g| g.units["soldier"] >= 50),
+    achievement("soldiers100", |g| g.units["soldier"] >= 100),
+    achievement("tanks50", |g| g.units["tank"] >= 50),
+    achievement("army", |g| g.units.all()),
+    achievement("units500", |g| g.units.total() >= 500),
+    achievement("prod1k", |g| g.production() >= 1e3),
+    achievement("prod1m", |g| g.production() >= 1e6),
+    achievement("prod1b", |g| g.production() >= 1e9),
+    achievement("rich", |g| g.radiation >= 1e12),
+    achievement("combo", |g| g.stats.max_combo),
+    achievement("overheat", |g| g.stats.overheats >= 1),
+    achievement("drop1", |g| g.stats.drops >= 1),
+    achievement("drop25", |g| g.stats.drops >= 25),
+    achievement("perfect", |g| g.stats.perfects >= 1),
+    achievement("perfect10", |g| g.stats.perfects >= 10),
+    achievement("inspector", |g| g.stats.inspectors >= 1),
+    achievement("inspector25", |g| g.stats.inspectors >= 25),
+    achievement("enemy1", |g| g.stats.enemies >= 1),
+    achievement("enemy25", |g| g.stats.enemies >= 25),
+    achievement("frozen", |g| g.stats.frozen >= 1),
+    achievement("mutant", |g| g.stats.mutations >= 10),
+    achievement("prestige1", |g| g.prestige_count >= 1),
+    achievement("prestige10", |g| g.prestige_count >= 10),
+    achievement("supernova", |g| g.supernova_count >= 1),
+    achievement("synergy1", |g| !g.synergies_found.is_empty()),
+    achievement("synergy_all",
                 |g| g.synergies_found.len() >= SYNERGIES.len()),
-    achievement("speed", "Éclair", "Prestige en moins de 15 minutes.",
+    achievement("speed",
                 |g| g.stats.best_prestige_time.is_some_and(|t| t < 900.0)),
-    achievement("challenges", "Vétéran des défis", "Réussis 3 défis.", |g| g.challenges_done.len() >= 3),
-    achievement("challenges_all", "Maître des défis", "Réussis tous les défis.",
+    achievement("challenges", |g| g.challenges_done.len() >= 3),
+    achievement("challenges_all",
                 |g| g.challenges_done.len() >= data::CHALLENGES.len()),
-    achievement("legend", "Légende", "Termine un défi au rang III.",
+    achievement("legend",
                 |g| g.challenges_done.values().any(|&r| r >= data::CHALLENGE_RANKS)),
-    achievement("legend_all", "Légende vivante", "Termine tous les défis au rang III.",
+    achievement("legend_all",
                 |g| data::CHALLENGES.iter().all(|c| g.challenge_rank(c.id) >= data::CHALLENGE_RANKS)),
-    achievement("double", "Doublé", "Réussis un double défi.", |g| g.stats.doubles >= 1),
+    achievement("double", |g| g.stats.doubles >= 1),
 ];
 
 pub fn find_achievement(id: &str) -> Option<&'static Achievement> {
     ACHIEVEMENTS.iter().find(|a| a.id == id)
 }
 
-/// (minimum level, headline). The banner picks at random among the unlocked ones.
-#[rustfmt::skip]
-pub const NEWS: [(u32, &str); 38] = [
-    (0, "Un militaire distrait a laissé une bombe dans le jardin. Rien d'inquiétant."),
-    (0, "Les autorités recommandent de ne PAS appuyer sur la barre d'espace."),
-    (1, "Le village voisin signale une légère hausse des températures."),
-    (1, "Un agriculteur affirme que ses tomates brillent dans le noir."),
-    (1, "Le maire inaugure un rond-point. Personne ne remarque le cratère juste à côté."),
-    (2, "Un chat du voisinage a désormais trois queues. Il refuse de commenter."),
-    (3, "Le ministère dément toute explosion et conseille de fermer les volets, par pure coquetterie."),
-    (5, "Un réalisateur de série Z repère les lieux : « Pas besoin d'effets spéciaux. »"),
-    (5, "Les soldats demandent des grenades plus grosses."),
-    (10, "Les pigeons du quartier évitent désormais la zone."),
-    (10, "La météo annonce un nuage en forme de champignon. « C'est normal », assure le ministère."),
-    (12, "Tournage annulé pour « L'Attaque des tomates fluo » : les tomates ont attaqué pour de vrai."),
-    (15, "Le compteur Geiger de la mairie est parti en vacances. Sans prévenir."),
-    (20, "Un influenceur fait un selfie devant le champignon. Il ne s'est plus jamais coiffé."),
-    (25, "Un acteur en costume de lézard géant postule comme mascotte du site. Refusé : pas assez crédible."),
-    (30, "Les ventes de crème solaire indice 5000 explosent."),
-    (35, "Les vaches du coin donnent du lait pétillant. Les fromagers sont perplexes."),
-    (40, "Un champignonniste local porte plainte pour concurrence déloyale."),
-    (45, "Sortie au cinéma de « Champignon 2 : le retour du retour ». Le public sort irradié d'émotion."),
-    (50, "Le champignon est classé monument historique. Personne n'ose l'inspecter."),
-    (60, "Les avions de ligne font désormais un détour de 300 km."),
-    (70, "Un savant fou réclame des droits d'auteur sur le champignon. Il porte une blouse, c'est donc sérieux."),
-    (75, "Une secte vénère le Grand Champignon. Ses membres ont tous le teint fluo."),
-    (90, "Les scientifiques débattent : est-ce un champignon ou un nuage ? Les deux, apparemment."),
-    (95, "Le doublage de la bande-annonce est confié à une voix grave qui dit « Cet été » toutes les trois secondes."),
-    (100, "Le champignon atteint sa taille maximale. Il semble... frustré."),
-    (200, "Les maquettes en carton du film catastrophe sont plus petites que le vrai champignon. Le tournage est reporté."),
-    (300, "La NASA confirme : le champignon est visible depuis Mars."),
-    (500, "Les Martiens envoient une soucoupe en fil de pêche pour voir de plus près."),
-    (1_000, "Le champignon a son propre fuseau horaire."),
-    (2_000, "Un festival de films de série Z organise sa cérémonie à l'ombre du champignon. Il fait très chaud."),
-    (5_000, "Les extraterrestres demandent poliment de baisser le volume."),
-    (10_000, "Le champignon reçoit un prix d'interprétation. Il n'a pas de discours, il n'a pas de bouche."),
-    (20_000, "La Lune signale un léger réchauffement de sa face cachée."),
-    (100_000, "Le champignon dépasse l'orbite des satellites. Les GPS indiquent tous « champignon »."),
-    (200_000, "Les étoiles filantes font un détour."),
-    (500_000, "Le Soleil se sent menacé."),
-    (999_999, "Les astronomes renomment la Voie lactée « Le Grand Champignon »."),
-];
-pub const NEWS_PRESTIGE: [&str; 4] = [
-    "Déjà-vu : un militaire distrait laisse à nouveau une bombe dans le jardin.",
-    "Les historiens notent que le champignon semble repousser de plus en plus vite.",
-    "Suite, remake, reboot : le champignon est de retour, et il n'a rien appris.",
-    "Le militaire distrait jure qu'on ne l'y reprendra plus. On l'y reprendra.",
-];
-pub const NEWS_NANAR: [&str; 4] = [
-    "Le champignon est en carton-pâte, mais le réalisateur jure que ça ne se voit pas.",
-    "Une perche de micro apparaît dans le champ du champignon. Personne ne la retire.",
-    "Faux raccord : le champignon a changé de couleur entre deux plans.",
-    "Le budget effets spéciaux est épuisé. Les explosions seront désormais bruitées à la bouche.",
-];
-/// Headline of the Crocodile Fury challenge.
-pub const NEWS_CROCODILE: &str = "Un crocodile en caoutchouc sème la panique dans les rizières : le machiniste nie toute responsabilité.";
-pub const NEWS_INSPECTOR: &str = "ALERTE : un inspecteur de l'ONU approche du site !";
-/// During the Nanarland (Crocodile Fury) challenge, each NEWS_NANAR headline (NEWS_CROCODILE) weighs as much
+/// During the Nanarland (Crocodile Fury) challenge, each news_nanar headline (news_crocodile) weighs as much
 /// as this many others.
 const NANAR_NEWS_WEIGHT: usize = 3;
 
+/// Headline of the news banner (texts: i18n, `tr().data.news…`).
 pub fn pick_news(g: &mut Game) -> &'static str {
+    let texts = &tr().data;
     if g.inspector.is_some() {
-        return NEWS_INSPECTOR;
+        return texts.news_inspector;
     }
     if let Some(e) = g.enemies.first() {
-        return e.kind.spec().news;
+        return e.kind.spec().news();
     }
-    let mut pool: Vec<&'static str> = NEWS
+    let mut pool: Vec<&'static str> = texts
+        .news
         .iter()
         .filter(|(lvl, _)| *lvl <= g.level)
         .map(|(_, t)| *t)
         .collect();
     if g.prestige_count > 0 {
-        pool.extend(NEWS_PRESTIGE);
+        pool.extend(texts.news_prestige);
     }
     if g.in_challenge("nanar") {
         for _ in 0..NANAR_NEWS_WEIGHT {
-            pool.extend(NEWS_NANAR); // the challenge sets the mood
+            pool.extend(texts.news_nanar); // the challenge sets the mood
         }
     }
     if g.in_challenge("crocodile") {
-        pool.extend([NEWS_CROCODILE; NANAR_NEWS_WEIGHT]);
+        pool.extend([texts.news_crocodile; NANAR_NEWS_WEIGHT]);
     }
     g.rng.choice(&pool)
 }
@@ -676,35 +627,34 @@ pub enum EnemyKind {
 }
 
 /// level: level it appears at, hits: X presses to chase it (base, scaled by enemy_hits),
-/// dur: seconds to reach the mushroom, sky: flies (drawn in the sky), desc: announced effect ({}: its current
-/// strength, see enemy_desc), news: headline while it is there.
+/// dur: seconds to reach the mushroom, sky: flies (drawn in the sky). Name, announced effect and headline
+/// while it is there: i18n (`tr().data.enemies`).
 pub struct EnemySpec {
     pub kind: EnemyKind,
     pub id: &'static str,
-    pub name: &'static str,
     pub level: u32,
     pub hits: u32,
     pub dur: f64,
     pub sky: bool,
-    pub desc: &'static str,
-    pub news: &'static str,
+}
+
+impl EnemySpec {
+    pub fn name(&self) -> &'static str {
+        tr().data.enemy(self.id).name
+    }
+
+    /// Headline while it is there.
+    pub fn news(&self) -> &'static str {
+        tr().data.enemy(self.id).news
+    }
 }
 
 #[rustfmt::skip]
 pub const ENEMIES: [EnemySpec; 4] = [
-    EnemySpec { kind: EnemyKind::Saboteur, id: "saboteur", name: "Saboteur", level: 15, hits: 3, dur: 12.0, sky: false,
-                desc: "vole {} % de la radiation s'il atteint le champignon",
-                news: "Un individu cagoulé avec un sac marqué « BUTIN » a été aperçu près du site." },
-    EnemySpec { kind: EnemyKind::Drone, id: "drone", name: "Drone espion", level: 25, hits: 4, dur: 15.0, sky: true,
-                desc: "vide la masse critique et appelle un inspecteur",
-                news: "Un drone sans immatriculation survole la zone. Il a l'air de prendre des notes." },
-    EnemySpec { kind: EnemyKind::Hippies, id: "hippies", name: "Manifestants", level: 40, hits: 8, dur: 25.0,
-                sky: false, desc: "production divisée par {} tant qu'ils sont là",
-                news: "Des manifestants réclament la paix dans le monde et un champignon plus petit." },
-    EnemySpec { kind: EnemyKind::Commando, id: "commando", name: "Commando", level: 60, hits: 10, dur: 20.0,
-                sky: false, desc: "détruit {} % de chaque type d'unité s'il arrive",
-                news: "Un commando en tenue de camouflage avance. Il est très mal camouflé devant un champignon \
-                       orange." },
+    EnemySpec { kind: EnemyKind::Saboteur, id: "saboteur", level: 15, hits: 3, dur: 12.0, sky: false },
+    EnemySpec { kind: EnemyKind::Drone, id: "drone", level: 25, hits: 4, dur: 15.0, sky: true },
+    EnemySpec { kind: EnemyKind::Hippies, id: "hippies", level: 40, hits: 8, dur: 25.0, sky: false },
+    EnemySpec { kind: EnemyKind::Commando, id: "commando", level: 60, hits: 10, dur: 20.0, sky: false },
 ];
 
 impl EnemyKind {
@@ -761,7 +711,7 @@ fn effect_strength(g: &Game, kind: EnemyKind) -> Option<String> {
 
 /// Announced effect, with its current strength (it grows with the threat pressure).
 pub fn enemy_desc(g: &Game, kind: EnemyKind) -> String {
-    let desc = kind.spec().desc;
+    let desc = tr().data.enemy(kind.id()).desc;
     match effect_strength(g, kind) {
         Some(value) => desc.replace("{}", &value),
         None => desc.to_string(),
@@ -802,7 +752,7 @@ pub fn spawn_enemy(g: &mut Game) {
         g.enemies = vec![new_enemy(g, kind, g.time)];
         let message = format!(
             "{} en approche : {} ! Martèle X.",
-            kind.spec().name,
+            kind.spec().name(),
             enemy_desc(g, kind)
         );
         g.log(message, MsgKind::Bad, Some("ALERTE"));
@@ -817,7 +767,7 @@ pub fn spawn_enemy(g: &mut Game) {
         .enumerate()
         .map(|(i, &k)| new_enemy(g, k, g.time + i as f64 * WAVE_GAP))
         .collect();
-    let names: Vec<&str> = kinds.iter().map(|k| k.spec().name).collect();
+    let names: Vec<&str> = kinds.iter().map(|k| k.spec().name()).collect();
     let title = format!("VAGUE {}", g.wave);
     g.log(
         format!("Vague {} : {} ! Martèle X.", g.wave, names.join(", ")),
@@ -840,7 +790,7 @@ fn enemy_gone(g: &mut Game, idx: usize, chased: bool) {
         g.log(
             format!(
                 "{} repoussé ! (+{} ☢ de butin)",
-                kind.spec().name,
+                kind.spec().name(),
                 g.fmt(bonus)
             ),
             MsgKind::Good,
@@ -1013,7 +963,7 @@ pub fn choose_mutation(g: &mut Game, idx: usize) {
     g.stats.mutations += 1;
     g.pending_mutation = None;
     g.log(
-        format!("Mutation : {} !", mutation(mid).name),
+        format!("Mutation : {} !", mutation(mid).name()),
         MsgKind::Good,
         Some("MUTATION"),
     );
@@ -1022,7 +972,7 @@ pub fn choose_mutation(g: &mut Game, idx: usize) {
         g.sfx.push_back("synergy");
         let found = if discovered { " découverte" } else { "" };
         g.log(
-            format!("Synergie{found} : {} ! {}", syn.name, syn.effect),
+            format!("Synergie{found} : {} ! {}", syn.name(), syn.effect()),
             MsgKind::Epic,
             Some("SYNERGIE"),
         );
@@ -1736,13 +1686,15 @@ mod tests {
     fn inspector_news() {
         let mut g = exploded_game();
         g.inspector = inspector(0.0, 0);
-        assert_eq!(pick_news(&mut g), NEWS_INSPECTOR);
+        assert_eq!(pick_news(&mut g), tr().data.news_inspector);
     }
 
     #[test]
     fn news_unlocked_by_level() {
         let mut g = exploded_game();
-        let allowed: Vec<&str> = NEWS
+        let allowed: Vec<&str> = tr()
+            .data
+            .news
             .iter()
             .filter(|(lvl, _)| *lvl <= g.level)
             .map(|(_, t)| *t)
@@ -1756,7 +1708,7 @@ mod tests {
     fn enemy_news() {
         let mut g = exploded_game();
         g.enemies = vec![enemy(EnemyKind::Drone, 0.0, 15.0)];
-        assert_eq!(pick_news(&mut g), EnemyKind::Drone.spec().news);
+        assert_eq!(pick_news(&mut g), EnemyKind::Drone.spec().news());
     }
 
     // --- Enemies ---
@@ -1922,7 +1874,7 @@ mod tests {
         assert!(enemy_desc(&g, EnemyKind::Hippies).contains("divisée par 2 "));
         assert_eq!(
             enemy_desc(&g, EnemyKind::Drone),
-            EnemyKind::Drone.spec().desc
+            tr().data.enemy("drone").desc
         );
     }
 
@@ -2041,7 +1993,7 @@ mod tests {
         for kind in EnemyKind::ALL {
             assert_eq!(kind.spec().kind, kind);
             assert_eq!(EnemyKind::from_id(kind.id()), Some(kind));
-            assert!(!kind.spec().news.is_empty());
+            assert!(!kind.spec().news().is_empty());
         }
     }
 
@@ -2130,7 +2082,7 @@ mod tests {
         assert_eq!(g.crit_mult(), 15.0);
         g.challenge = Some("nanar");
         let picked: Vec<&str> = (0..50).map(|_| pick_news(&mut g)).collect();
-        assert!(picked.iter().any(|n| NEWS_NANAR.contains(n)));
+        assert!(picked.iter().any(|n| tr().data.news_nanar.contains(n)));
     }
 
     #[test]
@@ -2155,10 +2107,10 @@ mod tests {
     fn crocodile_news() {
         let mut g = exploded_game();
         let picked: Vec<&str> = (0..50).map(|_| pick_news(&mut g)).collect();
-        assert!(!picked.contains(&NEWS_CROCODILE));
+        assert!(!picked.contains(&tr().data.news_crocodile));
         g.challenge = Some("crocodile");
         let picked: Vec<&str> = (0..50).map(|_| pick_news(&mut g)).collect();
-        assert!(picked.contains(&NEWS_CROCODILE));
+        assert!(picked.contains(&tr().data.news_crocodile));
     }
 
     // --- Sounds ---

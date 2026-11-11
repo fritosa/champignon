@@ -360,7 +360,7 @@ fn try_doubles(cps: f64, start: &Game) {
             tried += 1;
             let mut g = Game::from_save(base.clone(), wall_time());
             g.rng = Box::new(StdRandom::seeded(GAME_SEED));
-            let pair = format!("{} + {}", a.name, b.name);
+            let pair = format!("{} + {}", a.name(), b.name());
             match Bot::new(cps).run_double(&mut g, a.id, b.id) {
                 None => println!("double {pair}: cannot start"),
                 Some(false) => println!(
@@ -404,7 +404,7 @@ fn play_unit_challenge(bot: &mut Bot, g: &mut Game, tried: &mut Vec<&'static str
     tried.push(c);
     let mut before = Game::from_save(g.save_data(), wall_time());
     let done = bot.run_challenge(g, c) == Some(true);
-    let name = data::challenge(c).name;
+    let name = data::challenge(c).name();
     let result = if done { "done" } else { "failed" };
     println!(
         "        challenge {name} I {result} after {:.1}m",
@@ -448,7 +448,7 @@ fn try_challenges(cps: f64, start: &Game) {
                 }
             }
         }
-        println!("challenge {:<22} {}", c.name, results.join("  "));
+        println!("challenge {:<22} {}", c.name(), results.join("  "));
     }
 }
 

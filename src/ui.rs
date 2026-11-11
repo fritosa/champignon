@@ -802,7 +802,7 @@ impl<S: Screen> UI<S> {
         }
         if !g.enemies.is_empty() {
             let who = match g.enemies.as_slice() {
-                [one] => one.kind.spec().name.to_string(),
+                [one] => one.kind.spec().name().to_string(),
                 many => format!("{} ennemis", many.len()),
             };
             lines.push((
@@ -1327,7 +1327,7 @@ impl<S: Screen> UI<S> {
             let names: Vec<&str> = g
                 .mutations
                 .iter()
-                .map(|m| events::mutation(m).name)
+                .map(|m| events::mutation(m).name())
                 .collect();
             lines.push(vec![(
                 format!("Mutations : {}", names.join(", ")),
@@ -1396,8 +1396,8 @@ impl<S: Screen> UI<S> {
         } else {
             ""
         };
-        let text = format!("{mark} {picked}Défi {} {done}/{all}{cur}", c.name);
-        let reward = format!("Récompense : {}.", c.reward);
+        let text = format!("{mark} {picked}Défi {} {done}/{all}{cur}", c.name());
+        let reward = format!("Récompense : {}.", c.reward_text());
         if done == all {
             return Row::new(
                 text,
@@ -1474,7 +1474,7 @@ impl<S: Screen> UI<S> {
                 let cost = g.unit_cost_n(uid, k);
                 let text = format!(
                     "{:<nw$} x{n:<4} {:>7}/s {:>7} ☢",
-                    head(u.name, nw),
+                    head(u.name(), nw),
                     self.num(g.unit_prod(uid) * n as f64),
                     game::fmt(cost),
                     nw = nw as usize
@@ -1487,7 +1487,7 @@ impl<S: Screen> UI<S> {
                 };
                 let mut desc = format!(
                     "{} : +{} ☢/s chacun. Entrée : acheter ×{k} (M pour changer).",
-                    u.name,
+                    u.name(),
                     self.num(g.unit_prod(uid))
                 );
                 if let Some(nxt) = g.next_milestone(uid) {
@@ -1512,10 +1512,10 @@ impl<S: Screen> UI<S> {
                 let (text, desc) = match u.challenge.map(|(c, _)| c).filter(|&c| g.challenge_rank(c) == 0) {
                     Some(c) => (
                         "??? — réussis un défi".to_string(),
-                        format!("Se débloque après le défi {}.", data::challenge(c).name),
+                        format!("Se débloque après le défi {}.", data::challenge(c).name()),
                     ),
                     None => (
-                        format!("??? — talent « {} »", u.unlock_name),
+                        format!("??? — talent « {} »", u.unlock_name()),
                         "Débloque de nouvelles unités dans l'onglet Talents (2), branche Infanterie."
                             .to_string(),
                     ),
@@ -1532,7 +1532,8 @@ impl<S: Screen> UI<S> {
             format!("Points de talent : {} PT", g.pt),
             self.c("cyan").bold(),
         )];
-        for (bid, label) in data::BRANCHES {
+        for bid in data::BRANCHES {
+            let label = tr().data.branch(bid);
             rows.push(Row::label(
                 format!("── {label} {}", "─".repeat(RULE)),
                 self.c("cyan"),
@@ -1552,7 +1553,7 @@ impl<S: Screen> UI<S> {
                 } else {
                     String::new()
                 };
-                let name = indent + t.name;
+                let name = indent + t.name();
                 let nw = NAME_MIN_W.max(self.tab_w - TALENT_COLUMNS_W);
                 let text = format!(
                     "{:<nw$} {r}/{:<2} {cost:>6}",
@@ -1571,7 +1572,7 @@ impl<S: Screen> UI<S> {
                 } else {
                     self.c("grey")
                 };
-                let mut desc = format!("{}{}", t.desc, self.qty_note());
+                let mut desc = format!("{}{}", t.desc(), self.qty_note());
                 if !g.talent_allowed(tid) {
                     desc = format!("Défi Ascète : talent interdit. {desc}");
                 }
@@ -1579,7 +1580,7 @@ impl<S: Screen> UI<S> {
                     let reqs: Vec<String> = t
                         .req
                         .iter()
-                        .map(|(q, n)| format!("{} {n}", data::talent(q).name))
+                        .map(|(q, n)| format!("{} {n}", data::talent(q).name()))
                         .collect();
                     desc += &format!(" Requiert : {}.", reqs.join(", "));
                 }
@@ -1686,10 +1687,7 @@ impl<S: Screen> UI<S> {
                 rows.push(self.challenge_row(c));
             }
         }
-        let skin_name = data::SKINS
-            .iter()
-            .find(|(id, _)| *id == g.skin)
-            .map_or(g.skin, |(_, name)| name);
+        let skin_name = data::skin_name(g.skin);
         rows.push(Row::new(
             format!(
                 "Skin : {skin_name}  ({}/{})",
@@ -1805,7 +1803,7 @@ impl<S: Screen> UI<S> {
                 };
                 let text = format!(
                     "{:<nw$} {r}/{:<2} {price:>8}",
-                    head(t.name, nw),
+                    head(t.name(), nw),
                     t.max,
                     nw = nw as usize
                 );
@@ -1816,7 +1814,7 @@ impl<S: Screen> UI<S> {
                 } else {
                     self.c("white")
                 };
-                let desc = format!("{}{}{}", t.desc, extra_desc(t.id), self.qty_note());
+                let desc = format!("{}{}{}", t.desc(), extra_desc(t.id), self.qty_note());
                 Row::new(text, style, Some(kind(t.id)), desc)
             })
             .collect()
@@ -1836,14 +1834,14 @@ impl<S: Screen> UI<S> {
         for a in &ACHIEVEMENTS {
             let done = g.achievements.contains(a.id);
             rows.push(Row::new(
-                format!("{} {}", if done { '★' } else { '·' }, a.name),
+                format!("{} {}", if done { '★' } else { '·' }, a.name()),
                 if done {
                     self.c("yellow")
                 } else {
                     self.c("grey")
                 },
                 None,
-                a.desc,
+                a.desc(),
             ));
         }
         let found = &g.synergies_found;
@@ -1859,16 +1857,16 @@ impl<S: Screen> UI<S> {
         for s in &SYNERGIES {
             let pair = format!(
                 "{} + {}",
-                events::mutation(s.pair.0).name,
-                events::mutation(s.pair.1).name
+                events::mutation(s.pair.0).name(),
+                events::mutation(s.pair.1).name()
             );
             if found.contains(s.id) {
                 let active = if g.has_syn(s.id) { " (active)" } else { "" };
                 rows.push(Row::new(
-                    format!("✦ {}{active}", s.name),
+                    format!("✦ {}{active}", s.name()),
                     self.c("magenta").bold(),
                     None,
-                    format!("{pair} : {}", s.effect),
+                    format!("{pair} : {}", s.effect()),
                 ));
             } else {
                 rows.push(Row::new(
@@ -1984,10 +1982,10 @@ impl<S: Screen> UI<S> {
         if self.show_stories {
             for ch in read {
                 rows.push(Row::new(
-                    format!("  Revoir le défi {}", ch.name),
+                    format!("  Revoir le défi {}", ch.name()),
                     self.c("magenta"),
                     Some(Action::Story(ch.id)),
-                    format!("Entrée : relire l'histoire du défi {}.", ch.name),
+                    format!("Entrée : relire l'histoire du défi {}.", ch.name()),
                 ));
             }
         }
@@ -2431,7 +2429,7 @@ impl<S: Screen> UI<S> {
         self.put(y + 1, x + PANEL_PAD, &intro, white);
         for (i, mid) in opts.iter().enumerate() {
             let m = events::mutation(mid);
-            let label = format!("{}. {}", i + 1, m.name);
+            let label = format!("{}. {}", i + 1, m.name());
             let row = y + 2 + OPTION_ROW_H * i as i32;
             let yellow = self.c("yellow").bold();
             self.put(
@@ -2442,7 +2440,7 @@ impl<S: Screen> UI<S> {
             );
             if let Some(syn) = events::synergy_completed_by(&self.g, mid) {
                 let hint = if self.g.synergies_found.contains(syn.id) {
-                    format!(" ★ {}", syn.name)
+                    format!(" ★ {}", syn.name())
                 } else {
                     " ★ synergie inconnue !".to_string()
                 };
@@ -2459,7 +2457,7 @@ impl<S: Screen> UI<S> {
             self.put(
                 row + 1,
                 x + OPTION_DESC_X,
-                &head(m.effect, bw - OPTION_DESC_X - PANEL_PAD),
+                &head(&m.effect(), bw - OPTION_DESC_X - PANEL_PAD),
                 desc_style,
             );
         }
@@ -2728,8 +2726,7 @@ impl<S: Screen> UI<S> {
             }
             Action::Skin => {
                 let owned: Vec<&'static str> = data::SKINS
-                    .iter()
-                    .map(|(id, _)| *id)
+                    .into_iter()
                     .filter(|id| g.skins.contains(id))
                     .collect();
                 if let Some(first) = owned.first() {
@@ -3660,7 +3657,7 @@ pub(crate) mod tests {
         let mut u = finished();
         u.g.last_run.as_mut().unwrap().mutations = events::MUTATIONS
             .iter()
-            .map(|m| m.name.to_string())
+            .map(|m| m.name().to_string())
             .collect();
         sized(&mut u, 20, 60);
         u.draw_report();

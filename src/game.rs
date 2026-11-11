@@ -891,7 +891,7 @@ impl Game {
         let names: Vec<&str> = self
             .active_challenges()
             .into_iter()
-            .map(|c| data::challenge(c).name)
+            .map(|c| data::challenge(c).name())
             .collect();
         (!names.is_empty()).then(|| names.join(" + "))
     }
@@ -1335,9 +1335,9 @@ impl Game {
         self.log(
             format!(
                 "Défi {} {} réussi ! {}",
-                ch.name,
+                ch.name(),
                 data::RANK_NAMES[rank as usize - 1],
-                ch.reward
+                ch.reward_text()
             ),
             MsgKind::Star,
             Some("DÉFI OK"),
@@ -1400,7 +1400,7 @@ impl Game {
                 self.sfx.push_back("milestone");
                 let text = format!(
                     "Palier : {m} {}s, production ×{} !",
-                    data::unit(uid).name,
+                    data::unit(uid).name(),
                     i18n::num(self.milestone_mult())
                 );
                 self.log(text, MsgKind::Good, Some("PALIER"));
@@ -1571,12 +1571,12 @@ impl Game {
             mutations: self
                 .mutations
                 .iter()
-                .map(|m| events::mutation(m).name.to_string())
+                .map(|m| events::mutation(m).name().to_string())
                 .collect(),
             synergies: self
                 .synergies()
                 .iter()
-                .map(|s| s.name.to_string())
+                .map(|s| s.name().to_string())
                 .collect(),
             number: self.prestige_count,
         });
@@ -1594,8 +1594,8 @@ impl Game {
         if data::double_forbidden(a, b) {
             let text = format!(
                 "{} et {} ne se jouent pas ensemble.",
-                data::challenge(a).name,
-                data::challenge(b).name
+                data::challenge(a).name(),
+                data::challenge(b).name()
             );
             self.sfx.push_back("nope");
             self.log(text, MsgKind::Bad, Some("NON !"));
@@ -1645,7 +1645,7 @@ impl Game {
             .iter()
             .map(|c| {
                 let rank = data::RANK_NAMES[self.challenge_rank(c) as usize];
-                format!("{} {rank}", data::challenge(c).name)
+                format!("{} {rank}", data::challenge(c).name())
             })
             .collect();
         if !started.is_empty() {
@@ -1891,7 +1891,7 @@ impl Game {
         let n = self.units[uid];
         let eaten = ((n as f64 * data::CROCODILE_BITE) as u64).clamp(n.min(1), n);
         self.units[uid] -= eaten;
-        let text = format!("Croco ! -{eaten} {}", data::unit(uid).name);
+        let text = format!("Croco ! -{eaten} {}", data::unit(uid).name());
         self.log(text, MsgKind::Bad, Some("CROCO !"));
     }
 
@@ -1952,7 +1952,7 @@ impl Game {
                 self.log(
                     format!(
                         "★ Succès : {} (+{} % de production)",
-                        a.name,
+                        a.name(),
                         i18n::num(data::percent(events::ACHIEVEMENT_BONUS))
                     ),
                     MsgKind::Star,

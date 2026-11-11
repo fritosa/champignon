@@ -15,7 +15,7 @@ binaires, le jeu (`src/main.rs`), `sim` et `apercu`.
 
 | Fichier | Rôle | Dépend de |
 |---|---|---|
-| `src/i18n/mod.rs` | Textes du joueur : catalogue `Texts` (struct typée, une par langue : un texte oublié ne compile pas), `tr()` (langue courante, le français seul pour l'instant), `num` (nombre dans une phrase), `LANGS` (toutes les langues, vérifiées par les tests), `with_lang` (forcer une langue en test). Une langue par sous-module (`src/i18n/fr/mod.rs`). | — |
+| `src/i18n/mod.rs` | Textes du joueur : catalogue `Texts` (struct typée, une par langue : un texte oublié ne compile pas), `tr()` (langue courante, le français seul pour l'instant), `num` (nombre dans une phrase), `LANGS` (toutes les langues, vérifiées par les tests), `with_lang` (forcer une langue en test). Types des textes des tables dans `src/i18n/data.rs` (`DataTexts`, lus par identifiant). Une langue par sous-module (`src/i18n/fr/` : `mod.rs`, `data.rs`). | — |
 | `src/data.rs` | Données statiques : unités (`UNITS`), talents de run (`TALENTS`, ceux des unités générés), talents de prestige (⚛, `PTALENTS`) et de supernova (✦, `STALENTS`), défis (`CHALLENGES`), skins (`SKINS`). | — |
 | `src/rng.rs` | Trait `Rng` (`random`, `below`, `uniform`, `randint`) et son extension `RandomExt` (`choice`, `sample`) ; `StdRandom` (graine système ou `seeded`), `FixedRandom` pour les tests. | `rand` |
 | `src/events.rs` | Logique pure des systèmes annexes : ravitaillements/coffres, inspecteur de l'ONU, autres ennemis, masse critique (QTE), mutations et synergies, succès, flash info. | `data`, `game`, `rng` |
@@ -68,16 +68,20 @@ Les tests sont dans un module `#[cfg(test)] mod tests` en fin de chaque fichier 
 
   Une même règle n'a qu'une constante, que les autres modules importent (`events::ACHIEVEMENT_BONUS`,
   `game::MAX_VOLUME`, `saves::MAIN_SLOT`…). Restent littéraux : le contenu des tables (stats des unités,
-  coûts, sprites, palettes, accords), les seuils des succès écrits à côté de leur texte, l'arithmétique
+  coûts, sprites, palettes, accords), les seuils des succès (cités dans leur texte du catalogue), l'arithmétique
   évidente (±1, moitiés, ×100 des pourcentages, 60 et 3600 des durées) et les tests.
 - **Les textes citent leurs constantes.** Un nombre de règle n'est jamais tapé dans un texte du joueur : il
   est inséré par `i18n::num` (en français : virgule décimale, 3 décimales au plus, milliers séparés par des
   espaces).
-  Dans les tables `const` (`PTALENTS`, `STALENTS`, `CHALLENGES`, `SYNERGIES`), les descriptions sont des
-  `data::Desc { template, values, len }` : `{}` prend la valeur suivante, `{n}` la n-ième (3 valeurs au plus,
-  pourcentages déjà ×100 par `percent()`) ; dans `Challenge.desc`, `{0}` est le niveau visé, fourni par
-  `challenge_def`. Les tables construites au démarrage (`TALENTS`, `MUTATIONS` en `LazyLock`) utilisent
-  `format!` + `i18n::num`.
+  Les tables de données (`data.rs`, `events.rs`) ne contiennent aucun texte : identifiants, chiffres et
+  valeurs citées seulement. Leurs noms et descriptions sont dans le catalogue (`i18n::tr().data`, par
+  identifiant), lus par des méthodes (`unit.name()`, `talent.desc()`, `challenge.desc_at(rang)`,
+  `mutation.effect()`…). Une description qui cite des valeurs est un gabarit du catalogue rendu par
+  `data::Desc::render` : la table donne les valeurs (`Desc { values, len }`), `{}` prend la suivante, `{n}`
+  la n-ième (3 au plus, pourcentages déjà ×100 par `percent()`) ; dans la description d'un défi, `{0}` est
+  le niveau visé (fourni par `challenge_def`) et `{1}` le temps limite en minutes d'un défi chronométré.
+  Les talents des unités (`u_<id>`, `m_<id>`) tirent leur texte de l'unité (`TalentText::Unlock` /
+  `Mult`). Aucun texte des tables n'est figé au démarrage : tout est lu dans `tr()` à l'affichage.
 
 ## 🔁 Boucle de jeu
 

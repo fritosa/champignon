@@ -5,7 +5,10 @@
 //! its own word order and the compiler checks the values passed. Texts of the data tables (units, talents,
 //! challenges…) are keyed by identifier; the tests check that every language covers every identifier.
 
+pub mod data;
 pub mod fr;
+
+use data::DataTexts;
 
 /// Every text shown to the player, in one language.
 pub struct Texts {
@@ -19,6 +22,8 @@ pub struct Texts {
     pub hidden: &'static str,
     /// Endless value or duration.
     pub infinity: &'static str,
+    /// Texts of the data tables.
+    pub data: DataTexts,
 }
 
 /// Powers of 1000 with a suffix in game::fmt (beyond: scientific notation).
@@ -73,6 +78,97 @@ mod tests {
         let (_, fr) = LANGS[0];
         with_lang(fr, || assert!(std::ptr::eq(tr(), fr)));
         assert!(std::ptr::eq(tr(), &fr::FR));
+    }
+
+    /// The ids of a text table are exactly `ids`, without duplicates.
+    fn same_ids<'a, T>(
+        lang: &str,
+        what: &str,
+        table: &[(&str, T)],
+        ids: impl IntoIterator<Item = &'a str>,
+    ) {
+        let mut got: Vec<&str> = table.iter().map(|(k, _)| *k).collect();
+        let mut want: Vec<&str> = ids.into_iter().collect();
+        got.sort_unstable();
+        want.sort_unstable();
+        assert_eq!(got, want, "{lang}: texts of the {what}");
+    }
+
+    #[test]
+    fn every_table_entry_has_its_text() {
+        use crate::data::{self, TalentText};
+        use crate::events;
+        for (lang, texts) in LANGS {
+            let d = &texts.data;
+            same_ids(lang, "units", d.units, data::UNITS.iter().map(|u| u.id));
+            let talents = data::TALENTS
+                .iter()
+                .filter(|t| matches!(t.text, TalentText::Table(_)))
+                .map(|t| t.id);
+            same_ids(lang, "talents", d.talents, talents);
+            same_ids(lang, "branches", d.branches, data::BRANCHES);
+            let ptalents = data::PTALENTS.iter().map(|p| p.id);
+            same_ids(lang, "prestige talents", d.ptalents, ptalents);
+            let stalents = data::STALENTS.iter().map(|p| p.id);
+            same_ids(lang, "supernova talents", d.stalents, stalents);
+            let challenges = data::CHALLENGES.iter().map(|c| c.id);
+            same_ids(lang, "challenges", d.challenges, challenges);
+            same_ids(lang, "skins", d.skins, data::SKINS);
+            let mutations = events::MUTATIONS.iter().map(|m| m.id);
+            same_ids(lang, "mutations", d.mutations, mutations);
+            let synergies = events::SYNERGIES.iter().map(|s| s.id);
+            same_ids(lang, "synergies", d.synergies, synergies);
+            let achievements = events::ACHIEVEMENTS.iter().map(|a| a.id);
+            same_ids(lang, "achievements", d.achievements, achievements);
+            let enemies = events::ENEMIES.iter().map(|e| e.id);
+            same_ids(lang, "enemies", d.enemies, enemies);
+        }
+    }
+
+    /// Each template quotes every value of its entry, and renders (a bad placeholder or a missing value
+    /// panics).
+    #[test]
+    fn every_template_quotes_its_values() {
+        use crate::data::{self, Desc, TalentText};
+        use crate::events;
+        for (lang, texts) in LANGS {
+            let d = &texts.data;
+            let mut descs: Vec<(Desc, &str)> = Vec::new();
+            for t in data::TALENTS.iter() {
+                if let TalentText::Table(desc) = t.text {
+                    descs.push((desc, d.talent(t.id).desc));
+                }
+            }
+            for p in data::PTALENTS.iter().chain(&data::STALENTS) {
+                descs.push((p.desc, d.perk(p.id).desc));
+            }
+            for c in &data::CHALLENGES {
+                descs.push((c.desc, d.challenge(c.id).desc));
+                descs.push((c.reward, d.challenge(c.id).reward));
+            }
+            for m in &events::MUTATIONS {
+                descs.push((m.effect, d.mutation(m.id).desc));
+            }
+            for s in &events::SYNERGIES {
+                descs.push((s.effect, d.synergy(s.id).desc));
+            }
+            for (desc, template) in descs {
+                assert!(
+                    template.matches('{').count() >= desc.len,
+                    "{lang}: {template}"
+                );
+                let _ = desc.render(template);
+            }
+            with_lang(texts, || {
+                for t in data::TALENTS.iter() {
+                    assert!(
+                        !t.name().is_empty() && !t.desc().is_empty(),
+                        "{lang}: {}",
+                        t.id
+                    );
+                }
+            });
+        }
     }
 
     #[test]

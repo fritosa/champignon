@@ -9,6 +9,7 @@ use std::path::Path;
 use champignon::data;
 use champignon::events::{self, EnemyKind};
 use champignon::game::{Enemy, Game, Plane, need};
+use champignon::i18n::tr;
 use champignon::rng::StdRandom;
 use champignon::sound::SoundSink;
 use champignon::term::{BufferScreen, ColorName, Ink, Style};
@@ -297,7 +298,7 @@ fn main() {
     // Crocodile Fury: the crocodile bites just before the capture (banner and big title on screen), and the
     // headline is set at the start of the banner.
     u.g.crocodile_bite("soldier");
-    u.news = events::NEWS_CROCODILE;
+    u.news = tr().data.news_crocodile;
     u.news_off =
         f64::from(u.w) - " FLASH INFO ".chars().count() as f64 - f64::from(ui::NEWS_MARGIN);
     u.t = ui::MONSTER_CROSSING * CROC_LAP;

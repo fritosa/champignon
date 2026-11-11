@@ -7,25 +7,30 @@ Chaque recette se termine par : `cargo test`, `cargo clippy --all-targets -- -D 
 et si l'équilibrage change, `cargo run --release --bin sim`. Puis revue automatique du commit et correction des
 problèmes trouvés (voir `CLAUDE.md`). Les tables sont des tableaux de taille fixe : ajuster la taille déclarée
 (`[Unit; 9]`…) à chaque ajout. Toute valeur d'effet ou de réglage est une constante nommée près de sa table,
-et les textes la citent (`{}` dans un `data::Desc`, ou `format!` + `i18n::num`) au lieu de recopier le
-nombre (voir « Pas de nombre magique » dans [ARCHITECTURE.md](ARCHITECTURE.md#-règles-darchitecture)).
+et les textes la citent (valeur dans un `data::Desc`, `{}` dans le gabarit du catalogue, ou `format!` +
+`i18n::num`) au lieu de recopier le nombre. Les textes vont dans le catalogue de **chaque** langue
+(`src/i18n/fr/data.rs` pour les tables, par identifiant) : le test `every_table_entry_has_its_text` signale
+un oubli (voir « Pas de nombre magique » dans [ARCHITECTURE.md](ARCHITECTURE.md#-règles-darchitecture)).
 
 **Nouvelle unité** : ajouter un `unit_def(…)` dans `data::UNITS` (le talent de déblocage `u_<id>` et le
-multiplicateur `m_<id>` sont générés par `unit_talents`) + un sprite dans `art::UNIT_ART` (2 images, lignes
+multiplicateur `m_<id>` sont générés par `unit_talents`) + son nom et ceux de ses deux talents dans
+`tr().data.units` + un sprite dans `art::UNIT_ART` (2 images, lignes
 alignées en bas, tourné vers la droite ; le miroir est automatique pour le côté droit) + l'identifiant dans la
 liste `UNITS` des tests de `art.rs`. Unité réservée aux joueurs qui ont réussi un défi : `.after_challenge("<id>", MULT)`
 après son `unit_def` (production ×MULT par rang du défi). Le même sprite s'affiche dans l'onglet Unités à côté de la description, en
 silhouette grise tant que l'unité n'est pas débloquée.
 
 **Nouvel ennemi** : variante dans `events::EnemyKind` (et dans `EnemyKind::ALL`) + `EnemySpec` dans
-`events::ENEMIES`, **dans le même ordre que l'enum** (`spec()` indexe par la variante) : `id`, `name`, `level`,
-`hits`, `dur`, `sky`, `desc` (avec `{}` pour la force de l'effet si elle grandit avec la pression des menaces :
-la fournir dans `effect_strength`) et `news` (titre du flash info pendant sa présence) + effet dans le `match`
+`events::ENEMIES`, **dans le même ordre que l'enum** (`spec()` indexe par la variante) : `id`, `level`, `hits`, `dur`, `sky`
++ son texte dans `tr().data.enemies` : `name`, `desc` (avec `{}` pour la force de l'effet si elle grandit avec
+la pression des menaces : la fournir dans `effect_strength`) et `news` (titre du flash info pendant sa
+présence) + effet dans le `match`
 d'`enemy_arrives` (ou un effet continu là où il s'applique) + sprite dans `art::ENEMY_ART` et identifiant dans
 la liste `ENEMIES` des tests de `art.rs`. Les tests `every_enemy_has_spec_and_news` (`events.rs`) et
 `every_unit_and_enemy_has_art` (`art.rs`) le vérifient.
 
-**Nouveau défi** : un `challenge_def(…)` dans `data::CHALLENGES` (avec `skin`) + skin dans `data::SKINS` +
+**Nouveau défi** : un `challenge_def(…)` dans `data::CHALLENGES` (avec `skin`) + son nom, sa description et
+sa récompense dans `tr().data.challenges` + skin dans `data::SKINS` (nom dans `tr().data.skins`) +
 palette dans `art::PALETTES` (et dans la liste du test `known_skins`) + la contrainte
 (`g.in_challenge("<id>")`, pour qu'il marche aussi en double défi) et la récompense par rang (`g.reward_pow("<id>", MULT)` ou `X * g.challenge_rank("<id>")`)
 dans le code, leurs valeurs en constantes `<DÉFI>_…` dans `data.rs` citées par `desc` et `reward` (« … par rang »).
@@ -38,16 +43,18 @@ automatiquement `CHALLENGES.len()`, comme « Légende vivante ». Obligatoire (t
 `every_challenge_has_both_stories`) : une histoire de lancement et de réussite dans `screens::STORIES` (clés
 `("<id>", "start")` / `("<id>", "end")`).
 
-**Nouveau talent** : un `talent_def(…)` dans `data::build_talents` (talents de run, `TALENTS`), ou une entrée
+**Nouveau talent** : un `table_talent(…)` dans `data::build_talents` (talents de run, `TALENTS`), ou une entrée
 dans `data::PTALENTS` / `STALENTS` + la constante de son effet à côté (`T_…`, `P_…`, `S_…`), citée par sa
-description (`Desc`) + effet dans le multiplicateur concerné de `Game` (rang lu par `g.tr`, `g.pr` ou
+description (valeurs dans un `Desc`, nom et gabarit dans `tr().data.talents` / `ptalents` / `stalents`) + effet dans le multiplicateur concerné de `Game` (rang lu par `g.tr`, `g.pr` ou
 `g.sr`). Si un talent ne doit jamais être acheté par l'auto-achat, adapter `Game::auto_talents`.
 
 **Nouvelle mutation / synergie** : `events::MUTATIONS` / `events::SYNERGIES` (chaque mutation n'appartient
-qu'à une paire) + la constante de son effet dans `events.rs`, citée par son texte + effet via
+qu'à une paire) + la constante de son effet dans `events.rs`, citée par son texte (nom et gabarit dans
+`tr().data.mutations` / `synergies`) + effet via
 `g.has_mut("id")` / `g.has_syn("id")`.
 
-**Nouveau succès** : un `achievement(id, nom, condition, |g| …)` dans `events::ACHIEVEMENTS` (chaque succès
+**Nouveau succès** : un `achievement(id, |g| …)` dans `events::ACHIEVEMENTS` (nom et condition dans
+`tr().data.achievements`) (chaque succès
 donne `events::ACHIEVEMENT_BONUS` de production). Un nouveau compteur va dans `game::Stats`, avec
 `#[serde(deserialize_with = "or_default")]` (absent d'une sauvegarde, il vaut 0).
 
