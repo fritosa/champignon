@@ -1247,11 +1247,13 @@ impl Game {
         self.challenge == Some("mono") && self.units.iter().any(|(u, n)| n > 0 && u != uid)
     }
 
+    /// Unit unlocked and allowed by the current challenge (affordable or not).
+    pub fn unit_allowed(&self, uid: &str) -> bool {
+        self.challenge != Some("pacifist") && !self.mono_forbidden(uid) && self.unit_unlocked(uid)
+    }
+
     pub fn can_buy_unit(&self, uid: &str) -> bool {
-        self.challenge != Some("pacifist")
-            && !self.mono_forbidden(uid)
-            && self.unit_unlocked(uid)
-            && self.radiation >= self.unit_cost(uid, None)
+        self.unit_allowed(uid) && self.radiation >= self.unit_cost(uid, None)
     }
 
     pub fn buy_unit(&mut self, uid: &str) -> bool {

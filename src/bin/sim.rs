@@ -16,6 +16,8 @@ const DEFAULT_PRESSES_PER_SECOND: f64 = 6.0;
 /// Fixed seeds: the bot's choices and the game's draws, so that two simulations print the same thing.
 const BOT_SEED: u64 = 1;
 const GAME_SEED: u64 = 2;
+/// Longest wait (in seconds of production) to save up for the best unit rather than buy a worse one.
+const SAVE_SECONDS: f64 = 30.0;
 /// Units bought at most per tick (the bot stops earlier when it can no longer afford any).
 const MAX_UNIT_BUYS: usize = 100;
 /// Critical mass presses: chance (cumulative) of landing in the green, then in the yellow, else missing;
@@ -52,17 +54,37 @@ const PRESTIGE_ORDER: [&str; 10] = [
     "p_dna",
 ];
 
+/// The unit with the best production per radiation spent (the first of them on a tie), among those
+/// that pass `keep`.
+fn best_unit(g: &Game, keep: impl Fn(&str) -> bool) -> Option<&'static str> {
+    let mut best: Option<(&'static str, f64)> = None;
+    for u in data::UNITS.iter().filter(|u| keep(u.id)) {
+        let value = g.unit_prod(u.id) / g.unit_cost(u.id, None);
+        if best.is_none_or(|(_, b)| value > b) {
+            best = Some((u.id, value));
+        }
+    }
+    best.map(|(uid, _)| uid)
+}
+
+/// Buys the best unit; saves up for it when it can be afforded within SAVE_SECONDS of production, otherwise
+/// buys the best affordable one.
 fn buy_units(g: &mut Game) {
     for _ in 0..MAX_UNIT_BUYS {
-        // The best production per radiation spent (the first of them on a tie).
-        let mut best: Option<(&str, f64)> = None;
-        for u in data::UNITS.iter().filter(|u| g.can_buy_unit(u.id)) {
-            let value = g.unit_prod(u.id) / g.unit_cost(u.id, None);
-            if best.is_none_or(|(_, b)| value > b) {
-                best = Some((u.id, value));
-            }
-        }
-        let Some((uid, _)) = best else { return };
+        let Some(target) = best_unit(g, |uid| g.unit_allowed(uid)) else {
+            return;
+        };
+        let missing = g.unit_cost(target, None) - g.radiation;
+        let uid = if missing <= 0.0 {
+            target
+        } else if missing <= g.production() * SAVE_SECONDS {
+            return;
+        } else {
+            let Some(uid) = best_unit(g, |uid| g.can_buy_unit(uid)) else {
+                return;
+            };
+            uid
+        };
         g.buy_unit(uid);
     }
 }

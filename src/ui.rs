@@ -1365,10 +1365,7 @@ impl<S: Screen> UI<S> {
                         data::fr_num(g.milestone_mult())
                     );
                 }
-                if !ok
-                    && !matches!(g.challenge, Some("pacifist" | "blind"))
-                    && !g.mono_forbidden(uid)
-                {
+                if !ok && g.unit_allowed(uid) && g.challenge != Some("blind") {
                     let prod = g.production();
                     desc += &if prod > 0.0 {
                         format!(" Encore {} d'attente.", dur((cost - g.radiation) / prod))
