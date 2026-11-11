@@ -69,7 +69,7 @@ pub(super) const UI: UiTexts = UiTexts {
     level_max: "MAX ! Prestige disponible → onglet 3",
     production: |prod| format!("+{prod}/s"),
     frozen: "GELÉ",
-    click_stats: |click, crit| format!("Détonation {click}   Crit {crit}%"),
+    click_stats: |click, crit| format!("Détonation {click}   Crit {crit} %"),
     auto: |per_second| format!("Auto {per_second}/s"),
     pt: |pt| format!("PT {pt}"),
     overheat: |left| format!("SURCHAUFFE ! {} s", fixed(left, 1)),

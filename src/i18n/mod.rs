@@ -22,6 +22,8 @@ use ui::UiTexts;
 pub struct Texts {
     /// Number in a sentence (French: decimal comma, at most 3 decimals, thousands separated by spaces).
     pub num: fn(f64) -> String,
+    /// Percentage (15 %), the number already formatted.
+    pub percent: fn(&str) -> String,
     /// Duration for humans (42 s, 2 min 05 s, 2 h 01 min).
     pub dur: fn(i64) -> String,
     /// Decimal separator of the short numbers (game::fmt) and of `fixed`.

@@ -91,7 +91,7 @@ de `screens.rs` qui reçoivent un `&mut dyn Screen`, lisent les touches par `rea
 traduire : le compilateur exige chaque champ, `every_table_entry_has_its_text` chaque entrée des tables,
 `every_template_quotes_its_values` chaque valeur citée par un gabarit, `titles_use_the_big_font` des titres
 dessinables, et les tests d'écran entier une mise en page qui tient en 60×20. Déclarer le module dans
-`src/i18n/mod.rs` et l'ajouter à `LANGS`. Adapter `num`, `dur`, `typography` et les suffixes à la langue, et
+`src/i18n/mod.rs` et l'ajouter à `LANGS`. Adapter `num`, `dur`, `percent`, `typography` et les suffixes à la langue, et
 garder les textes en caractères d'une colonne. Choisir la langue (variable d'environnement, réglage
 sauvegardé…) se branche dans `i18n::tr()`, seul point qui la lit. La sauvegarde ne contient que des
 identifiants : rien à convertir.

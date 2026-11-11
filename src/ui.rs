@@ -129,11 +129,9 @@ const HIPPIES_RUSH: f64 = 4.0; // protesters walk this much faster, then stage t
 const DRONE_ALTITUDE: i32 = 2; // sky enemies: rows above their sprite top
 
 // Statistics panel.
-const LEVEL_BAR_MARGIN: i32 = 6; // columns right of the level bar, for the percentage
 const COMBO_BAR_MAX: i32 = 20;
 const COMBO_LABEL_W: i32 = 16; // "Combo ×1.0 " and some room
 const GAUGE_MIN_W: i32 = 5;
-const GAUGE_LABEL_W: i32 = 20; // "Masse critique " and " 100%"
 
 // Tabs.
 const TAB_LABEL_SHORT: i32 = 5; // characters kept of the tab names when they don't fit…
@@ -1141,14 +1139,18 @@ impl<S: Screen> UI<S> {
             } else {
                 0.0
             };
-            let percent = if g.in_challenge("blind") {
-                format!(" {}", tr().hidden)
+            let shown = if g.in_challenge("blind") {
+                tr().hidden.to_string()
             } else {
-                format!(" {:3}%", (frac * 100.0) as i64)
+                percent((frac * 100.0) as i64)
             };
+            // Right-aligned on the width of 100 %, so that the line doesn't move.
+            let full = percent_width();
+            let percent = format!(" {shown:>w$}", w = full as usize);
             lines.push(vec![
                 (
-                    Self::bar(frac, iw - LEVEL_BAR_MARGIN, "█", "░"),
+                    // Room on the right for the percentage and its space.
+                    Self::bar(frac, iw - 1 - full, "█", "░"),
                     self.c("orange"),
                 ),
                 (percent, Style::PLAIN),
@@ -1230,10 +1232,19 @@ impl<S: Screen> UI<S> {
             lines.push(vec![
                 (format!("{} ", ui.gauge), Style::PLAIN),
                 (
-                    Self::bar(g.crit_gauge, GAUGE_MIN_W.max(iw - GAUGE_LABEL_W), "█", "░"),
+                    // Room for the label, then the percentage, each followed or preceded by a space.
+                    Self::bar(
+                        g.crit_gauge,
+                        GAUGE_MIN_W.max(iw - width(ui.gauge) - 2 - percent_width()),
+                        "█",
+                        "░",
+                    ),
                     self.c("red"),
                 ),
-                (format!(" {}%", (g.crit_gauge * 100.0) as i64), Style::PLAIN),
+                (
+                    format!(" {}", percent((g.crit_gauge * 100.0) as i64)),
+                    Style::PLAIN,
+                ),
             ]);
         }
 
@@ -1835,7 +1846,7 @@ impl<S: Screen> UI<S> {
             ),
             (
                 labels.sound,
-                format!("{} · {} %", audio_label(g.audio), g.volume),
+                format!("{} · {}", audio_label(g.audio), percent(g.volume)),
             ),
             (
                 labels.synergies,
@@ -1973,7 +1984,7 @@ impl<S: Screen> UI<S> {
         };
         let with_volume;
         if audible && self.g.volume < game::MAX_VOLUME {
-            with_volume = format!("{sound_label} {}%", self.g.volume);
+            with_volume = format!("{sound_label} {}", percent(self.g.volume));
             sound_label = &with_volume;
         }
         let variants = (ui.tab_help)(&self.qty.to_string(), sound_label);
@@ -2650,6 +2661,16 @@ pub fn clip(text: &str, w: i32) -> String {
     } else {
         head(text, w - 1) + "…"
     }
+}
+
+/// Percentage in the current language (15 %).
+fn percent(n: impl fmt::Display) -> String {
+    (tr().percent)(&n.to_string())
+}
+
+/// Columns of the widest percentage (100 %) in the current language.
+fn percent_width() -> i32 {
+    width(&percent(100))
 }
 
 /// Duration for humans: 42 s, 2 min 05 s, 2 h 01 min (∞ if it never ends).

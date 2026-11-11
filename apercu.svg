@@ -44,7 +44,7 @@
 <rect x="614.8" y="44.0" width="8.4" height="17.0" fill="#f28c28"/>
 <rect x="623.2" y="44.0" width="8.4" height="17.0" fill="#f28c28"/>
 <text x="404.8" y="57" fill="#f28c28" xml:space="preserve" textLength="378.0" lengthAdjust="spacingAndGlyphs">                           ░░░░░░░░░░░░░░░░░░</text>
-<text x="782.8" y="57" fill="#c5c8c6" xml:space="preserve" textLength="58.8" lengthAdjust="spacingAndGlyphs">  60%  </text>
+<text x="782.8" y="57" fill="#c5c8c6" xml:space="preserve" textLength="58.8" lengthAdjust="spacingAndGlyphs">  60 % </text>
 <path d="M845.8 44.0L845.8 52.5L845.8 61.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 61.0L14.2 69.5L14.2 78.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <rect x="102.4" y="69.5" width="8.4" height="8.5" fill="#e5534b"/>
@@ -79,7 +79,7 @@
 <rect x="253.6" y="78.0" width="8.4" height="17.0" fill="#e5534b"/>
 <rect x="287.2" y="78.0" width="8.4" height="8.5" fill="#e5534b"/>
 <path d="M383.8 78.0L383.8 86.5L383.8 95.0M392.2 78.0L392.2 86.5L392.2 95.0" stroke="#808080" stroke-width="1.2" fill="none"/>
-<text x="396.4" y="91" fill="#c5c8c6" xml:space="preserve" textLength="445.2" lengthAdjust="spacingAndGlyphs"> Détonation 2,4   Crit 0%                            </text>
+<text x="396.4" y="91" fill="#c5c8c6" xml:space="preserve" textLength="445.2" lengthAdjust="spacingAndGlyphs"> Détonation 2,4   Crit 0 %                           </text>
 <path d="M845.8 78.0L845.8 86.5L845.8 95.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 95.0L14.2 103.5L14.2 112.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <text x="85.6" y="108" fill="#808080" xml:space="preserve" textLength="8.4" lengthAdjust="spacingAndGlyphs">*</text>
@@ -163,8 +163,8 @@
 <rect x="665.2" y="129.0" width="8.4" height="17.0" fill="#e5534b"/>
 <rect x="673.6" y="129.0" width="8.4" height="17.0" fill="#e5534b"/>
 <rect x="682.0" y="129.0" width="8.4" height="17.0" fill="#e5534b"/>
-<text x="530.8" y="142" fill="#e5534b" xml:space="preserve" textLength="260.4" lengthAdjust="spacingAndGlyphs">                   ░░░░░░░░░░░░</text>
-<text x="791.2" y="142" fill="#c5c8c6" xml:space="preserve" textLength="50.4" lengthAdjust="spacingAndGlyphs"> 62%  </text>
+<text x="530.8" y="142" fill="#e5534b" xml:space="preserve" textLength="252.0" lengthAdjust="spacingAndGlyphs">                   ░░░░░░░░░░░</text>
+<text x="782.8" y="142" fill="#c5c8c6" xml:space="preserve" textLength="58.8" lengthAdjust="spacingAndGlyphs"> 62 %  </text>
 <path d="M845.8 129.0L845.8 137.5L845.8 146.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <path d="M14.2 146.0L14.2 154.5L14.2 163.0" stroke="#808080" stroke-width="1.2" fill="none"/>
 <text x="43.6" y="159" fill="#808080" xml:space="preserve" textLength="16.8" lengthAdjust="spacingAndGlyphs">:&#x27;</text>

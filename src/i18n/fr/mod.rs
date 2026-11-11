@@ -12,6 +12,7 @@ use super::Texts;
 pub static FR: Texts = Texts {
     num,
     dur,
+    percent: |n| format!("{n} %"),
     decimal: ',',
     suffixes: [
         "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc",
