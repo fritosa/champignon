@@ -98,8 +98,8 @@ le jeu ne rattrape pas tout d'un coup.
   50/100/200... (`UNIT_MILESTONES` ; les unités achetées ou offertes en jeu passent par `Game::add_units`, qui
   annonce les paliers franchis), débloquées par les talents `u_<id>` et boostées par `m_<id>` (générés par
   `unit_talents` dans `data.rs`). `g.units` s'indexe par identifiant (`g.units["soldier"]`). Une unité
-  `.after_challenge("<id>")` (la Moussaka apprivoisée) ne se débloque qu'après le rang I de ce défi
-  (`Game::talent_available`), et sa production est ×`MOUSSAKA_PROD_MULT` par rang du défi.
+  `.after_challenge("<id>", MULT)` (la Moussaka apprivoisée) ne se débloque qu'après le rang I de ce défi
+  (`Game::talent_available`), et sa production est ×MULT par rang du défi (`Unit::challenge`).
 - **Talents de run** (PT, branches DÉTONATION / INFANTERIE / LOGISTIQUE, `data::BRANCHES`), **prestige**
   (⚛, arbre `PTALENTS`), **supernova** (✦, arbre `STALENTS`, remet aussi à zéro le prestige, sauf les rangs
   d'Expansion du cœur gardés par Cœur stellaire, `s_keep`). Rangs lus par `g.tr(id)`, `g.pr(id)`, `g.sr(id)`.
@@ -132,7 +132,8 @@ le jeu ne rattrape pas tout d'un coup.
   Chaque défi a `CHALLENGE_RANKS` (3) rangs : `g.challenges_done` donne le nombre de rangs réussis par défi
   (`challenge_rank`), la cible du rang suivant est la cible de base ×`CHALLENGE_TARGET_MULT` (10) par rang réussi
   (`Challenge::target_at` / `desc_at`, `Game::challenge_target`), et un rang ne se lance que si le niveau max
-  l'atteint (`challenge_available`, vérifié par `Game::prestige`). La récompense s'applique une fois par rang :
+  l'atteint (`challenge_available`, vérifié par `Game::prestige`). Le temps limite d'un défi chronométré
+  est multiplié par le numéro du rang (`Challenge::time_at`, `{1}` de sa description). La récompense s'applique une fois par rang :
   `reward_pow(id, mult)` (multiplicateur puissance rang) ou `X * challenge_rank(id)`. L'histoire n'est racontée
   qu'au rang I. Contraintes regroupées dans une
   méthode quand elles servent à plusieurs endroits : `Game::mono_forbidden` (Monoculture), `Game::on_strike`

@@ -106,15 +106,16 @@ pub struct Unit {
     pub unlock_name: &'static str,
     pub unlock_cost: u32,
     pub mult_name: &'static str,
-    /// Challenge to complete (rank I) before its unlock talent can be bought.
-    pub challenge: Option<&'static str>,
+    /// Challenge to complete (rank I) before its unlock talent can be bought, and the production
+    /// multiplier per rank of that challenge.
+    pub challenge: Option<(&'static str, f64)>,
 }
 
 impl Unit {
-    /// Same unit, unlockable only once this challenge is done.
-    const fn after_challenge(self, challenge: &'static str) -> Unit {
+    /// Same unit, unlockable only once this challenge is done, its production ×`mult` per rank of it.
+    const fn after_challenge(self, challenge: &'static str, mult: f64) -> Unit {
         Unit {
-            challenge: Some(challenge),
+            challenge: Some((challenge, mult)),
             ..self
         }
     }
@@ -152,7 +153,7 @@ pub const UNITS: [Unit; 10] = [
     unit_def("blackhole", "Trou noir de poche", "O", 2.6e9, 5.5e6, "·", "white", "Singularité", 30,
              "Horizon des événements"),
     unit_def("moussaka", "Moussaka apprivoisée", "#", 3e10, 4.2e7, "~", "orange", "Recette de mamie", 35,
-             "Béchamel enrichie").after_challenge("moussaka"),
+             "Béchamel enrichie").after_challenge("moussaka", MOUSSAKA_PROD_MULT),
 ];
 pub const UNIT_COUNT: usize = UNITS.len();
 pub const UNIT_COST_GROWTH: f64 = 1.15;
@@ -231,7 +232,7 @@ fn unit_talents() -> Vec<Talent> {
             1,
             (unit.unlock_cost as i64, 0),
             match unit.challenge {
-                Some(c) => format!(
+                Some((c, _)) => format!(
                     "Débloque l'unité : {}. Après le défi {}.",
                     unit.name,
                     challenge(c).name
@@ -500,7 +501,8 @@ pub struct Challenge {
     pub id: &'static str,
     pub name: &'static str,
     pub target: u32,
-    /// Time limit in seconds (None: untimed).
+    /// Time limit of rank I in seconds (None: untimed), ×(rank number) at the next ranks; shown as `{1}` (in
+    /// minutes) in the description.
     pub time: Option<f64>,
     pub skin: &'static str,
     /// `{0}` is the target level, `{1}`... the values given to challenge_def.
@@ -522,10 +524,19 @@ impl Challenge {
             .saturating_mul(CHALLENGE_TARGET_MULT.saturating_pow(done))
     }
 
-    /// Description of the rank after `done` ranks (with its target level).
+    /// Time limit of the rank after `done` ranks: the base limit ×(rank number).
+    pub fn time_at(&self, done: u32) -> Option<f64> {
+        self.time.map(|t| t * f64::from(done + 1))
+    }
+
+    /// Description of the rank after `done` ranks: its target level (`{0}`) and, for a timed challenge, its
+    /// time limit in minutes (`{1}`).
     pub fn desc_at(&self, done: u32) -> Desc {
         let mut desc = self.desc;
         desc.values[0] = self.target_at(done) as f64;
+        if let Some(t) = self.time_at(done) {
+            desc.values[1] = t / 60.0;
+        }
         desc
     }
 }

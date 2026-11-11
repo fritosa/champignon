@@ -983,7 +983,7 @@ impl Game {
         let mut p = unit.prod
             * unit
                 .challenge
-                .map_or(1.0, |c| self.reward_pow(c, data::MOUSSAKA_PROD_MULT))
+                .map_or(1.0, |(c, mult)| self.reward_pow(c, mult))
             * data::UNIT_TALENT_MULT.powi(self.tr(data::UNIT_TALENT_IDS[unit_slot(uid)].1) as i32)
             * self.milestone_mult().powi(self.unit_milestones(uid) as i32);
         if self.has_mut("spores") {
@@ -1359,7 +1359,7 @@ impl Game {
             .zip(data::UNIT_TALENT_IDS.iter())
             .find(|(_, (unlock, _))| *unlock == tid)
             .and_then(|(u, _)| u.challenge)
-            .is_none_or(|c| self.challenge_rank(c) > 0)
+            .is_none_or(|(c, _)| self.challenge_rank(c) > 0)
     }
 
     pub fn buy_talent(&mut self, tid: &str) -> bool {
@@ -1716,7 +1716,9 @@ impl Game {
 
     fn fail_slow_challenge(&mut self) {
         if let Some(ch) = self.challenge.map(data::challenge)
-            && ch.time.is_some_and(|limit| self.run_time > limit)
+            && ch
+                .time_at(self.challenge_rank(ch.id))
+                .is_some_and(|limit| self.run_time > limit)
         {
             self.challenge = None;
             self.log(
@@ -2572,6 +2574,29 @@ pub(crate) mod tests {
             g.unit_prod("moussaka"),
             one * data::MOUSSAKA_PROD_MULT
         ));
+    }
+
+    #[test]
+    fn race_time_grows_with_rank() {
+        let race = data::challenge("race");
+        assert_eq!(race.time_at(0), Some(data::RACE_TIME));
+        assert_eq!(race.time_at(2), Some(3.0 * data::RACE_TIME));
+        assert_eq!(
+            race.desc_at(1).to_string(),
+            format!(
+                "Atteins le niveau {} en moins de {} minutes.",
+                data::fr_num(1000.0),
+                data::fr_num(2.0 * data::RACE_TIME / 60.0)
+            )
+        );
+        let mut g = exploded_game();
+        (g.challenge, g.run_time) = (Some("race"), data::RACE_TIME + 1.0);
+        g.challenges_done.insert("race", 1);
+        g.tick(0.1);
+        assert_eq!(g.challenge, Some("race")); // rank II: twice the time
+        g.run_time = 2.0 * data::RACE_TIME + 1.0;
+        g.tick(0.1);
+        assert_eq!(g.challenge, None);
     }
 
     #[test]

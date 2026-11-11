@@ -1112,7 +1112,7 @@ impl<S: Screen> UI<S> {
         let mut tag = String::new();
         if let Some(ch) = g.challenge.and_then(data::find_challenge) {
             tag = format!("Défi {}", ch.name);
-            if let Some(time) = ch.time {
+            if let Some(time) = ch.time_at(g.challenge_rank(ch.id)) {
                 let left = (time - g.run_time).max(0.0);
                 tag += &format!(
                     " {:.0}:{:02.0}",
@@ -1430,7 +1430,7 @@ impl<S: Screen> UI<S> {
                 );
             } else if !teased {
                 teased = true;
-                let (text, desc) = match u.challenge.filter(|&c| g.challenge_rank(c) == 0) {
+                let (text, desc) = match u.challenge.map(|(c, _)| c).filter(|&c| g.challenge_rank(c) == 0) {
                     Some(c) => (
                         "??? — réussis un défi".to_string(),
                         format!("Se débloque après le défi {}.", data::challenge(c).name),
