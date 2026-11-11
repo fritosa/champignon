@@ -152,17 +152,17 @@ pub const UNITS: [Unit; 15] = [
              "Plasma confiné"),
     unit_def("blackhole", "Trou noir de poche", "O", 2.6e9, 5.5e6, "·", "white", "Singularité", 30,
              "Horizon des événements"),
-    unit_def("moussaka", "Moussaka apprivoisée", "#", 3e10, 4.2e7, "~", "orange", "Recette de mamie", 35,
+    unit_def("moussaka", "Moussaka apprivoisée", "#", 3e10, 1.4e7, "~", "orange", "Recette de mamie", 35,
              "Béchamel enrichie").after_challenge("moussaka", MOUSSAKA_PROD_MULT),
-    unit_def("savior", "Sauveur du monde", "&", 3.5e11, 3.2e8, "*", "yellow", "Ceinture noire", 40,
+    unit_def("savior", "Sauveur du monde", "&", 3.5e11, 1.1e8, "*", "yellow", "Ceinture noire", 40,
              "Poings de fer").after_challenge("savior", NANAR_UNIT_MULT),
-    unit_def("diamond", "Diamant blanc", "$", 4e12, 2.4e9, "'", "white", "Mine de diamants", 45,
+    unit_def("diamond", "Diamant blanc", "$", 4e12, 8e8, "'", "white", "Mine de diamants", 45,
              "Taille en brillant").after_challenge("whitefire", NANAR_UNIT_MULT),
-    unit_def("croc", "Croco en caoutchouc", "C", 4.6e13, 1.8e10, "w", "green", "Rizière hantée", 50,
+    unit_def("croc", "Croco en caoutchouc", "C", 4.6e13, 6e9, "w", "green", "Rizière hantée", 50,
              "Mâchoires en mousse").after_challenge("crocodile", NANAR_UNIT_MULT),
-    unit_def("mummy", "Momie de la falaise", "M", 5.3e14, 1.4e11, "#", "red", "Couvercle sans sarcophage", 55,
+    unit_def("mummy", "Momie de la falaise", "M", 5.3e14, 4.7e10, "#", "red", "Couvercle sans sarcophage", 55,
              "Bandelettes au faux sang").after_challenge("devil", NANAR_UNIT_MULT),
-    unit_def("ninja", "Ninja d'Interpol", "N", 6.1e15, 1.05e12, "x", "magenta", "Opération Pastèque", 60,
+    unit_def("ninja", "Ninja d'Interpol", "N", 6.1e15, 3.5e11, "x", "magenta", "Opération Pastèque", 60,
              "Baguettes de combat").after_challenge("ninja", NANAR_UNIT_MULT),
 ];
 pub const UNIT_COUNT: usize = UNITS.len();
@@ -521,9 +521,12 @@ pub struct Challenge {
     pub desc: Desc,
     /// Effect of each rank.
     pub reward: Desc,
+    /// Target level multiplier from one rank to the next.
+    pub rank_mult: u32,
 }
 
-/// Ranks of each challenge; the target level is ×CHALLENGE_TARGET_MULT at each rank.
+/// Ranks of each challenge; the target level is ×CHALLENGE_TARGET_MULT at each rank (unless the challenge sets
+/// its own `rank_mult`).
 pub const CHALLENGE_RANKS: u32 = 3;
 pub const CHALLENGE_TARGET_MULT: u32 = 10;
 /// Rank numbers shown to the player.
@@ -533,7 +536,15 @@ impl Challenge {
     /// Target level of the rank after `done` ranks.
     pub fn target_at(&self, done: u32) -> u32 {
         self.target
-            .saturating_mul(CHALLENGE_TARGET_MULT.saturating_pow(done))
+            .saturating_mul(self.rank_mult.saturating_pow(done))
+    }
+
+    /// Same challenge, its target ×`mult` per rank instead of CHALLENGE_TARGET_MULT.
+    const fn rank_mult(self, mult: u32) -> Challenge {
+        Challenge {
+            rank_mult: mult,
+            ..self
+        }
     }
 
     /// Time limit of the rank after `done` ranks: the base limit ×(rank number).
@@ -566,10 +577,14 @@ const fn challenge_def(
     reward: Desc,
 ) -> Challenge {
     let desc = Desc::after(desc, &[target as f64], desc_values);
-    Challenge { id, name, target, time, skin, desc, reward }
+    Challenge { id, name, target, time, skin, desc, reward, rank_mult: CHALLENGE_TARGET_MULT }
 }
 
 // Challenge constraints.
+/// Target multipliers per rank of the hardest challenges (the others use CHALLENGE_TARGET_MULT).
+pub const PACIFIST_RANK_MULT: u32 = 3;
+pub const UNLUCKY_RANK_MULT: u32 = 4;
+pub const MONO_RANK_MULT: u32 = 4;
 pub const ONEARM_SOLDIERS: u64 = 3;
 pub const RACE_TIME: f64 = 600.0;
 pub const INFLATION_COST_MULT: f64 = 4.0;
@@ -591,7 +606,7 @@ pub const STRIKE_WINDOW: f64 = 1.0;
 /// The giant moussaka grows by 1 every MOUSSAKA_GROWTH seconds; production is divided by its size.
 pub const MOUSSAKA_GROWTH: f64 = 60.0;
 /// Seconds of army production released by each press (L'homme qui sauve le monde).
-pub const SAVIOR_PUNCH: f64 = 0.1;
+pub const SAVIOR_PUNCH: f64 = 0.15;
 /// White Fire: chance per press of a brawl, and share of the radiation it costs.
 pub const WHITEFIRE_BRAWL_CHANCE: f64 = 0.05;
 pub const WHITEFIRE_BRAWL_LOSS: f64 = 0.2;
@@ -634,7 +649,8 @@ pub const NANAR_UNIT_MULT: f64 = 2.0;
 #[rustfmt::skip]
 pub const CHALLENGES: [Challenge; 21] = [
     challenge_def("pacifist", "Pacifiste", 60, None, "toxic", "Aucune unité autorisée. Atteins le niveau {0}.", &[],
-                  Desc::new("Détonation ×{} par rang + skin Vert radioactif", &[PACIFIST_CLICK_MULT])),
+                  Desc::new("Détonation ×{} par rang + skin Vert radioactif", &[PACIFIST_CLICK_MULT]))
+        .rank_mult(PACIFIST_RANK_MULT),
     challenge_def("onearm", "Manchot", 100, None, "rainbow",
                   "Ni ESPACE ni auto-détonateur ({1} soldats offerts). Atteins le niveau {0}.",
                   &[ONEARM_SOLDIERS as f64],
@@ -670,7 +686,8 @@ pub const CHALLENGES: [Challenge; 21] = [
                             &[STERILE_CRIT_SPEED])),
     challenge_def("unlucky", "Chat noir", 100, None, "obsidian",
                   "Ni critiques, ni masse critique, ni ravitaillements. Atteins le niveau {0}.", &[],
-                  Desc::new("Chance de critique +{} % par rang + skin Obsidienne", &[percent(UNLUCKY_CRIT_CHANCE)])),
+                  Desc::new("Chance de critique +{} % par rang + skin Obsidienne", &[percent(UNLUCKY_CRIT_CHANCE)]))
+        .rank_mult(UNLUCKY_RANK_MULT),
     challenge_def("nanar", "Nanarland", 100, None, "carton",
                   "Effets spéciaux en carton : 1 détonation sur {1} fait pschitt, budget de série Z (production ÷{2}). \
                    Atteins le niveau {0}.",
@@ -680,7 +697,8 @@ pub const CHALLENGES: [Challenge; 21] = [
     challenge_def("mono", "Monoculture", 100, None, "moss",
                   "Une seule sorte d'unité, la première que tu achètes (sans Vétérans). Atteins le niveau {0}.", &[],
                   Desc::new("Paliers d'unités +{} par rang (×{} sans) + skin Mousse",
-                            &[MONO_MILESTONE_BONUS, MILESTONE_MULT])),
+                            &[MONO_MILESTONE_BONUS, MILESTONE_MULT]))
+        .rank_mult(MONO_RANK_MULT),
     challenge_def("halflife", "Demi-vie", 100, None, "uranium",
                   "Radiation stockée et progression du niveau fondent de moitié toutes les {1} s, l'armée perd {2} % \
                    de ses unités par seconde. Atteins le niveau {0}.",

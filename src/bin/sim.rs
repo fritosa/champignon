@@ -1,8 +1,10 @@
 //! Headless simulation to check the game balance.
 //!
-//! Usage: cargo run --release --bin sim -- [number_of_runs] [presses_per_second] [defis]
+//! Usage: cargo run --release --bin sim -- [number_of_runs] [presses_per_second] [defis|unites]
 //!
 //! With `defis`, the ranks of each challenge are then tried in turn, from the state reached after the runs.
+//! With `unites`, the bot plays the challenges that unlock a unit (rank I) during the runs, as soon as they
+//! are available, to measure what these units change.
 
 use champignon::data;
 use champignon::events;
@@ -245,8 +247,11 @@ fn main() {
     let cps: f64 = args.get(2).map_or(DEFAULT_PRESSES_PER_SECOND, |a| {
         a.parse().expect("presses per second")
     });
+    let mode = args.get(3).map(String::as_str);
     let mut bot = Bot::new(cps);
     let mut g = Game::new(Box::new(StdRandom::seeded(GAME_SEED)));
+    // Unit challenges already tried in this supernova cycle (mode "unites").
+    let mut tried: Vec<&'static str> = Vec::new();
     let mut total = 0.0;
     let mut durations: Vec<f64> = Vec::new();
     let mut supernova_times: Vec<f64> = Vec::new();
@@ -282,6 +287,7 @@ fn main() {
             let stars = g.supernova_gain();
             g.supernova();
             supernova_times.push(total);
+            tried.clear();
             while data::STALENTS.iter().any(|s| g.buy_stalent(s.id)) {}
             println!(
                 "        SUPERNOVA #{} +{} ✦ -> talents {}  left {} ✦",
@@ -303,11 +309,43 @@ fn main() {
             bought.join(", "),
             g.isotopes
         );
+        if mode == Some("unites") {
+            total += play_unit_challenge(&mut bot, &mut g, &mut tried);
+        }
     }
     print_summary(total, &durations, &supernova_times);
-    if args.get(3).is_some_and(|a| a == "defis") {
+    if mode == Some("defis") {
         try_challenges(cps, &g);
     }
+}
+
+/// Mode "unites": starts the next run with the first challenge that unlocks a unit, not done yet, available
+/// and not tried in this supernova cycle; the run then goes on normally once it ends. A failed attempt (which
+/// lasts MAX_RUN_SECONDS and would leave the run stuck below the max level) is dropped: the game goes back to its
+/// state before it. Returns the time lost to a failed attempt.
+fn play_unit_challenge(bot: &mut Bot, g: &mut Game, tried: &mut Vec<&'static str>) -> f64 {
+    let next = data::UNITS
+        .iter()
+        .filter_map(|u| u.challenge)
+        .map(|(c, _)| c)
+        .find(|&c| g.challenge_rank(c) == 0 && g.challenge_available(c) && !tried.contains(&c));
+    let Some(c) = next else { return 0.0 };
+    tried.push(c);
+    let mut before = Game::from_save(g.save_data(), wall_time());
+    let done = bot.run_challenge(g, c) == Some(true);
+    let name = data::challenge(c).name;
+    let result = if done { "done" } else { "failed" };
+    println!(
+        "        challenge {name} I {result} after {:.1}m",
+        g.run_time / SECONDS_PER_MINUTE
+    );
+    if done {
+        return 0.0;
+    }
+    let lost = g.run_time;
+    std::mem::swap(&mut before.rng, &mut g.rng);
+    *g = before;
+    lost
 }
 
 /// Tries each challenge once, each from a copy of the same state with a fresh bot (the order does not matter).

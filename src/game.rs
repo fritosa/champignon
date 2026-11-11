@@ -2746,6 +2746,22 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn hardest_challenges_have_gentler_ranks() {
+        let pacifist = data::challenge("pacifist");
+        assert_eq!(
+            pacifist.target_at(2),
+            pacifist.target * data::PACIFIST_RANK_MULT.pow(2)
+        );
+        let unlucky = data::challenge("unlucky");
+        assert_eq!(
+            unlucky.target_at(1),
+            unlucky.target * data::UNLUCKY_RANK_MULT
+        );
+        let race = data::challenge("race");
+        assert_eq!(race.target_at(1), race.target * data::CHALLENGE_TARGET_MULT);
+    }
+
+    #[test]
     fn challenge_ranks() {
         let mut g = exploded_game();
         g.prestige_count = 1;

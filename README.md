@@ -36,8 +36,8 @@ champignon                 # lance le jeu de n'importe où (menu des parties s'i
 champignon --mute          # sans son
 champignon --reset         # efface toutes les parties (après confirmation)
 cargo test                 # tests (depuis la racine du projet)
-cargo run --release --bin sim -- [runs] [appuis/s] [defis]   # simulation sans affichage pour l'équilibrage
-cargo run --release --bin apercu                             # régénère apercu.svg, la capture du README
+cargo run --release --bin sim -- [runs] [appuis/s] [defis|unites]   # simulation sans affichage pour l'équilibrage
+cargo run --release --bin apercu                                    # régénère apercu.svg, la capture du README
 ```
 
 Installation, une fois, depuis le dossier du projet : `./install.sh`. Il compile le jeu avec cargo (Rust
