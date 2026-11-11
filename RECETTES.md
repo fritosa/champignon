@@ -7,7 +7,7 @@ Chaque recette se termine par : `cargo test`, `cargo clippy --all-targets -- -D 
 et si l'équilibrage change, `cargo run --release --bin sim`. Puis revue automatique du commit et correction des
 problèmes trouvés (voir `CLAUDE.md`). Les tables sont des tableaux de taille fixe : ajuster la taille déclarée
 (`[Unit; 9]`…) à chaque ajout. Toute valeur d'effet ou de réglage est une constante nommée près de sa table,
-et les textes la citent (`{}` dans un `data::Desc`, ou `format!` + `data::fr_num`) au lieu de recopier le
+et les textes la citent (`{}` dans un `data::Desc`, ou `format!` + `i18n::num`) au lieu de recopier le
 nombre (voir « Pas de nombre magique » dans [ARCHITECTURE.md](ARCHITECTURE.md#-règles-darchitecture)).
 
 **Nouvelle unité** : ajouter un `unit_def(…)` dans `data::UNITS` (le talent de déblocage `u_<id>` et le

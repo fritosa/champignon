@@ -8,6 +8,7 @@ use crate::art;
 use crate::data::{self, UNITS};
 use crate::events::{self, ACHIEVEMENTS, SYNERGIES};
 use crate::game::{self, AUDIO_MODES, Game, MsgKind, RunReport, VOLUME_STEP, need};
+use crate::i18n::{self, tr};
 use crate::rng::{RandomExt, Rng, StdRandom};
 use crate::screens::{
     INTRO, Interrupted, STORY_GUARD, center, fdiv, head, intro, slice, story, wrap,
@@ -1152,7 +1153,7 @@ impl<S: Screen> UI<S> {
     /// Formatted number, hidden during the Fog of War challenge.
     pub fn num(&self, x: f64) -> String {
         if self.g.in_challenge("blind") {
-            "???".to_string()
+            tr().hidden.to_string()
         } else {
             game::fmt(x)
         }
@@ -1492,7 +1493,7 @@ impl<S: Screen> UI<S> {
                 if let Some(nxt) = g.next_milestone(uid) {
                     desc += &format!(
                         " Palier à {nxt} : production ×{}.",
-                        data::fr_num(g.milestone_mult())
+                        i18n::num(g.milestone_mult())
                     );
                 }
                 if !ok && g.unit_allowed(uid) && !g.in_challenge("blind") {
@@ -1614,8 +1615,8 @@ impl<S: Screen> UI<S> {
                 format!(
                     "{reset_desc} Surplus : ×{} (+{} par ×10 de la radiation qu'il fallait pour le niveau max : \
                      rester au niveau max rapporte plus).",
-                    data::fr_num((g.surplus_mult() * 100.0).floor() / 100.0),
-                    data::fr_num(crate::game::SURPLUS_BONUS)
+                    i18n::num((g.surplus_mult() * 100.0).floor() / 100.0),
+                    i18n::num(crate::game::SURPLUS_BONUS)
                 ),
             ));
         } else {
@@ -1828,7 +1829,7 @@ impl<S: Screen> UI<S> {
             format!(
                 "{n}/{} succès · +{} % de production",
                 ACHIEVEMENTS.len(),
-                data::fr_num(data::percent(events::ACHIEVEMENT_BONUS) * n as f64)
+                i18n::num(data::percent(events::ACHIEVEMENT_BONUS) * n as f64)
             ),
             self.c("yellow").bold(),
         )];
@@ -2024,7 +2025,7 @@ impl<S: Screen> UI<S> {
             .enumerate()
             .map(|(i, n)| {
                 if i == PRESTIGE_TAB && !self.g.prestige_unlocked() {
-                    "???".to_string()
+                    tr().hidden.to_string()
                 } else {
                     n.to_string()
                 }
@@ -2778,16 +2779,9 @@ pub fn clip(text: &str, w: i32) -> String {
 /// Duration for humans: 42 s, 2 min 05 s, 2 h 01 min (∞ if it never ends).
 pub fn dur(sec: f64) -> String {
     if sec == f64::INFINITY {
-        return "∞".to_string();
+        return tr().infinity.to_string();
     }
-    let sec = sec as i64;
-    if sec >= 3600 {
-        format!("{} h {:02} min", sec / 3600, sec % 3600 / 60)
-    } else if sec >= 60 {
-        format!("{} min {:02} s", sec / 60, sec % 60)
-    } else {
-        format!("{sec} s")
-    }
+    (tr().dur)(sec as i64)
 }
 
 /// (label, value) rows of a finished game summary.

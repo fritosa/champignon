@@ -12,12 +12,10 @@ use serde_json::Value;
 
 use crate::data::{self, UNIT_COUNT, UNITS};
 use crate::events::{self, EnemyKind};
+use crate::i18n::{self, tr};
 use crate::rng::{RandomExt, Rng, StdRandom};
 use crate::saves;
 
-pub const SUFFIXES: [&str; 12] = [
-    "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc",
-];
 /// Shorter absences earn nothing offline (seconds; the share and the cap are in data, with p_offline).
 pub const OFFLINE_MIN: f64 = 60.0;
 pub const MAX_BULK: u64 = 1000; // beyond that, 1.15^n overflows
@@ -75,14 +73,14 @@ pub const SURPLUS_BONUS: f64 = 0.5;
 const ONE_DECIMAL_BELOW: f64 = 100.0;
 
 /// Powers of 1000 as correctly rounded floats (like Python's int → float conversion).
-const THOUSANDS: [f64; 12] = [
+const THOUSANDS: [f64; i18n::SUFFIX_COUNT] = [
     1e0, 1e3, 1e6, 1e9, 1e12, 1e15, 1e18, 1e21, 1e24, 1e27, 1e30, 1e33,
 ];
 
 /// Short number: 2.5, 150, 1.50K, 2.00M... then 1.00e+40.
 pub fn fmt(n: f64) -> String {
     if n == f64::INFINITY {
-        return "∞".to_string();
+        return tr().infinity.to_string();
     }
     if n < ONE_DECIMAL_BELOW {
         if n == n.trunc() {
@@ -95,8 +93,8 @@ pub fn fmt(n: f64) -> String {
         return format!("{}", n as i64);
     }
     let thousands = (n.log10() / 3.0).floor() as usize;
-    if thousands < SUFFIXES.len() {
-        return format!("{:.2}{}", n / THOUSANDS[thousands], SUFFIXES[thousands]);
+    if let Some(suffix) = tr().suffixes.get(thousands) {
+        return format!("{:.2}{suffix}", n / THOUSANDS[thousands]);
     }
     format!("{n:.2e}").replace('e', "e+")
 }
@@ -720,7 +718,7 @@ impl Game {
     /// Number formatted for messages, hidden during the Brouillard de guerre challenge.
     pub fn fmt(&self, n: f64) -> String {
         if self.in_challenge("blind") {
-            "???".to_string()
+            tr().hidden.to_string()
         } else {
             fmt(n)
         }
@@ -1403,7 +1401,7 @@ impl Game {
                 let text = format!(
                     "Palier : {m} {}s, production ×{} !",
                     data::unit(uid).name,
-                    data::fr_num(self.milestone_mult())
+                    i18n::num(self.milestone_mult())
                 );
                 self.log(text, MsgKind::Good, Some("PALIER"));
             }
@@ -1955,7 +1953,7 @@ impl Game {
                     format!(
                         "★ Succès : {} (+{} % de production)",
                         a.name,
-                        data::fr_num(data::percent(events::ACHIEVEMENT_BONUS))
+                        i18n::num(data::percent(events::ACHIEVEMENT_BONUS))
                     ),
                     MsgKind::Star,
                     Some("SUCCÈS"),
@@ -2797,8 +2795,8 @@ pub(crate) mod tests {
             race.desc_at(1).to_string(),
             format!(
                 "Atteins le niveau {} en moins de {} minutes.",
-                data::fr_num(1000.0),
-                data::fr_num(2.0 * data::RACE_TIME / 60.0)
+                i18n::num(1000.0),
+                i18n::num(2.0 * data::RACE_TIME / 60.0)
             )
         );
         let mut g = exploded_game();

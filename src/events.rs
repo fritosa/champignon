@@ -2,8 +2,9 @@
 
 use std::sync::LazyLock;
 
-use crate::data::{self, Desc, fr_num, percent};
+use crate::data::{self, Desc, percent};
 use crate::game::{BuffKind, Enemy, Game, Inspector, MsgKind, Plane, Qte, QteResult};
+use crate::i18n::num;
 use crate::rng::RandomExt;
 
 /// Letters usable to catch a supply drop (no control keys).
@@ -42,24 +43,24 @@ pub const GAMBLE_FREEZE_MULT: u32 = 2;
 #[rustfmt::skip]
 pub static MUTATIONS: LazyLock<[Mutation; 12]> = LazyLock::new(|| [
     mutation_def("spores", "Spores radioactives",
-                 format!("+{} % de production par soldat.", fr_num(percent(SPORES_PER_SOLDIER)))),
+                 format!("+{} % de production par soldat.", num(percent(SPORES_PER_SOLDIER)))),
     mutation_def("twin", "Champignon jumeau",
-                 format!("Détonation ×{} (et un deuxième chapeau !).", fr_num(TWIN_CLICK_MULT))),
+                 format!("Détonation ×{} (et un deuxième chapeau !).", num(TWIN_CLICK_MULT))),
     mutation_def("acid", "Pluie acide", format!("Unités -{} % de coût, mais détonation ÷{}.",
-                 fr_num(percent(1.0 - ACID_COST_MULT)), fr_num(1.0 / ACID_CLICK_MULT))),
+                 num(percent(1.0 - ACID_COST_MULT)), num(1.0 / ACID_CLICK_MULT))),
     mutation_def("unstable", "Cœur instable",
-                 format!("La masse critique se charge {}× plus vite.", fr_num(UNSTABLE_CRIT_SPEED))),
-    mutation_def("fallout", "Retombées massives", format!("Production ×{}.", fr_num(FALLOUT_PROD_MULT))),
+                 format!("La masse critique se charge {}× plus vite.", num(UNSTABLE_CRIT_SPEED))),
+    mutation_def("fallout", "Retombées massives", format!("Production ×{}.", num(FALLOUT_PROD_MULT))),
     mutation_def("magnet", "Aimant à colis",
-                 format!("Ravitaillements {}× plus fréquents.", fr_num(MAGNET_DROP_FREQ))),
+                 format!("Ravitaillements {}× plus fréquents.", num(MAGNET_DROP_FREQ))),
     mutation_def("berserk", "Rage atomique", format!("Combo max +{BERSERK_COMBO}.")),
     mutation_def("fog", "Brouillard radioactif", "Les inspecteurs ne trouvent plus le champignon.".to_string()),
     mutation_def("mitosis", "Mitose", format!("+{MITOSIS_PT} PT supplémentaire par niveau.")),
     mutation_def("asbestos", "Doigts d'amiante", "Plus jamais de surchauffe.".to_string()),
     mutation_def("glow", "Lueur verte",
-                 format!("+{} % de chance de détonation critique.", fr_num(percent(GLOW_CRIT_CHANCE)))),
+                 format!("+{} % de chance de détonation critique.", num(percent(GLOW_CRIT_CHANCE)))),
     mutation_def("gamble", "Roulette russe", format!("Production ×{}, mais les inspecteurs gèlent {}× plus longtemps.",
-                 fr_num(GAMBLE_PROD_MULT), GAMBLE_FREEZE_MULT)),
+                 num(GAMBLE_PROD_MULT), GAMBLE_FREEZE_MULT)),
 ]);
 
 pub fn find_mutation(id: &str) -> Option<&'static Mutation> {
@@ -413,10 +414,9 @@ const ARMY_SHARE: f64 = 0.1;
 const BRIBE_TIME: f64 = 300.0;
 
 /// Buff names, shown in the UI.
-static FRENZY_NAME: LazyLock<String> =
-    LazyLock::new(|| format!("Frénésie ×{}", fr_num(FRENZY_MULT)));
+static FRENZY_NAME: LazyLock<String> = LazyLock::new(|| format!("Frénésie ×{}", num(FRENZY_MULT)));
 static CLICK_FRENZY_NAME: LazyLock<String> =
-    LazyLock::new(|| format!("Détonation ×{}", fr_num(CLICK_FRENZY_MULT)));
+    LazyLock::new(|| format!("Détonation ×{}", num(CLICK_FRENZY_MULT)));
 
 fn drop_power(g: &Game) -> f64 {
     1.0 + data::P_DROP_POWER * g.pr("p_drop") as f64
@@ -430,7 +430,7 @@ pub fn chest_text(g: &Game, kind: &str) -> (&'static str, String) {
             "Frénésie",
             format!(
                 "Production ×{} pendant {:.0} s.",
-                fr_num(FRENZY_MULT),
+                num(FRENZY_MULT),
                 FRENZY_TIME * power
             ),
         ),
@@ -438,7 +438,7 @@ pub fn chest_text(g: &Game, kind: &str) -> (&'static str, String) {
             "Détonateur fou",
             format!(
                 "Détonation ×{} pendant {:.0} s.",
-                fr_num(CLICK_FRENZY_MULT),
+                num(CLICK_FRENZY_MULT),
                 CLICK_FRENZY_TIME * power
             ),
         ),
@@ -754,7 +754,7 @@ fn effect_strength(g: &Game, kind: EnemyKind) -> Option<String> {
     match kind {
         EnemyKind::Saboteur => Some(stolen_percent(g).to_string()),
         EnemyKind::Commando => Some(sabotaged_percent(g).to_string()),
-        EnemyKind::Hippies => Some(fr_num(protest_divisor(g))),
+        EnemyKind::Hippies => Some(num(protest_divisor(g))),
         EnemyKind::Drone => None,
     }
 }

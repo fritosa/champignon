@@ -4,6 +4,7 @@ pub mod art;
 pub mod data;
 pub mod events;
 pub mod game;
+pub mod i18n;
 pub mod rng;
 pub mod saves;
 pub mod screens;

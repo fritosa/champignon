@@ -1,40 +1,21 @@
 //! Static definitions: units, run talents, prestige talents, challenges, skins.
 //!
 //! The effect values of talents and challenges are named constants next to their table; descriptions quote
-//! them (fr_num, Desc) so that rebalancing touches one place.
+//! them (i18n::num, Desc) so that rebalancing touches one place.
 
 use std::fmt;
 use std::sync::LazyLock;
 
+use crate::i18n::num;
+
 pub const BASE_CAP: u32 = 100;
 pub const MAX_CAP: u32 = 1_000_000;
-
-/// Number written the French way for player texts: decimal comma, at most 3 decimals without trailing zeros,
-/// thousands separated by spaces (1,5 · 0,1 · 1 000 000).
-pub fn fr_num(x: f64) -> String {
-    let s = format!("{x:.3}");
-    let s = s.trim_end_matches('0').trim_end_matches('.');
-    let (int, frac) = s.split_once('.').unwrap_or((s, ""));
-    let (sign, digits) = int.split_at(usize::from(int.starts_with('-')));
-    let mut grouped = String::from(sign);
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            grouped.push(' ');
-        }
-        grouped.push(c);
-    }
-    if frac.is_empty() {
-        grouped
-    } else {
-        format!("{grouped},{frac}")
-    }
-}
 
 /// Most values a Desc can quote.
 const DESC_VALUES: usize = 3;
 
 /// Player text of a const table quoting tuning values: like `format!`, each `{}` shows the next value and
-/// `{n}` the n-th one, written by fr_num. Displayed with `{}`, like a string.
+/// `{n}` the n-th one, written by i18n::num. Displayed with `{}`, like a string.
 #[derive(Clone, Copy, Debug)]
 pub struct Desc {
     pub template: &'static str,
@@ -85,7 +66,7 @@ impl fmt::Display for Desc {
             let value = self.values[..self.len]
                 .get(index)
                 .unwrap_or_else(|| panic!("no value {index} in the Desc {:?}", self.template));
-            write!(f, "{}{}", &rest[..open], fr_num(*value))?;
+            write!(f, "{}{}", &rest[..open], num(*value))?;
             rest = &rest[close + 1..];
         }
         f.write_str(rest)
@@ -264,7 +245,7 @@ fn unit_talents() -> Vec<Talent> {
             format!(
                 "Production des {}s ×{} par rang.",
                 unit.name,
-                fr_num(UNIT_TALENT_MULT)
+                num(UNIT_TALENT_MULT)
             ),
             &[(unlock_id, 1)],
         ));
@@ -310,9 +291,9 @@ pub const fn percent(share: f64) -> f64 {
 fn build_talents() -> Vec<Talent> {
     let mut talents = vec![
         talent_def("t_click", "Détonateur renforcé", "det", 0, 10, (1, 1),
-                   format!("+{} de puissance de détonation de base par rang.", fr_num(T_CLICK_POWER)), &[]),
+                   format!("+{} de puissance de détonation de base par rang.", num(T_CLICK_POWER)), &[]),
         talent_def("t_crit", "Fission critique", "det", 1, 5, (2, 1),
-                   format!("+{} % de chance de détonation critique par rang.", fr_num(percent(T_CRIT_CHANCE))),
+                   format!("+{} % de chance de détonation critique par rang.", num(percent(T_CRIT_CHANCE))),
                    &[("t_click", 1)]),
         talent_def("t_combo", "Réaction en chaîne", "det", 1, T_COMBO_RANKS, (2, 2),
                    format!("Combo max +{} par rang (×{} → ×{}).", T_COMBO_MAX, BASE_MAX_COMBO,
@@ -321,31 +302,31 @@ fn build_talents() -> Vec<Talent> {
         talent_def("t_cool", "Refroidissement", "det", 2, 3, (2, 1),
                    format!("Seuil de surchauffe +{T_COOL_THRESHOLD} appuis/s par rang."), &[("t_combo", 1)]),
         talent_def("t_auto", "Auto-détonateur", "det", 1, 5, (3, 2),
-                   format!("Appuie tout seul sur ESPACE : {} fois/s par rang.", fr_num(T_AUTO_RATE)),
+                   format!("Appuie tout seul sur ESPACE : {} fois/s par rang.", num(T_AUTO_RATE)),
                    &[("t_click", 2)]),
         talent_def("t_shock", "Onde de choc", "det", 1, 5, (3, 2),
-                   format!("Chaque appui ajoute {} % de la production/s par rang.", fr_num(percent(T_SHOCK_SHARE))),
+                   format!("Chaque appui ajoute {} % de la production/s par rang.", num(percent(T_SHOCK_SHARE))),
                    &[("t_click", 3)]),
     ];
     talents.extend(unit_talents());
     talents.extend([
         talent_def("l_global", "Propagande", "log", 0, 10, (2, 1),
-                   format!("Production globale +{} % par rang.", fr_num(percent(L_GLOBAL_PROD))), &[]),
+                   format!("Production globale +{} % par rang.", num(percent(L_GLOBAL_PROD))), &[]),
         talent_def("l_synergy", "Esprit de corps", "log", 1, 3, (4, 2),
-                   format!("+{} % de production par unité possédée, par rang.", fr_num(percent(L_SYNERGY_PROD))),
+                   format!("+{} % de production par unité possédée, par rang.", num(percent(L_SYNERGY_PROD))),
                    &[("l_global", 2)]),
         talent_def("l_guard", "Gardes", "log", 1, 1, (4, 0),
                    "Des gardes chassent automatiquement les inspecteurs de l'ONU.".to_string(), &[("l_global", 1)]),
         talent_def("l_discount", "Marché noir", "log", 0, 5, (2, 1),
-                   format!("Coût des unités -{} % par rang.", fr_num(percent(L_DISCOUNT))), &[]),
+                   format!("Coût des unités -{} % par rang.", num(percent(L_DISCOUNT))), &[]),
         talent_def("l_autobuy", "Quartier-maître", "log", 1, 3, (5, 3),
                    format!("Achète automatiquement les unités ({L_AUTOBUY_TYPES} types de plus par rang)."),
                    &[("l_discount", 1)]),
         talent_def("l_radar", "Radar", "log", 0, 3, (2, 1),
-                   format!("Ravitaillements +{} % plus fréquents et avions plus lents.", fr_num(percent(L_RADAR_FREQ))),
+                   format!("Ravitaillements +{} % plus fréquents et avions plus lents.", num(percent(L_RADAR_FREQ))),
                    &[]),
         talent_def("l_enrich", "Enrichissement", "log", 0, 3, (3, 1),
-                   format!("La masse critique se charge {} % plus vite par rang.", fr_num(percent(L_ENRICH_SPEED))),
+                   format!("La masse critique se charge {} % plus vite par rang.", num(percent(L_ENRICH_SPEED))),
                    &[]),
     ]);
     talents
@@ -874,12 +855,9 @@ mod tests {
 
     #[test]
     fn french_numbers() {
-        assert_eq!(fr_num(1.5), "1,5");
-        assert_eq!(fr_num(percent(T_CRIT_CHANCE)), "5");
-        assert_eq!(fr_num(percent(L_SYNERGY_PROD)), "0,1");
-        assert_eq!(fr_num(100.0), "100");
-        assert_eq!(fr_num(1_000_000.0), "1 000 000");
-        assert_eq!(fr_num(-1234.25), "-1 234,25");
+        assert_eq!(num(1.5), "1,5");
+        assert_eq!(num(percent(T_CRIT_CHANCE)), "5");
+        assert_eq!(num(percent(L_SYNERGY_PROD)), "0,1");
     }
 
     #[test]
