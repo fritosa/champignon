@@ -760,6 +760,13 @@ pub fn find_challenge(id: &str) -> Option<&'static Challenge> {
     CHALLENGES.iter().find(|c| c.id == id)
 }
 
+/// The unit unlocked by challenge `id` (moussaka, nanars), if any.
+pub fn challenge_unit(id: &str) -> Option<&'static Unit> {
+    UNITS
+        .iter()
+        .find(|u| u.challenge.is_some_and(|(c, _)| c == id))
+}
+
 pub fn challenge(id: &str) -> &'static Challenge {
     find_challenge(id).unwrap_or_else(|| panic!("unknown challenge {id}"))
 }

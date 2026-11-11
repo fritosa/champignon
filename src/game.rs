@@ -1877,7 +1877,7 @@ impl Game {
     pub fn crocodile_bite(&mut self, uid: &'static str) {
         let eaten = (self.units[uid] as f64 * data::CROCODILE_BITE).ceil() as u64;
         self.units[uid] -= eaten;
-        let text = format!("Le croco dévore {eaten} × {} !", data::unit(uid).name);
+        let text = format!("Croco ! -{eaten} {}", data::unit(uid).name);
         self.log(text, MsgKind::Bad, Some("CROCO !"));
     }
 
@@ -2844,7 +2844,7 @@ pub(crate) mod tests {
         for _ in 0..data::CROCODILE_PERIOD as u32 {
             g.tick(1.0);
         }
-        assert!(g.messages.iter().any(|m| m.text.contains("croco")));
+        assert!(g.messages.iter().any(|m| m.text.starts_with("Croco !")));
     }
 
     #[test]

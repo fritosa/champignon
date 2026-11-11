@@ -133,6 +133,9 @@ le jeu ne rattrape pas tout d'un coup.
   (un double défi réussi, compteur `Stats::doubles`).
 - **Défis** (`data::CHALLENGES`) : contraintes codées en dur là où elles s'appliquent, toujours testées par
   `g.in_challenge("<id>")` (dans `Game`, `events.rs` comme dans `ui.rs`), jamais en comparant `g.challenge`.
+  Pendant un défi qui débloque une unité (moussaka, nanars), son monstre (le sprite de l'unité) traverse le
+  terrain de droite à gauche en boucle (`UI::draw_challenge_monsters`, `MONSTER_CROSSING`). L'onglet Prestige
+  range ces défis, dont le monstre rejoint l'armée, sous leur propre titre « MONSTRES ».
   **Double défi** (ouvert après `DOUBLE_UNLOCK` défis réussis, sauf les paires de `DOUBLE_FORBIDDEN`) : `g.challenge` et `g.challenge2`
   (`Option<&'static str>`), lancés par `Game::prestige_double` ; la cible est la plus haute des deux
   (`run_target`), le temps limite le plus court (`run_time_limit`), et la réussite donne un rang à chacun,

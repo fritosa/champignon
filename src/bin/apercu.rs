@@ -36,6 +36,8 @@ const UI_SEED: u64 = 1;
 const LEVEL_PROGRESS: f64 = 0.6;
 const ENEMY_ELAPSED: f64 = 0.65;
 const PLANE_AGE: f64 = 2.0;
+/// Share of its crossing done by the rubber crocodile, right of the mushroom's stem.
+const CROC_LAP: f64 = 0.3;
 
 /// Fake "available" sound, so the help bar shows the sound mode.
 struct Sound;
@@ -298,6 +300,7 @@ fn main() {
     u.news = events::NEWS_CROCODILE;
     u.news_off =
         f64::from(u.w) - " FLASH INFO ".chars().count() as f64 - f64::from(ui::NEWS_MARGIN);
+    u.t = ui::MONSTER_CROSSING * CROC_LAP;
     u.draw(0.0);
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("apercu.svg");
     std::fs::write(path, svg(u.scr.rows())).expect("write apercu.svg");

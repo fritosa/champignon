@@ -15,6 +15,8 @@ use crate::screens::{
 use crate::sound::SoundSink;
 use crate::term::{Color, Key, Screen, Style, width};
 
+/// Seconds for a challenge monster to cross the field.
+pub const MONSTER_CROSSING: f64 = 12.0;
 /// Minimum delay between two plays of the same sound.
 pub const SFX_GAP: [(&str, f64); 7] = [
     ("level", 0.6),
@@ -651,6 +653,7 @@ impl<S: Screen> UI<S> {
             dt,
             1 + banners.len() as i32,
         );
+        self.draw_challenge_monsters(iy, ix, iw, ground);
         self.draw_inspector(iy, ix, iw, ground, (iw - INSPECTOR_START).min(iw / 2 + gap));
         self.draw_enemy(iy, ix, iw, ground, gap);
         self.draw_plane(iy, ix, iw);
@@ -1053,6 +1056,22 @@ impl<S: Screen> UI<S> {
         let hits = "x".repeat(ins.hits as usize) + &"·".repeat(left as usize);
         let style = self.c("red");
         self.put(iy + ground - 3, ix + x, &hits, style);
+    }
+
+    /// During a challenge that unlocks a unit (moussaka, nanars), its monster crosses the field from right to
+    /// left, again and again, in front of the army.
+    pub fn draw_challenge_monsters(&mut self, iy: i32, ix: i32, iw: i32, ground: i32) {
+        let monsters = self.g.active_challenges().into_iter();
+        for (i, u) in monsters.filter_map(data::challenge_unit).enumerate() {
+            let frames = art::unit_art(u.id).expect("every unit has art");
+            let w = art::sprite_width(frames);
+            // A double challenge with two monsters: the second one half a crossing behind.
+            let lap = (self.t / MONSTER_CROSSING + i as f64 * 0.5).fract();
+            let x = iw - (lap * f64::from(iw + w)) as i32;
+            let rows = art::sprite(frames, self.t, true);
+            let style = self.c(u.color).bold();
+            self.draw_sprite(iy, ix, iw, ground - 1, x, &rows, style, true);
+        }
     }
 
     /// Enemies coming from the left (drones through the sky), remaining hits above each one.
@@ -1584,9 +1603,6 @@ impl<S: Screen> UI<S> {
                      deux gagnent un rang. Entrée sur un premier défi (◆), puis sur le second.",
                 ));
             }
-            for c in &data::CHALLENGES {
-                rows.push(self.challenge_row(c));
-            }
             if g.challenge.is_some() {
                 rows.push(Row::new(
                     "✘ Abandonner le défi en cours",
@@ -1594,6 +1610,20 @@ impl<S: Screen> UI<S> {
                     Some(Action::Abandon),
                     "Retire la contrainte du défi sans réinitialiser la run.",
                 ));
+            }
+            // Classic challenges first, then those that unlock a unit (their monster), under their own rule.
+            let (monsters, classics): (Vec<_>, Vec<_>) = data::CHALLENGES
+                .iter()
+                .partition(|c| data::challenge_unit(c.id).is_some());
+            for c in classics {
+                rows.push(self.challenge_row(c));
+            }
+            rows.push(Row::label(
+                format!("── MONSTRES {}", "─".repeat(RULE)),
+                self.c("cyan"),
+            ));
+            for c in monsters {
+                rows.push(self.challenge_row(c));
             }
         }
         let skin_name = data::SKINS
@@ -3125,6 +3155,58 @@ pub(crate) mod tests {
         select(&mut u, |a| *a == Action::Supernova);
         u.activate();
         assert_eq!(u.g.supernova_count, 1);
+    }
+
+    /// Game time well past the explosion flash.
+    const LONG_AFTER_EXPLOSION: f64 = 500.0;
+
+    #[test]
+    fn challenge_monster_crosses_the_field() {
+        let mut u = bare_ui();
+        u.g.time = LONG_AFTER_EXPLOSION;
+        u.t = MONSTER_CROSSING / 2.0; // mid-field
+        u.draw(0.0);
+        // Rubber croc's backs (,^^^^^,; '^' alone is also dust) and the leftmost column holding one.
+        let back = |u: &UI<BufferScreen>| {
+            let cols: Vec<usize> = u
+                .scr
+                .rows()
+                .iter()
+                .filter_map(|r| {
+                    let line: String = r.iter().map(|c| c.0).collect();
+                    line.find(",^^^^^,").map(|b| line[..b].chars().count())
+                })
+                .collect();
+            (cols.len(), cols.into_iter().min())
+        };
+        let (before, _) = back(&u);
+        u.g.challenge = Some("crocodile");
+        u.draw(0.0);
+        let (during, mid) = back(&u);
+        assert!(during > before);
+        u.t += MONSTER_CROSSING / 4.0; // a quarter of a crossing later, further left
+        u.draw(0.0);
+        let (_, later) = back(&u);
+        assert!(later.is_some() && later < mid);
+    }
+
+    #[test]
+    fn monster_challenges_have_their_section() {
+        let u = supernova_ui();
+        let texts = row_texts(&u.prestige_rows());
+        let header = texts
+            .iter()
+            .position(|t| t.starts_with("── MONSTRES"))
+            .unwrap();
+        let moussaka = texts
+            .iter()
+            .position(|t| t.contains("moussaka géante"))
+            .unwrap();
+        let race = texts
+            .iter()
+            .position(|t| t.contains("Défi Course"))
+            .unwrap();
+        assert!(race < header && header < moussaka);
     }
 
     #[test]
