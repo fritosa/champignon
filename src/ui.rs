@@ -1377,6 +1377,10 @@ impl<S: Screen> UI<S> {
             Some("pacifist") => Some("Défi Pacifiste : unités interdites !".to_string()),
             Some("mono") => Some("Défi Monoculture : une seule unité !".to_string()),
             Some("strike") if g.on_strike() => Some("Grève : appuie sur ESPACE !".to_string()),
+            Some("savior") => Some("Le héros frappe, l'armée suit !".to_string()),
+            Some("devil") if g.devil_waiting() => {
+                Some("Cheval noir : attends un peu...".to_string())
+            }
             _ => None,
         };
         if let Some(text) = warning {
@@ -1390,7 +1394,7 @@ impl<S: Screen> UI<S> {
                 let n = g.units[uid];
                 let k = match self.qty {
                     Qty::Max => 1.max(g.affordable(uid)),
-                    Qty::N(k) => k,
+                    Qty::N(k) => k.min(g.max_bulk()),
                 };
                 let cost = g.unit_cost_n(uid, k);
                 let text = format!(
@@ -2522,7 +2526,7 @@ impl<S: Screen> UI<S> {
             Action::Unit(uid) => {
                 let bought = match self.qty {
                     Qty::Max => g.buy_unit_max(uid),
-                    Qty::N(k) => g.buy_unit_n(uid, k),
+                    Qty::N(k) => g.buy_unit_n(uid, k.min(g.max_bulk())),
                 };
                 if bought > 0 {
                     self.sfx("buy");

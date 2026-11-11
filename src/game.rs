@@ -12,7 +12,7 @@ use serde_json::Value;
 
 use crate::data::{self, UNIT_COUNT, UNITS};
 use crate::events::{self, EnemyKind};
-use crate::rng::{Rng, StdRandom};
+use crate::rng::{RandomExt, Rng, StdRandom};
 use crate::saves;
 
 pub const SUFFIXES: [&str; 12] = [
@@ -616,8 +616,10 @@ pub struct Game {
     pub auto_acc: f64,
     pub autobuy_acc: f64,
     pub ach_acc: f64,
-    /// Time since the last unit loss of the Demi-vie challenge.
-    pub decay_acc: f64,
+    /// Time since the last periodic effect of the current challenge (Demi-vie losses, Crocodile Fury bites).
+    pub challenge_acc: f64,
+    /// Time of the last unit bought (Devil Story challenge).
+    pub last_unit_buy: f64,
 }
 
 impl Default for Game {
@@ -688,7 +690,8 @@ impl Game {
             next_inspector: 0.0,
             auto_acc: 0.0,
             autobuy_acc: 0.0,
-            decay_acc: 0.0,
+            challenge_acc: 0.0,
+            last_unit_buy: LONG_AGO,
             ach_acc: 0.0,
         };
         g.reset_run();
@@ -767,7 +770,8 @@ impl Game {
         self.auto_acc = 0.0;
         self.autobuy_acc = 0.0;
         self.ach_acc = 0.0;
-        self.decay_acc = 0.0;
+        self.challenge_acc = 0.0;
+        self.last_unit_buy = LONG_AGO;
     }
 
     pub fn schedule_inspector(&mut self, first: bool) {
@@ -998,6 +1002,14 @@ impl Game {
     }
 
     pub fn production(&self) -> f64 {
+        if self.challenge == Some("savior") {
+            return 0.0;
+        }
+        self.army_production()
+    }
+
+    /// Production of the army, also during L'homme qui sauve le monde (where it only comes with presses).
+    pub fn army_production(&self) -> f64 {
         if self.frozen() || !self.exploded || self.on_strike() {
             return 0.0;
         }
@@ -1095,9 +1107,11 @@ impl Game {
                 return;
             }
             let combo_top = (self.max_combo() - 1) as f64;
-            self.combo = combo_top.min(self.combo + COMBO_STEP);
-            if self.combo >= combo_top {
-                self.stats.max_combo = true;
+            if self.challenge != Some("ninja") {
+                self.combo = combo_top.min(self.combo + COMBO_STEP);
+                if self.combo >= combo_top {
+                    self.stats.max_combo = true;
+                }
             }
             self.last_click = self.time;
             self.stats.clicks += 1;
@@ -1113,6 +1127,9 @@ impl Game {
             return;
         }
         let mut v = self.click_value(manual);
+        if self.challenge == Some("savior") {
+            v += self.army_production() * data::SAVIOR_PUNCH;
+        }
         if self.rng.random() < self.crit_chance() {
             v *= self.crit_mult();
             self.last_crit = self.time;
@@ -1131,6 +1148,21 @@ impl Game {
             self.run_stats.best_click = self.run_stats.best_click.max(v);
         }
         self.gain(v);
+        if manual
+            && self.challenge == Some("whitefire")
+            && self.rng.random() < data::WHITEFIRE_BRAWL_CHANCE
+        {
+            self.brawl();
+        }
+    }
+
+    /// White Fire challenge: a brawl breaks out and costs part of the radiation.
+    fn brawl(&mut self) {
+        let lost = self.radiation * data::WHITEFIRE_BRAWL_LOSS;
+        self.radiation -= lost;
+        self.sfx.push_back("nope");
+        let text = format!("Baston homérique ! -{} ☢", self.fmt(lost));
+        self.log(text, MsgKind::Bad, Some("BASTON"));
     }
 
     /// Records the press; true if it exceeds the press threshold over the last second.
@@ -1277,7 +1309,14 @@ impl Game {
     }
 
     pub fn can_buy_unit(&self, uid: &str) -> bool {
-        self.unit_allowed(uid) && self.radiation >= self.unit_cost(uid, None)
+        self.unit_allowed(uid)
+            && !self.devil_waiting()
+            && self.radiation >= self.unit_cost(uid, None)
+    }
+
+    /// Devil Story challenge: the last unit was bought less than DEVIL_BUY_GAP seconds ago.
+    pub fn devil_waiting(&self) -> bool {
+        self.challenge == Some("devil") && self.time - self.last_unit_buy < data::DEVIL_BUY_GAP
     }
 
     pub fn buy_unit(&mut self, uid: &str) -> bool {
@@ -1307,13 +1346,22 @@ impl Game {
         (0..k).map(|i| self.unit_cost(uid, Some(n + i))).sum()
     }
 
-    /// Number of units affordable at once with the current radiation (capped at MAX_BULK).
+    /// Most units bought at once: MAX_BULK, 1 during Devil Story.
+    pub fn max_bulk(&self) -> u64 {
+        if self.challenge == Some("devil") {
+            1
+        } else {
+            MAX_BULK
+        }
+    }
+
+    /// Number of units affordable at once with the current radiation (capped at `max_bulk`).
     pub fn affordable(&self, uid: &str) -> u64 {
         if !self.can_buy_unit(uid) {
             return 0;
         }
         let (mut k, mut total, n) = (0, 0.0, self.units[uid]);
-        while k < MAX_BULK && total + self.unit_cost(uid, Some(n + k)) <= self.radiation {
+        while k < self.max_bulk() && total + self.unit_cost(uid, Some(n + k)) <= self.radiation {
             total += self.unit_cost(uid, Some(n + k));
             k += 1;
         }
@@ -1323,11 +1371,12 @@ impl Game {
     /// Buys exactly k units (all or nothing); returns the number bought.
     pub fn buy_unit_n(&mut self, uid: &str, k: u64) -> u64 {
         let total = self.unit_cost_n(uid, k);
-        if k == 0 || !self.can_buy_unit(uid) || self.radiation < total {
+        if k == 0 || k > self.max_bulk() || !self.can_buy_unit(uid) || self.radiation < total {
             return 0;
         }
         self.radiation = (self.radiation - total).max(0.0); // in one go: no rounding drift along the way
         self.add_units(uid, k);
+        self.last_unit_buy = self.time;
         k
     }
 
@@ -1663,6 +1712,9 @@ impl Game {
         if self.challenge == Some("halflife") {
             self.half_life(dt);
         }
+        if self.challenge == Some("crocodile") {
+            self.crocodile(dt);
+        }
         self.gain(self.production() * dt);
         self.auto_detonate(dt);
 
@@ -1694,14 +1746,41 @@ impl Game {
         let decay = 0.5f64.powf(dt / data::HALFLIFE_SECONDS);
         self.radiation *= decay;
         self.progress *= decay;
-        self.decay_acc += dt;
-        while self.decay_acc >= HALFLIFE_UNIT_PERIOD {
-            self.decay_acc -= HALFLIFE_UNIT_PERIOD;
+        self.challenge_acc += dt;
+        while self.challenge_acc >= HALFLIFE_UNIT_PERIOD {
+            self.challenge_acc -= HALFLIFE_UNIT_PERIOD;
             for u in &UNITS {
                 let lost = (self.units[u.id] as f64 * data::HALFLIFE_UNIT_DECAY) as u64;
                 self.units[u.id] -= lost;
             }
         }
+    }
+
+    /// Crocodile Fury challenge: every CROCODILE_PERIOD seconds, part of a random owned unit type is eaten.
+    fn crocodile(&mut self, dt: f64) {
+        self.challenge_acc += dt;
+        if self.challenge_acc < data::CROCODILE_PERIOD {
+            return;
+        }
+        self.challenge_acc -= data::CROCODILE_PERIOD;
+        let owned: Vec<&'static str> = self
+            .units
+            .iter()
+            .filter(|&(_, n)| n > 0)
+            .map(|(u, _)| u)
+            .collect();
+        if owned.is_empty() {
+            return;
+        }
+        let uid = *self.rng.choice(&owned);
+        let eaten = (self.units[uid] as f64 * data::CROCODILE_BITE).ceil() as u64;
+        self.units[uid] -= eaten;
+        self.sfx.push_back("enemy");
+        let text = format!(
+            "Le crocodile dévore {eaten} unités ({}) !",
+            data::unit(uid).name
+        );
+        self.log(text, MsgKind::Bad, Some("CROCO !"));
     }
 
     fn auto_detonate(&mut self, dt: f64) {
@@ -2063,11 +2142,11 @@ impl Game {
     pub fn apply_offline(&mut self, elapsed: f64) {
         let rank = self.pr("p_offline");
         // Demi-vie: the stored radiation would have melted away during the absence; moussaka: it would have
-        // kept growing (run_time does not advance offline).
+        // kept growing, crocodile: it would have kept eating (run_time does not advance offline).
         if rank == 0
             || elapsed < OFFLINE_MIN
             || !self.exploded
-            || matches!(self.challenge, Some("halflife" | "moussaka"))
+            || matches!(self.challenge, Some("halflife" | "moussaka" | "crocodile"))
         {
             return;
         }
@@ -2597,6 +2676,71 @@ pub(crate) mod tests {
         g.run_time = 2.0 * data::RACE_TIME + 1.0;
         g.tick(0.1);
         assert_eq!(g.challenge, None);
+    }
+
+    #[test]
+    fn savior_army_only_works_with_presses() {
+        let mut g = exploded_game_with(fixed(0.99)); // no crit
+        g.units["soldier"] = 10;
+        let army = g.production();
+        g.challenge = Some("savior");
+        assert_eq!(g.production(), 0.0);
+        assert!(approx(g.army_production(), army));
+        let before = g.radiation;
+        g.click(false);
+        let press = g.click_value(false);
+        assert!(approx(
+            g.radiation - before,
+            press + army * data::SAVIOR_PUNCH
+        ));
+    }
+
+    #[test]
+    fn whitefire_brawl_costs_radiation() {
+        let mut g = exploded_game_with(fixed(0.0)); // every draw below the brawl chance
+        g.challenge = Some("whitefire");
+        g.radiation = 1000.0;
+        g.click(true);
+        assert!(g.radiation < 1000.0);
+        assert!(has(&g, "nope"));
+    }
+
+    #[test]
+    fn crocodile_eats_part_of_a_unit_type() {
+        let mut g = exploded_game();
+        g.challenge = Some("crocodile");
+        g.units["soldier"] = 11;
+        g.tick(data::CROCODILE_PERIOD - 1.0);
+        assert_eq!(g.units["soldier"], 11);
+        g.tick(1.0);
+        assert_eq!(
+            g.units["soldier"],
+            11 - (11.0 * data::CROCODILE_BITE).ceil() as u64
+        );
+    }
+
+    #[test]
+    fn devil_buys_one_unit_at_a_time() {
+        let mut g = exploded_game();
+        g.challenge = Some("devil");
+        g.talents.insert("u_soldier", 1);
+        g.radiation = 1e9;
+        assert_eq!(g.affordable("soldier"), 1);
+        assert_eq!(g.buy_unit_n("soldier", 2), 0);
+        assert!(g.buy_unit("soldier"));
+        assert!(g.devil_waiting());
+        assert!(!g.buy_unit("soldier"));
+        g.time += data::DEVIL_BUY_GAP;
+        assert!(g.buy_unit("soldier"));
+    }
+
+    #[test]
+    fn ninja_has_no_combo() {
+        let mut g = exploded_game();
+        g.challenge = Some("ninja");
+        g.click(true);
+        g.click(true);
+        assert_eq!(g.combo, 0.0);
     }
 
     #[test]
@@ -3310,7 +3454,7 @@ pub(crate) mod tests {
         assert!(approx(g.radiation, 5.0 * 3600.0 * 0.25));
         assert_eq!(last_kind(&g), MsgKind::Good);
         let before = g.radiation;
-        for ch in ["halflife", "moussaka"] {
+        for ch in ["halflife", "moussaka", "crocodile"] {
             g.challenge = Some(ch);
             g.apply_offline(3600.0);
             assert_eq!(g.radiation, before, "{ch}");

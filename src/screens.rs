@@ -179,6 +179,127 @@ pub const STORIES: &[((&str, &str), &[&str])] = &[
              de cinéma. Il ouvre une taverne.",
         ],
     ),
+    (
+        ("savior", "start"),
+        &[
+            "L'HOMME QUI SAUVE LE MONDE — UN REMAKE DE GÉRARD ZÉDÉ",
+            "Gérard Zédé a déniché une cassette turque de 1982, jamais sortie en France, que la rédaction d'un \
+             certain site place tout en haut de son classement. Il l'appelle « le Saint Graal ». Il veut le même, \
+             chez toi, tout de suite.",
+            "Le héros moustachu de son remake ne délègue rien. Ton armée attend les bras croisés : elle ne crache \
+             sa radiation que quand le héros cogne. Et il cogne sur ESPACE, encore et encore, comme sur un rocher \
+             d'entraînement.",
+            "Ta mission : atteindre le niveau demandé à la force du poignet. Le monde ne va pas se sauver tout \
+             seul.",
+        ],
+    ),
+    (
+        ("savior", "end"),
+        &[
+            "L'HOMME QUI SAUVE LE MONDE — GÉNÉRIQUE DE FIN",
+            "Le monde est sauvé. Probablement. Le montage est si rapide que personne n'a bien vu. Gérard Zédé \
+             pleure dans les bras du perchman, qui commence à avoir l'habitude.",
+            "Le héros moustachu reste dans ton armée : le Sauveur du monde frappe désormais pour toi, et sa \
+             production double à chaque rang du défi. Tu gagnes aussi le skin Sauveur du monde, jaune et rouge \
+             comme une affiche de vidéoclub.",
+        ],
+    ),
+    (
+        ("whitefire", "start"),
+        &[
+            "WHITE FIRE — UN REMAKE DE GÉRARD ZÉDÉ",
+            "Trois titres, un film, un monument : White Fire, alias Vivre pour survivre, alias Le diamant. \
+             Gérard Zédé en a fait son livre de chevet. Pour le remake, il a réuni des gros bras et un diamant \
+             radioactif plus gros qu'un melon.",
+            "Problème : sur ce tournage, la moindre réplique tourne à la baston homérique. Chaque appui sur ESPACE \
+             risque de déclencher une bagarre générale qui fait voler une partie de ta radiation à travers le \
+             décor.",
+            "Ta mission : atteindre le niveau demandé avant que l'équipe ne casse tout. Le cascadeur en chef a \
+             déjà demandé une prime.",
+        ],
+    ),
+    (
+        ("whitefire", "end"),
+        &[
+            "WHITE FIRE — GÉNÉRIQUE DE FIN",
+            "La dernière baston s'achève. Personne ne sait plus qui se battait contre qui, ni pourquoi. Le diamant, \
+             lui, brille toujours, intact, au fond d'un seau.",
+            "Tu le gardes : le Diamant blanc rejoint ton armée et irradie de plus belle, deux fois plus à chaque \
+             rang du défi. Le skin Feu blanc te revient aussi. Le film sort sous trois titres différents ; tu \
+             achètes les trois cassettes.",
+        ],
+    ),
+    (
+        ("crocodile", "start"),
+        &[
+            "CROCODILE FURY — UN REMAKE DE GÉRARD ZÉDÉ",
+            "Hong Kong, 1988 : deux films collés ensemble, des vampires d'un côté, un crocodile de l'autre, et un \
+             doublage improvisé après le tournage. Gérard Zédé trouve ça génial. Pour son remake, il a acheté un \
+             crocodile en caoutchouc d'occasion.",
+            "Le crocodile a faim. Toutes les trente secondes, il surgit de la rizière et dévore une partie d'une \
+             sorte de troupes au hasard. Il paraît que c'est la réincarnation de la fiancée du héros. Elle n'a \
+             pas bon caractère.",
+            "Ta mission : atteindre le niveau demandé en remplaçant les disparus plus vite qu'il ne les mange.",
+        ],
+    ),
+    (
+        ("crocodile", "end"),
+        &[
+            "CROCODILE FURY — GÉNÉRIQUE DE FIN",
+            "Le héros serre le crocodile en caoutchouc dans ses bras : « Je comprends ce que tu ressens, mais tu \
+             ne peux pas continuer à dévorer tous mes soldats innocents. » Le crocodile hoche la tête. Le \
+             machiniste qui le tient aussi.",
+            "Apaisé, il s'engage : le Croco en caoutchouc produit pour toi, deux fois plus à chaque rang du défi. \
+             Tu gagnes le skin Rizière. La moitié du film reste à monter ; Gérard dit que ça fera une suite.",
+        ],
+    ),
+    (
+        ("devil", "start"),
+        &[
+            "DEVIL STORY — UN REMAKE DE GÉRARD ZÉDÉ",
+            "Normandie, 1985 : un village hanté, une falaise en maquette de bateau, une momie sans sarcophage et \
+             un cheval noir qui revient sans cesse à l'écran. Gérard Zédé n'en revient pas. Il tourne le remake \
+             sur place, avec le même cheval. Enfin, la même cassette.",
+            "Le monteur n'a qu'un seul plan du cheval noir, et il le remet entre chaque scène. Résultat : impossible \
+             d'enchaîner les achats. Une seule unité à la fois, puis le cheval repasse.",
+            "Ta mission : atteindre le niveau demandé malgré le stock-shot. Un vieux tire au fusil sans jamais \
+             recharger, de minuit à l'aube. Personne ne sait sur quoi.",
+        ],
+    ),
+    (
+        ("devil", "end"),
+        &[
+            "DEVIL STORY — GÉNÉRIQUE DE FIN",
+            "La momie sort enfin de son couvercle et retrouve sa fiancée. Le faux sang gicle à la poire pendant \
+             une bonne minute. Puis tout s'avère n'être qu'un rêve, et le chat noir du début vient regarder la \
+             fin.",
+            "La momie reste : la Momie de la falaise rejoint ton armée et produit deux fois plus à chaque rang du \
+             défi. Tu gagnes le skin Gore-mandie. Le cheval noir, lui, repasse une dernière fois. Pour la route.",
+        ],
+    ),
+    (
+        ("ninja", "start"),
+        &[
+            "BLACK NINJA — UN REMAKE DE GÉRARD ZÉDÉ",
+            "Hong Kong, 1987 : deux policiers d'Interpol, un film taïwanais cousu au milieu, une fausse France \
+             faite de baguettes et de bouteilles d'eau, et des ninjas qui se battent en accéléré. Titre original : \
+             Ninja: Silent Assassin. Gérard Zédé a pris des notes.",
+            "Sur ce tournage, le ninja frappe en silence : pas de combo, pas de crescendo. Chaque appui sur ESPACE \
+             compte pour un seul coup. Les moulinets de bras, eux, sont autorisés.",
+            "Ta mission : atteindre le niveau demandé, coup par coup. Une pastèque a été prévue pour chaque prise. \
+             Le budget pastèques dépasse celui des cascades.",
+        ],
+    ),
+    (
+        ("ninja", "end"),
+        &[
+            "BLACK NINJA — GÉNÉRIQUE DE FIN",
+            "Le dernier trafiquant tombe, en accéléré. La musique ressemble furieusement à celle d'une série \
+             policière américaine. Les avocats de Gérard Zédé sont formels : c'est une coïncidence.",
+            "Le ninja reste à ton service : le Ninja d'Interpol produit deux fois plus à chaque rang du défi. Tu \
+             gagnes le skin Black Carambar. Il ne reste aucune pastèque intacte sur le plateau.",
+        ],
+    ),
 ];
 
 /// Story of a challenge part ("start" or "end"), if it has one.

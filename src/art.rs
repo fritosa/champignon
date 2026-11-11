@@ -29,6 +29,11 @@ pub const PALETTES: &[(&str, &[ColorName])] = &[
     ("uranium", &[Green, White, Yellow, Green, Cyan]),
     ("sunset", &[Magenta, Orange, Red, Magenta, Yellow]),
     ("moussaka", &[Yellow, White, Orange, Magenta, Orange]),
+    ("savior", &[Yellow, Red, Orange, Yellow, White]),
+    ("whitefire", &[White, Cyan, White, Grey, Cyan]),
+    ("ricefield", &[Green, Yellow, Green, Grey, Yellow]),
+    ("goremandie", &[Red, Grey, Red, White, Magenta]),
+    ("carambar", &[Grey, Orange, Grey, Yellow, Grey]),
 ];
 pub const RAINBOW: &[ColorName] = &[Red, Orange, Yellow, Green, Cyan, Blue, Magenta];
 const DENSE: &[char] = &['@', '#', '%', '&'];
@@ -410,6 +415,29 @@ pub const UNIT_ART: &[(&str, Frames)] = &[
         "moussaka",
         [&[" ~~~ ", "(o_o)", "[###]"], &[" ~~~ ", "(-_-)", "[###]"]],
     ),
+    (
+        "savior",
+        [&[" o/ ", "/|  ", "/ \\ "], &["\\o  ", " |\\ ", "/ \\ "]],
+    ),
+    (
+        "diamond",
+        [&[" /\\ ", "<**>", " \\/ "], &[" /\\ ", "<##>", " \\/ "]],
+    ),
+    (
+        "croc",
+        [&[" ,^^^^^, ", "<o_____=>"], &[" ,^^^^^, ", "<O_____=>"]],
+    ),
+    (
+        "mummy",
+        [
+            &[" (#) ", "-|#|-", " / \\ "],
+            &[" (#) ", "\\|#|/", " / \\ "],
+        ],
+    ),
+    (
+        "ninja",
+        [&[" o  ", "<|=-", "/ \\ "], &["  o ", "-=|>", " / \\"]],
+    ),
 ];
 
 pub const ENEMY_ART: &[(&str, Frames)] = &[
@@ -602,7 +630,7 @@ pub fn big_width(text: &str) -> i32 {
 mod tests {
     use super::*;
 
-    const UNITS: [&str; 10] = [
+    const UNITS: [&str; 15] = [
         "soldier",
         "mortar",
         "artillery",
@@ -613,6 +641,11 @@ mod tests {
         "reactor",
         "blackhole",
         "moussaka",
+        "savior",
+        "diamond",
+        "croc",
+        "mummy",
+        "ninja",
     ];
     const ENEMIES: [&str; 4] = ["saboteur", "drone", "hippies", "commando"];
 
@@ -689,9 +722,29 @@ mod tests {
     #[test]
     fn known_skins() {
         for skin in [
-            "classic", "toxic", "rainbow", "mario", "plasma", "gold", "ghost", "neon", "ice",
-            "lava", "camo", "crystal", "obsidian", "carton", "moss", "uranium", "sunset",
+            "classic",
+            "toxic",
+            "rainbow",
+            "mario",
+            "plasma",
+            "gold",
+            "ghost",
+            "neon",
+            "ice",
+            "lava",
+            "camo",
+            "crystal",
+            "obsidian",
+            "carton",
+            "moss",
+            "uranium",
+            "sunset",
             "moussaka",
+            "savior",
+            "whitefire",
+            "ricefield",
+            "goremandie",
+            "carambar",
         ] {
             assert!(has_skin(skin), "{skin}");
         }

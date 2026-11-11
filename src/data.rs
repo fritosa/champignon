@@ -139,7 +139,7 @@ const fn unit_def(
 }
 
 #[rustfmt::skip]
-pub const UNITS: [Unit; 10] = [
+pub const UNITS: [Unit; 15] = [
     unit_def("soldier", "Soldat", "i", 15.0, 0.5, "o", "green", "Conscription", 1, "Grenades à fragmentation"),
     unit_def("mortar", "Mortier", "y", 150.0, 4.0, "*", "yellow", "Mortiers", 3, "Obus explosifs"),
     unit_def("artillery", "Artilleur", "F", 1_500.0, 30.0, "°", "orange", "Artillerie lourde", 5, "Obus perforants"),
@@ -154,6 +154,16 @@ pub const UNITS: [Unit; 10] = [
              "Horizon des événements"),
     unit_def("moussaka", "Moussaka apprivoisée", "#", 3e10, 4.2e7, "~", "orange", "Recette de mamie", 35,
              "Béchamel enrichie").after_challenge("moussaka", MOUSSAKA_PROD_MULT),
+    unit_def("savior", "Sauveur du monde", "&", 3.5e11, 3.2e8, "*", "yellow", "Ceinture noire", 40,
+             "Poings de fer").after_challenge("savior", NANAR_UNIT_MULT),
+    unit_def("diamond", "Diamant blanc", "$", 4e12, 2.4e9, "'", "white", "Mine de diamants", 45,
+             "Taille en brillant").after_challenge("whitefire", NANAR_UNIT_MULT),
+    unit_def("croc", "Croco en caoutchouc", "C", 4.6e13, 1.8e10, "w", "green", "Rizière hantée", 50,
+             "Mâchoires en mousse").after_challenge("crocodile", NANAR_UNIT_MULT),
+    unit_def("mummy", "Momie de la falaise", "M", 5.3e14, 1.4e11, "#", "red", "Couvercle sans sarcophage", 55,
+             "Bandelettes au faux sang").after_challenge("devil", NANAR_UNIT_MULT),
+    unit_def("ninja", "Ninja d'Interpol", "N", 6.1e15, 1.05e12, "x", "magenta", "Opération Pastèque", 60,
+             "Baguettes de combat").after_challenge("ninja", NANAR_UNIT_MULT),
 ];
 pub const UNIT_COUNT: usize = UNITS.len();
 pub const UNIT_COST_GROWTH: f64 = 1.15;
@@ -258,7 +268,9 @@ fn unit_talents() -> Vec<Talent> {
             ),
             &[(unlock_id, 1)],
         ));
-        previous = Some(unit.id);
+        if unit.challenge.is_none() {
+            previous = Some(unit.id);
+        }
     }
     talents
 }
@@ -578,6 +590,16 @@ pub const HALFLIFE_UNIT_DECAY: f64 = 0.05;
 pub const STRIKE_WINDOW: f64 = 1.0;
 /// The giant moussaka grows by 1 every MOUSSAKA_GROWTH seconds; production is divided by its size.
 pub const MOUSSAKA_GROWTH: f64 = 60.0;
+/// Seconds of army production released by each press (L'homme qui sauve le monde).
+pub const SAVIOR_PUNCH: f64 = 0.1;
+/// White Fire: chance per press of a brawl, and share of the radiation it costs.
+pub const WHITEFIRE_BRAWL_CHANCE: f64 = 0.05;
+pub const WHITEFIRE_BRAWL_LOSS: f64 = 0.2;
+/// Crocodile Fury: delay between two bites, and share of a unit type eaten.
+pub const CROCODILE_PERIOD: f64 = 30.0;
+pub const CROCODILE_BITE: f64 = 0.5;
+/// Devil Story: minimum delay between two units bought.
+pub const DEVIL_BUY_GAP: f64 = 2.0;
 // Challenge rewards.
 pub const PACIFIST_CLICK_MULT: f64 = 3.0;
 pub const ONEARM_PROD_MULT: f64 = 2.0;
@@ -606,9 +628,11 @@ pub const HALFLIFE_COMBO: u32 = 2;
 pub const STRIKE_SHOCK_MULT: f64 = 2.0;
 /// Production of the tamed moussakas.
 pub const MOUSSAKA_PROD_MULT: f64 = 2.0;
+/// Production of the units unlocked by the nanar challenges (savior to ninja), per rank.
+pub const NANAR_UNIT_MULT: f64 = 2.0;
 
 #[rustfmt::skip]
-pub const CHALLENGES: [Challenge; 16] = [
+pub const CHALLENGES: [Challenge; 21] = [
     challenge_def("pacifist", "Pacifiste", 60, None, "toxic", "Aucune unité autorisée. Atteins le niveau {0}.", &[],
                   Desc::new("Détonation ×{} par rang + skin Vert radioactif", &[PACIFIST_CLICK_MULT])),
     challenge_def("onearm", "Manchot", 100, None, "rainbow",
@@ -673,6 +697,34 @@ pub const CHALLENGES: [Challenge; 16] = [
                   &[MOUSSAKA_GROWTH],
                   Desc::new("Débloque la Moussaka apprivoisée, sa production ×{} par rang + skin Moussaka géante",
                             &[MOUSSAKA_PROD_MULT])),
+    challenge_def("savior", "L'homme qui sauve le monde", 100, None, "savior",
+                  "Le héros fait tout lui-même : l'armée ne produit rien seule, chaque appui sur ESPACE \
+                   (auto-détonateur compris) lui fait cracher {1} s de production. Atteins le niveau {0}.",
+                  &[SAVIOR_PUNCH],
+                  Desc::new("Débloque le Sauveur du monde, sa production ×{} par rang + skin Sauveur du monde",
+                            &[NANAR_UNIT_MULT])),
+    challenge_def("whitefire", "White Fire", 100, None, "whitefire",
+                  "Baston homérique : chaque appui sur ESPACE a {1} % de risque de déclencher une bagarre qui \
+                   coûte {2} % de ta radiation. Atteins le niveau {0}.",
+                  &[percent(WHITEFIRE_BRAWL_CHANCE), percent(WHITEFIRE_BRAWL_LOSS)],
+                  Desc::new("Débloque le Diamant blanc, sa production ×{} par rang + skin Feu blanc",
+                            &[NANAR_UNIT_MULT])),
+    challenge_def("crocodile", "Crocodile Fury", 100, None, "ricefield",
+                  "Toutes les {1} s, le crocodile en caoutchouc dévore {2} % d'une sorte d'unité au hasard. \
+                   Atteins le niveau {0}.",
+                  &[CROCODILE_PERIOD, percent(CROCODILE_BITE)],
+                  Desc::new("Débloque le Croco en caoutchouc, sa production ×{} par rang + skin Rizière",
+                            &[NANAR_UNIT_MULT])),
+    challenge_def("devil", "Devil Story", 100, None, "goremandie",
+                  "Le stock-shot du cheval noir repasse en boucle : une seule unité à la fois, toutes les {1} s \
+                   au plus. Atteins le niveau {0}.",
+                  &[DEVIL_BUY_GAP],
+                  Desc::new("Débloque la Momie de la falaise, sa production ×{} par rang + skin Gore-mandie",
+                            &[NANAR_UNIT_MULT])),
+    challenge_def("ninja", "Black Ninja", 100, None, "carambar",
+                  "Ninja: Silent Assassin : pas de combo, chaque appui frappe seul. Atteins le niveau {0}.", &[],
+                  Desc::new("Débloque le Ninja d'Interpol, sa production ×{} par rang + skin Black Carambar",
+                            &[NANAR_UNIT_MULT])),
 ];
 
 pub fn find_challenge(id: &str) -> Option<&'static Challenge> {
@@ -687,7 +739,7 @@ pub fn challenge(id: &str) -> &'static Challenge {
 pub const PLASMA_PRESTIGES: u64 = 5;
 
 /// (id, name), in cycling order.
-pub const SKINS: [(&str, &str); 18] = [
+pub const SKINS: [(&str, &str); 23] = [
     ("classic", "Classique (feu)"),
     ("toxic", "Vert radioactif"),
     ("rainbow", "Arc-en-ciel"),
@@ -706,6 +758,11 @@ pub const SKINS: [(&str, &str); 18] = [
     ("uranium", "Uranium"),
     ("sunset", "Crépuscule"),
     ("moussaka", "Moussaka géante"),
+    ("savior", "Sauveur du monde"),
+    ("whitefire", "Feu blanc"),
+    ("ricefield", "Rizière"),
+    ("goremandie", "Gore-mandie"),
+    ("carambar", "Black Carambar"),
 ];
 
 /// Skin id as a static string (None if unknown).
@@ -728,6 +785,9 @@ mod tests {
         assert_eq!(m.desc, "Production des Soldats ×2 par rang.");
         assert_eq!(talent("m_blackhole").cost, (15, 1));
         assert!(talent("u_soldier").req.is_empty());
+        // Challenge units only need the last regular unit, not each other.
+        assert_eq!(talent("u_ninja").req, vec![("u_blackhole", 1)]);
+        assert_eq!(talent("u_moussaka").req, vec![("u_blackhole", 1)]);
         assert_eq!(TALENTS.len(), 6 + 2 * UNIT_COUNT + 7);
         assert_eq!(
             talent("u_moussaka").desc,
