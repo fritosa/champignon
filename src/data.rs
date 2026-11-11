@@ -511,6 +511,10 @@ pub const INVASION_ENEMY_DELAY: (f64, f64) = (15.0, 30.0);
 /// One press in NANAR_FIZZLE_EVERY fizzles.
 pub const NANAR_FIZZLE_EVERY: f64 = 3.0;
 pub const NANAR_PROD_DIVISOR: f64 = 2.0;
+/// Half-life of the stored radiation, in seconds.
+pub const HALFLIFE_SECONDS: f64 = 10.0;
+/// Seconds of production after each press.
+pub const STRIKE_WINDOW: f64 = 1.0;
 // Challenge rewards.
 pub const PACIFIST_CLICK_MULT: f64 = 3.0;
 pub const ONEARM_PROD_MULT: f64 = 2.0;
@@ -531,9 +535,15 @@ pub const UNLUCKY_CRIT_CHANCE: f64 = 0.1;
 /// Critical press multiplier, without and with the Nanarland reward.
 pub const BASE_CRIT_MULT: f64 = 10.0;
 pub const NANAR_CRIT_MULT: f64 = 15.0;
+/// Unit milestone multiplier with the Monoculture reward (MILESTONE_MULT without).
+pub const MONO_MILESTONE_MULT: f64 = 2.25;
+/// Max combo bonus.
+pub const HALFLIFE_COMBO: u32 = 2;
+/// "Onde de choc" multiplier.
+pub const STRIKE_SHOCK_MULT: f64 = 2.0;
 
 #[rustfmt::skip]
-pub const CHALLENGES: [Challenge; 12] = [
+pub const CHALLENGES: [Challenge; 15] = [
     challenge_def("pacifist", "Pacifiste", 60, None, "toxic", "Aucune unité autorisée. Atteins le niveau {0}.", &[],
                   Desc::new("Détonation ×{} permanente + skin Vert radioactif", &[PACIFIST_CLICK_MULT])),
     challenge_def("onearm", "Manchot", 100, None, "rainbow",
@@ -578,6 +588,18 @@ pub const CHALLENGES: [Challenge; 12] = [
                   &[NANAR_FIZZLE_EVERY, NANAR_PROD_DIVISOR],
                   Desc::new("Critiques ×{} au lieu de ×{} permanent + skin Carton-pâte",
                             &[NANAR_CRIT_MULT, BASE_CRIT_MULT])),
+    challenge_def("mono", "Monoculture", 100, None, "moss",
+                  "Une seule sorte d'unité : la première que tu possèdes. Atteins le niveau {0}.", &[],
+                  Desc::new("Paliers d'unités ×{} au lieu de ×{} permanent + skin Mousse",
+                            &[MONO_MILESTONE_MULT, MILESTONE_MULT])),
+    challenge_def("halflife", "Demi-vie", 100, None, "uranium",
+                  "La radiation stockée fond de moitié toutes les {1} s. Atteins le niveau {0}.", &[HALFLIFE_SECONDS],
+                  Desc::new("Combo max +{} permanent + skin Uranium", &[HALFLIFE_COMBO as f64])),
+    challenge_def("strike", "Grève générale", 100, None, "sunset",
+                  "L'armée ne produit que {1} s après chaque appui sur ESPACE (l'auto-détonateur ne compte pas). \
+                   Atteins le niveau {0}.",
+                  &[STRIKE_WINDOW],
+                  Desc::new("Onde de choc ×{} permanente + skin Crépuscule", &[STRIKE_SHOCK_MULT])),
 ];
 
 pub fn find_challenge(id: &str) -> Option<&'static Challenge> {
@@ -592,7 +614,7 @@ pub fn challenge(id: &str) -> &'static Challenge {
 pub const PLASMA_PRESTIGES: u64 = 5;
 
 /// (id, name), in cycling order.
-pub const SKINS: [(&str, &str); 14] = [
+pub const SKINS: [(&str, &str); 17] = [
     ("classic", "Classique (feu)"),
     ("toxic", "Vert radioactif"),
     ("rainbow", "Arc-en-ciel"),
@@ -607,6 +629,9 @@ pub const SKINS: [(&str, &str); 14] = [
     ("crystal", "Cristal"),
     ("obsidian", "Obsidienne"),
     ("carton", "Carton-pâte"),
+    ("moss", "Mousse"),
+    ("uranium", "Uranium"),
+    ("sunset", "Crépuscule"),
 ];
 
 /// Skin id as a static string (None if unknown).

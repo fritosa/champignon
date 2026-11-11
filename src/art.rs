@@ -25,6 +25,9 @@ pub const PALETTES: &[(&str, &[ColorName])] = &[
     ("crystal", &[Cyan, Magenta, White, Blue, Cyan]),
     ("obsidian", &[Grey, Magenta, Grey, Blue, White]),
     ("carton", &[Orange, Yellow, Grey, Orange, White]),
+    ("moss", &[Green, Yellow, Green, Grey, Green]),
+    ("uranium", &[Green, White, Yellow, Green, Cyan]),
+    ("sunset", &[Magenta, Orange, Red, Magenta, Yellow]),
 ];
 pub const RAINBOW: &[ColorName] = &[Red, Orange, Yellow, Green, Cyan, Blue, Magenta];
 const DENSE: &[char] = &['@', '#', '%', '&'];
@@ -681,7 +684,7 @@ mod tests {
     fn known_skins() {
         for skin in [
             "classic", "toxic", "rainbow", "mario", "plasma", "gold", "ghost", "neon", "ice",
-            "lava", "camo", "crystal", "obsidian", "carton",
+            "lava", "camo", "crystal", "obsidian", "carton", "moss", "uranium", "sunset",
         ] {
             assert!(has_skin(skin), "{skin}");
         }

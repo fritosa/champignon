@@ -874,6 +874,11 @@ impl Game {
             } else {
                 0
             }
+            + if self.challenges_done.contains("halflife") {
+                data::HALFLIFE_COMBO
+            } else {
+                0
+            }
     }
 
     pub fn combo_mult(&self) -> f64 {
@@ -939,6 +944,14 @@ impl Game {
         m * self.buff_mult(BuffKind::Prod)
     }
 
+    pub fn milestone_mult(&self) -> f64 {
+        if self.challenges_done.contains("mono") {
+            data::MONO_MILESTONE_MULT
+        } else {
+            data::MILESTONE_MULT
+        }
+    }
+
     pub fn unit_milestones(&self, uid: &str) -> u32 {
         data::UNIT_MILESTONES
             .iter()
@@ -957,7 +970,7 @@ impl Game {
     pub fn unit_prod(&self, uid: &str) -> f64 {
         let mut p = data::unit(uid).prod
             * data::UNIT_TALENT_MULT.powi(self.tr(data::UNIT_TALENT_IDS[unit_slot(uid)].1) as i32)
-            * data::MILESTONE_MULT.powi(self.unit_milestones(uid) as i32);
+            * self.milestone_mult().powi(self.unit_milestones(uid) as i32);
         if self.has_mut("spores") {
             let per_soldier = if self.has_syn("proliferation") {
                 events::PROLIFERATION_PER_SOLDIER
@@ -970,7 +983,7 @@ impl Game {
     }
 
     pub fn production(&self) -> f64 {
-        if self.frozen() || !self.exploded {
+        if self.frozen() || !self.exploded || self.on_strike() {
             return 0.0;
         }
         let mut p: f64 = self
@@ -990,6 +1003,11 @@ impl Game {
         }
     }
 
+    /// Grève générale challenge: no production more than STRIKE_WINDOW seconds after the last press.
+    pub fn on_strike(&self) -> bool {
+        self.challenge == Some("strike") && self.time - self.last_click > data::STRIKE_WINDOW
+    }
+
     pub fn click_value(&self, manual: bool) -> f64 {
         let mut m =
             data::P_CLICK_MULT.powi(self.pr("p_click") as i32) * self.buff_mult(BuffKind::Click);
@@ -1006,7 +1024,17 @@ impl Game {
         if manual {
             v *= self.combo_mult();
         }
-        v + self.production() * data::T_SHOCK_SHARE * self.tr("t_shock") as f64
+        v + self.production() * self.shock_share()
+    }
+
+    /// Share of the production added to each press ("Onde de choc").
+    pub fn shock_share(&self) -> f64 {
+        let mult = if self.challenges_done.contains("strike") {
+            data::STRIKE_SHOCK_MULT
+        } else {
+            1.0
+        };
+        data::T_SHOCK_SHARE * self.tr("t_shock") as f64 * mult
     }
 
     // --- Actions -----------------------------------------------------------------
@@ -1214,8 +1242,14 @@ impl Game {
         }
     }
 
+    /// Monoculture challenge: another unit type is already owned.
+    pub fn mono_forbidden(&self, uid: &str) -> bool {
+        self.challenge == Some("mono") && self.units.iter().any(|(u, n)| n > 0 && u != uid)
+    }
+
     pub fn can_buy_unit(&self, uid: &str) -> bool {
         self.challenge != Some("pacifist")
+            && !self.mono_forbidden(uid)
             && self.unit_unlocked(uid)
             && self.radiation >= self.unit_cost(uid, None)
     }
@@ -1234,7 +1268,7 @@ impl Game {
                 let text = format!(
                     "Palier : {m} {}s, production ×{} !",
                     data::unit(uid).name,
-                    data::fr_num(data::MILESTONE_MULT)
+                    data::fr_num(self.milestone_mult())
                 );
                 self.log(text, MsgKind::Good, Some("PALIER"));
             }
@@ -1563,6 +1597,11 @@ impl Game {
             self.combo = (self.combo - decay_rate * dt).max(0.0);
         }
 
+        if self.challenge == Some("halflife") {
+            let decay = 0.5f64.powf(dt / data::HALFLIFE_SECONDS);
+            self.radiation *= decay;
+            self.progress *= decay;
+        }
         self.gain(self.production() * dt);
         self.auto_detonate(dt);
 
@@ -1938,7 +1977,12 @@ impl Game {
 
     pub fn apply_offline(&mut self, elapsed: f64) {
         let rank = self.pr("p_offline");
-        if rank == 0 || elapsed < OFFLINE_MIN || !self.exploded {
+        // Demi-vie: the stored radiation would have melted away during the absence.
+        if rank == 0
+            || elapsed < OFFLINE_MIN
+            || !self.exploded
+            || self.challenge == Some("halflife")
+        {
             return;
         }
         let secs = elapsed.min(data::OFFLINE_MAX);
@@ -2104,6 +2148,65 @@ pub(crate) mod tests {
         assert_eq!(g.stats.clicks, 0);
         assert!(has(&g, "nope"));
         assert_eq!(g.messages.len(), 1); // repeated message → deduplicated
+    }
+
+    #[test]
+    fn mono_allows_one_unit_type() {
+        let mut g = exploded_game();
+        g.challenge = Some("mono");
+        g.talents.insert("u_soldier", 1);
+        g.talents.insert("u_mortar", 1);
+        g.radiation = 1e9;
+        assert!(g.can_buy_unit("mortar"));
+        assert!(g.buy_unit("soldier"));
+        assert!(!g.can_buy_unit("mortar"));
+        assert!(g.can_buy_unit("soldier"));
+        g.challenge = None;
+        assert!(g.can_buy_unit("mortar"));
+    }
+
+    #[test]
+    fn mono_reward_boosts_milestones() {
+        let mut g = exploded_game();
+        g.units["soldier"] = data::UNIT_MILESTONES[0];
+        let prod = g.unit_prod("soldier");
+        g.challenges_done.insert("mono");
+        assert!(approx(
+            g.unit_prod("soldier"),
+            prod / data::MILESTONE_MULT * data::MONO_MILESTONE_MULT
+        ));
+    }
+
+    #[test]
+    fn halflife_decays_radiation_and_progress() {
+        let mut g = exploded_game();
+        g.challenge = Some("halflife");
+        (g.radiation, g.progress) = (100.0, 0.5);
+        g.tick(data::HALFLIFE_SECONDS);
+        assert!(approx(g.radiation, 50.0));
+        assert!(approx(g.progress, 0.25));
+        let combo = g.max_combo();
+        g.challenges_done.insert("halflife");
+        assert_eq!(g.max_combo(), combo + data::HALFLIFE_COMBO);
+    }
+
+    #[test]
+    fn strike_stops_production_without_presses() {
+        let mut g = exploded_game();
+        g.units["soldier"] = 10;
+        let prod = g.production();
+        assert!(prod > 0.0);
+        g.challenge = Some("strike");
+        assert!(g.on_strike());
+        assert_eq!(g.production(), 0.0);
+        g.click(true);
+        assert!(approx(g.production(), prod));
+        g.time += data::STRIKE_WINDOW + 0.1;
+        assert_eq!(g.production(), 0.0);
+        g.talents.insert("t_shock", 1);
+        let share = g.shock_share();
+        g.challenges_done.insert("strike");
+        assert!(approx(g.shock_share(), share * data::STRIKE_SHOCK_MULT));
     }
 
     // --- Levels ---
@@ -2971,6 +3074,10 @@ pub(crate) mod tests {
         g.apply_offline(3600.0);
         assert!(approx(g.radiation, 5.0 * 3600.0 * 0.25));
         assert_eq!(last_kind(&g), MsgKind::Good);
+        g.challenge = Some("halflife");
+        let before = g.radiation;
+        g.apply_offline(3600.0);
+        assert_eq!(g.radiation, before);
     }
 
     #[test]

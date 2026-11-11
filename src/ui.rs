@@ -1321,11 +1321,14 @@ impl<S: Screen> UI<S> {
     pub fn unit_rows(&self) -> Vec<Row> {
         let g = &self.g;
         let mut rows = Vec::new();
-        if g.challenge == Some("pacifist") {
-            rows.push(Row::label(
-                "Défi Pacifiste : unités interdites !",
-                self.c("magenta"),
-            ));
+        let warning = match g.challenge {
+            Some("pacifist") => Some("Défi Pacifiste : unités interdites !"),
+            Some("mono") => Some("Défi Monoculture : une seule unité !"),
+            Some("strike") if g.on_strike() => Some("Grève : appuie sur ESPACE !"),
+            _ => None,
+        };
+        if let Some(text) = warning {
+            rows.push(Row::label(text, self.c("magenta")));
         }
         let nw = UNIT_NAME_MIN_W.max(self.tab_w - UNIT_COLUMNS_W);
         let mut teased = false;
@@ -1357,9 +1360,15 @@ impl<S: Screen> UI<S> {
                     self.num(g.unit_prod(uid))
                 );
                 if let Some(nxt) = g.next_milestone(uid) {
-                    desc += &format!(" Palier à {nxt} : production ×2.");
+                    desc += &format!(
+                        " Palier à {nxt} : production ×{}.",
+                        data::fr_num(g.milestone_mult())
+                    );
                 }
-                if !ok && !matches!(g.challenge, Some("pacifist" | "blind")) {
+                if !ok
+                    && !matches!(g.challenge, Some("pacifist" | "blind"))
+                    && !g.mono_forbidden(uid)
+                {
                     let prod = g.production();
                     desc += &if prod > 0.0 {
                         format!(" Encore {} d'attente.", dur((cost - g.radiation) / prod))

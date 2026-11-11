@@ -1,10 +1,12 @@
 //! Headless simulation to check the game balance.
 //!
-//! Usage: cargo run --release --bin sim -- [number_of_runs] [presses_per_second]
+//! Usage: cargo run --release --bin sim -- [number_of_runs] [presses_per_second] [defis]
+//!
+//! With `defis`, each challenge is then tried once, from the state reached after the runs.
 
 use champignon::data;
 use champignon::events;
-use champignon::game::{Game, fmt};
+use champignon::game::{Game, fmt, wall_time};
 use champignon::rng::{Rng, StdRandom};
 
 const DT: f64 = 0.1;
@@ -94,6 +96,14 @@ struct Bot {
 }
 
 impl Bot {
+    fn new(cps: f64) -> Bot {
+        Bot {
+            rng: StdRandom::seeded(BOT_SEED),
+            cps,
+            presses: 0.0,
+        }
+    }
+
     fn play(&mut self, g: &mut Game) {
         if !g.exploded {
             g.click(true);
@@ -122,6 +132,19 @@ impl Bot {
         if g.inspector.is_some() || !g.enemies.is_empty() {
             events::chase(g);
         }
+    }
+
+    /// Plays a challenge until it ends (success or failure) or MAX_RUN_SECONDS; None if it cannot start,
+    /// else whether it was completed.
+    fn run_challenge(&mut self, g: &mut Game, id: &'static str) -> Option<bool> {
+        if !g.prestige(Some(id)) {
+            return None;
+        }
+        while g.run_time < MAX_RUN_SECONDS && g.challenge == Some(id) {
+            self.play(g);
+            g.tick(DT);
+        }
+        Some(g.challenges_done.contains(id))
     }
 
     /// Plays a run until the max level or MAX_RUN_SECONDS; returns (level mark, run time) in order.
@@ -184,11 +207,7 @@ fn main() {
     let cps: f64 = args.get(2).map_or(DEFAULT_PRESSES_PER_SECOND, |a| {
         a.parse().expect("presses per second")
     });
-    let mut bot = Bot {
-        rng: StdRandom::seeded(BOT_SEED),
-        cps,
-        presses: 0.0,
-    };
+    let mut bot = Bot::new(cps);
     let mut g = Game::new(Box::new(StdRandom::seeded(GAME_SEED)));
     let mut total = 0.0;
     let mut durations: Vec<f64> = Vec::new();
@@ -248,6 +267,28 @@ fn main() {
         );
     }
     print_summary(total, &durations, &supernova_times);
+    if args.get(3).is_some_and(|a| a == "defis") {
+        try_challenges(cps, &g);
+    }
+}
+
+/// Tries each challenge once, each from a copy of the same state with a fresh bot (the order does not matter).
+fn try_challenges(cps: f64, start: &Game) {
+    for c in &data::CHALLENGES {
+        let mut g = Game::from_save(start.save_data(), wall_time());
+        g.rng = Box::new(StdRandom::seeded(GAME_SEED));
+        let mut bot = Bot::new(cps);
+        let result = match bot.run_challenge(&mut g, c.id) {
+            None => "cannot start (no prestige yet)".to_string(),
+            Some(true) => format!("done in {:.1}m", g.run_time / SECONDS_PER_MINUTE),
+            Some(false) => format!(
+                "failed at level {} after {:.1}m",
+                g.level,
+                g.run_time / SECONDS_PER_MINUTE
+            ),
+        };
+        println!("challenge {:<22} {result}", c.name);
+    }
 }
 
 fn minutes(seconds: f64) -> String {

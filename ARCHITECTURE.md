@@ -26,7 +26,7 @@ binaires, le jeu (`src/main.rs`), `sim` et `apercu`.
 | `src/screens.rs` | Écrans plein écran hors partie, qui pilotent le `Screen` eux-mêmes : introduction et histoires des défis (texte tapé à la machine), menu des parties ; aides de texte (`wrap`, `center`, `head`, `slice`). | `game`, `saves`, `sound`, `term` |
 | `src/ui.rs` | `UI<S: Screen>` : rendu des panneaux, onglets et overlays de la partie, bandeaux, particules, sons de l'interface, touches (`handle` → `Flow`). | tous les modules de la bibliothèque |
 | `src/main.rs` | Binaire `champignon` : choix de la partie, intro des nouvelles parties, boucle principale (20 images/s), autosauvegarde toutes les 30 s, sauvegarde même après une panique, signaux, `--reset`, `--mute`. | `game`, `saves`, `screens`, `sound`, `term`, `ui`, `signal-hook` |
-| `src/bin/sim.rs` | Bot qui joue sans affichage, pour vérifier l'équilibrage (`cargo run --release --bin sim -- [runs] [appuis/s]`, 8 runs et 6 appuis/s par défaut). Termine par un bilan : durée totale, runs de moins d'une minute, run le plus court, heure de chaque supernova. | `game`, `events`, `data`, `rng` |
+| `src/bin/sim.rs` | Bot qui joue sans affichage, pour vérifier l'équilibrage (`cargo run --release --bin sim -- [runs] [appuis/s] [defis]`, 8 runs et 6 appuis/s par défaut). Termine par un bilan : durée totale, runs de moins d'une minute, run le plus court, heure de chaque supernova. Avec `defis`, tente ensuite chaque défi une fois, chacun depuis une copie de l'état atteint (réussite et durée, ou niveau atteint). | `game`, `events`, `data`, `rng` |
 | `src/bin/apercu.rs` | Génère `apercu.svg`, la capture en couleurs du README : le vrai rendu de `UI` sur un `BufferScreen` de 100×30. À relancer (`cargo run --release --bin apercu`) quand l'écran change. | `game`, `ui`, `events`, `data`, `term`, `rng`, `sound` |
 | `install.sh` | Compile (`cargo build --release`) et crée (ou `--desinstaller` retire) la commande `champignon`, lien vers `target/release/champignon` dans `~/.local/bin` (ou le dossier passé en argument). Refuse d'écraser un fichier qui n'est pas un lien, et de retirer un lien qui pointe ailleurs. | `cargo` |
 | `Cargo.toml` | Crate `champignon` (édition 2024) ; dépendances : `crossterm`, `libloading`, `rand`, `serde`, `serde_json`, `signal-hook`. | |
@@ -124,7 +124,9 @@ le jeu ne rattrape pas tout d'un coup.
   donc rien à sauvegarder.
 - **Défis** (`data::CHALLENGES`) : contraintes codées en dur là où elles s'appliquent (chercher
   `challenge == Some("<id>")`, dans `Game` comme dans `ui.rs`), récompense via
-  `challenges_done.contains("<id>")`. `g.challenge` vaut `Option<&'static str>`.
+  `challenges_done.contains("<id>")`. `g.challenge` vaut `Option<&'static str>`. Contraintes regroupées dans une
+  méthode quand elles servent à plusieurs endroits : `Game::mono_forbidden` (Monoculture), `Game::on_strike`
+  (Grève générale) ; récompenses lues par `milestone_mult`, `max_combo`, `shock_share`, etc.
 - **Histoires de défis** (`screens::STORIES`, clés `(id, "start" | "end")`, lues par `screens::story`) : `Game`
   pose `pending_story` au lancement et à la réussite d'un défi ; `UI::show_story` (appelé par la boucle de
   `main::play`, pas par `draw`) l'affiche en plein écran (même écran tapé à la machine que l'introduction,
@@ -209,7 +211,7 @@ le jeu ne rattrape pas tout d'un coup.
   touches). Après SIGHUP, la sortie standard n'existe plus : `let _ = writeln!(…)`, pas `println!`.
 - **Panique** : `term::install_panic_hook` restaure le terminal avant le message ; `main::run` sauvegarde la
   partie puis relance la panique.
-- Les tables de données sont des tableaux de taille fixe (`[Unit; 9]`, `[Challenge; 12]`…) : ajouter une
+- Les tables de données sont des tableaux de taille fixe (`[Unit; 9]`, `[Challenge; 15]`…) : ajouter une
   entrée oblige à changer la taille (le compilateur le signale). Elles sont sous `#[rustfmt::skip]`.
 - Les tests de `art.rs` listent en dur les unités et ennemis (`art` ne dépend pas de `data`) : les mettre à
   jour avec les tables.
