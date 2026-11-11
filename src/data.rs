@@ -495,7 +495,7 @@ pub const STALENTS: [Perk; 6] = [
     perk_costs("s_auto", "Chaîne de montage", 1, Desc::new("Achète automatiquement les talents de run.", &[]), &[5]),
     perk_costs("s_keep", "Cœur stellaire", 2,
                Desc::new("Garde {} rang d'Expansion du cœur après une supernova, par rang.", &[S_KEEP_CORE as f64]),
-               &[8, 20]),
+               &[8, 10]),
 ];
 
 pub fn find_stalent(id: &str) -> Option<&'static Perk> {
@@ -534,11 +534,16 @@ pub const DOUBLE_UNLOCK: usize = 10;
 /// Pairs that cannot be played together: without presses (Manchot), these challenges produce nothing.
 pub const DOUBLE_FORBIDDEN: [(&str, &str); 2] = [("onearm", "strike"), ("onearm", "savior")];
 
+/// Challenges never played in a double: without units, Pacifiste cannot reach the higher target of another
+/// challenge.
+pub const DOUBLE_SOLO: [&str; 1] = ["pacifist"];
+
 /// The two challenges cannot be played together (in either order).
 pub fn double_forbidden(a: &str, b: &str) -> bool {
-    DOUBLE_FORBIDDEN
-        .iter()
-        .any(|&(x, y)| (x, y) == (a, b) || (x, y) == (b, a))
+    DOUBLE_SOLO.iter().any(|&c| c == a || c == b)
+        || DOUBLE_FORBIDDEN
+            .iter()
+            .any(|&(x, y)| (x, y) == (a, b) || (x, y) == (b, a))
 }
 /// Rank numbers shown to the player.
 pub const RANK_NAMES: [&str; CHALLENGE_RANKS as usize] = ["I", "II", "III"];
@@ -659,7 +664,7 @@ pub const NANAR_UNIT_MULT: f64 = 2.0;
 
 #[rustfmt::skip]
 pub const CHALLENGES: [Challenge; 21] = [
-    challenge_def("pacifist", "Pacifiste", 60, None, "toxic", "Aucune unité autorisée. Atteins le niveau {0}.", &[],
+    challenge_def("pacifist", "Pacifiste", 45, None, "toxic", "Aucune unité autorisée. Atteins le niveau {0}.", &[],
                   Desc::new("Détonation ×{} par rang + skin Vert radioactif", &[PACIFIST_CLICK_MULT]))
         .rank_mult(PACIFIST_RANK_MULT),
     challenge_def("onearm", "Manchot", 100, None, "rainbow",
@@ -882,7 +887,7 @@ mod tests {
         );
         assert_eq!(
             challenge("pacifist").desc.to_string(),
-            "Aucune unité autorisée. Atteins le niveau 60."
+            "Aucune unité autorisée. Atteins le niveau 45."
         );
         assert_eq!(
             challenge("nanar").reward.to_string(),

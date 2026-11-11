@@ -1372,6 +1372,14 @@ impl<S: Screen> UI<S> {
             );
         }
         let rank = data::RANK_NAMES[done as usize];
+        if self.double && data::DOUBLE_SOLO.contains(&c.id) {
+            return Row::new(
+                text,
+                self.c("grey"),
+                None,
+                format!("Ne se joue pas en double défi. {reward}"),
+            );
+        }
         if !g.challenge_available(c.id) {
             let needed = crate::game::fmt(g.challenge_target(c.id) as f64);
             return Row::new(
@@ -3218,19 +3226,24 @@ pub(crate) mod tests {
                 .iter()
                 .any(|t| t.starts_with("Double défi"))
         );
-        for c in data::CHALLENGES.iter().skip(2).take(data::DOUBLE_UNLOCK) {
+        for c in data::CHALLENGES.iter().skip(3).take(data::DOUBLE_UNLOCK) {
             u.g.challenges_done.insert(c.id, 1);
         }
         select(&mut u, |a| *a == Action::DoubleMode);
         u.activate();
         assert!(u.double);
-        select(&mut u, |a| *a == Action::Challenge("pacifist"));
+        assert!(
+            !u.prestige_rows()
+                .iter()
+                .any(|r| r.action == Some(Action::Challenge("pacifist")))
+        );
+        select(&mut u, |a| *a == Action::Challenge("race"));
         u.activate();
-        assert_eq!(u.double_pick, Some("pacifist"));
+        assert_eq!(u.double_pick, Some("race"));
         assert!(
             row_texts(&u.prestige_rows())
                 .iter()
-                .any(|t| t.contains("◆ Défi Pacifiste"))
+                .any(|t| t.contains("◆ Défi Course"))
         );
         select(&mut u, |a| *a == Action::Challenge("onearm"));
         u.activate(); // confirmation
@@ -3239,7 +3252,7 @@ pub(crate) mod tests {
         u.activate();
         assert_eq!(
             (u.g.challenge, u.g.challenge2),
-            (Some("pacifist"), Some("onearm"))
+            (Some("race"), Some("onearm"))
         );
         assert_eq!(u.double_pick, None);
     }

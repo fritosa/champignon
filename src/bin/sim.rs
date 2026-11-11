@@ -1,10 +1,12 @@
 //! Headless simulation to check the game balance.
 //!
-//! Usage: cargo run --release --bin sim -- [number_of_runs] [presses_per_second] [defis|unites]
+//! Usage: cargo run --release --bin sim -- [number_of_runs] [presses_per_second] [defis|unites|doubles]
 //!
 //! With `defis`, the ranks of each challenge are then tried in turn, from the state reached after the runs.
 //! With `unites`, the bot plays the challenges that unlock a unit (rank I) during the runs, as soon as they
 //! are available, to measure what these units change.
+//! With `doubles`, every challenge is set to rank I, then every allowed pair is tried as a double challenge
+//! (rank II of both), each from the same state; only the failed and slow pairs are listed.
 
 use champignon::data;
 use champignon::events;
@@ -42,6 +44,8 @@ const QUICK_RUN_SECONDS: f64 = 120.0;
 /// Passes over PRESTIGE_ORDER when spending isotopes (one rank per talent per pass).
 const PRESTIGE_BUY_PASSES: usize = 40;
 const SECONDS_PER_MINUTE: f64 = 60.0;
+/// Mode "doubles": won pairs slower than this are listed.
+const SLOW_DOUBLE_SECONDS: f64 = 1800.0;
 /// Runs shorter than this are counted as "flash" runs in the summary.
 const FLASH_RUN_SECONDS: f64 = 60.0;
 const LEVEL_MARKS: [u32; 8] = [10, 25, 50, 100, 1_000, 10_000, 100_000, 1_000_000];
@@ -158,6 +162,20 @@ impl Bot {
         if g.inspector.is_some() || !g.enemies.is_empty() {
             events::chase(g);
         }
+    }
+
+    /// Plays a double challenge until it ends or MAX_RUN_SECONDS; None if it cannot start, else whether it
+    /// was won.
+    fn run_double(&mut self, g: &mut Game, a: &'static str, b: &'static str) -> Option<bool> {
+        let before = g.stats.doubles;
+        if !g.prestige_double(a, b) {
+            return None;
+        }
+        while g.run_time < MAX_RUN_SECONDS && g.in_challenge(a) {
+            self.play(g);
+            g.tick(DT);
+        }
+        Some(g.stats.doubles > before)
     }
 
     /// Plays the next rank of a challenge until it ends (success or failure) or MAX_RUN_SECONDS; None if it
@@ -317,6 +335,59 @@ fn main() {
     if mode == Some("defis") {
         try_challenges(cps, &g);
     }
+    if mode == Some("doubles") {
+        try_doubles(cps, &g);
+    }
+}
+
+/// Mode "doubles": every allowed pair at rank II, from a copy of `start` where every challenge is at rank I.
+/// Lists the pairs that fail, cannot start or take more than SLOW_DOUBLE_SECONDS, then a summary.
+fn try_doubles(cps: f64, start: &Game) {
+    let mut base = start.save_data();
+    base.challenge_ranks = Some(
+        data::CHALLENGES
+            .iter()
+            .map(|c| (c.id.to_string(), 1))
+            .collect(),
+    );
+    let (mut won, mut slowest) = (0, (0.0, String::new()));
+    let mut tried = 0;
+    for (i, a) in data::CHALLENGES.iter().enumerate() {
+        for b in &data::CHALLENGES[i + 1..] {
+            if data::double_forbidden(a.id, b.id) {
+                continue;
+            }
+            tried += 1;
+            let mut g = Game::from_save(base.clone(), wall_time());
+            g.rng = Box::new(StdRandom::seeded(GAME_SEED));
+            let pair = format!("{} + {}", a.name, b.name);
+            match Bot::new(cps).run_double(&mut g, a.id, b.id) {
+                None => println!("double {pair}: cannot start"),
+                Some(false) => println!(
+                    "double {pair}: failed at level {} after {:.1}m",
+                    fmt(g.level as f64),
+                    g.run_time / SECONDS_PER_MINUTE
+                ),
+                Some(true) => {
+                    won += 1;
+                    if g.run_time > SLOW_DOUBLE_SECONDS {
+                        println!(
+                            "double {pair}: slow, {:.1}m",
+                            g.run_time / SECONDS_PER_MINUTE
+                        );
+                    }
+                    if g.run_time > slowest.0 {
+                        slowest = (g.run_time, pair);
+                    }
+                }
+            }
+        }
+    }
+    println!(
+        "doubles: {won}/{tried} won, slowest {:.1}m ({})",
+        slowest.0 / SECONDS_PER_MINUTE,
+        slowest.1
+    );
 }
 
 /// Mode "unites": starts the next run with the first challenge that unlocks a unit, not done yet, available

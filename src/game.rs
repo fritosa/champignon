@@ -2918,6 +2918,7 @@ pub(crate) mod tests {
         assert!(g.double_unlocked());
         assert!(!g.prestige_double("race", "race"));
         assert!(!g.prestige_double("strike", "onearm"));
+        assert!(!g.prestige_double("race", "pacifist")); // Pacifiste: never in a double
         assert!(has(&g, "nope"));
         assert!(g.prestige_double("race", "nanar"));
         assert!(g.in_challenge("race") && g.in_challenge("nanar"));
