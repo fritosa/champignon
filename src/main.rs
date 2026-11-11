@@ -13,6 +13,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use champignon::game::{Game, MsgKind};
+use champignon::i18n::tr;
 use champignon::saves::{self, MAIN_SLOT, MAX_SLOTS, Saves};
 use champignon::screens::{self, INTRO};
 use champignon::sound::{Sound, SoundSink};
@@ -22,25 +23,21 @@ use champignon::ui::{Flow, UI};
 const FRAME_DURATION: f64 = 0.05;
 const AUTOSAVE_INTERVAL: f64 = 30.0;
 const MAX_TICK: f64 = 1.0; // after a sleep, the game doesn't catch up on all the elapsed time at once
-const YES: [&str; 4] = ["o", "oui", "y", "yes"];
 
 fn log_purged(g: &mut Game, purged: &[u32]) {
+    let app = &tr().app;
     let names: Vec<String> = purged
         .iter()
         .map(|&n| {
             if n == MAIN_SLOT {
-                "partie principale".to_string()
+                app.main_slot.to_string()
             } else {
-                format!("partie {n}")
+                (app.slot)(n)
             }
         })
         .collect();
-    let prefix = if purged.len() > 1 {
-        "Sauvegardes trop anciennes supprimées : "
-    } else {
-        "Sauvegarde trop ancienne supprimée : "
-    };
-    g.log(format!("{prefix}{}", names.join(", ")), MsgKind::Bad, None);
+    let text = (app.purged)(&names.join(tr().list_join), purged.len() > 1);
+    g.log(text, MsgKind::Bad, None);
 }
 
 /// Plays until the player quits (or a signal arrives). Returns the path of the saved game, None if
@@ -115,32 +112,33 @@ fn play(ui: &mut UI<TermScreen>, path: &Path) {
 /// Erases all games after confirmation. Returns false if the player backs out.
 /// answer: the line typed by the player, None on end of input.
 fn reset(saves: &Saves, answer: impl FnOnce() -> Option<String>, out: &mut impl Write) -> bool {
+    let app = &tr().app;
     let files = saves.all_files();
     if files.is_empty() {
-        let _ = writeln!(out, "Aucune partie à effacer.");
+        let _ = writeln!(out, "{}", app.reset_nothing);
         return true;
     }
     let list: Vec<String> = files.iter().map(|p| p.display().to_string()).collect();
-    let _ = writeln!(out, "Parties à effacer :\n  {}", list.join("\n  "));
-    let _ = write!(out, "Effacer définitivement ? [o/N] ");
+    let _ = writeln!(out, "{}", (app.reset_list)(&list));
+    let _ = write!(out, "{}", app.reset_confirm);
     let _ = out.flush();
     match answer() {
-        Some(a) if YES.contains(&a.trim().to_lowercase().as_str()) => {}
+        Some(a) if app.yes.contains(&a.trim().to_lowercase().as_str()) => {}
         Some(_) => {
-            let _ = writeln!(out, "Rien n'a été effacé.");
+            let _ = writeln!(out, "{}", app.reset_cancelled);
             return false;
         }
         None => {
-            let _ = writeln!(out, "\nRien n'a été effacé.");
+            let _ = writeln!(out, "\n{}", app.reset_cancelled);
             return false;
         }
     }
     let failed = saves::delete(&files);
     if !failed.is_empty() {
-        let _ = writeln!(out, "Impossible d'effacer :\n  {}", failed.join("\n  "));
+        let _ = writeln!(out, "{}", (app.reset_failed)(&failed));
         return false;
     }
-    let _ = writeln!(out, "Parties effacées.");
+    let _ = writeln!(out, "{}", app.reset_done);
     true
 }
 
@@ -165,10 +163,7 @@ fn main() {
     }
     let purged = saves.purge_obsolete();
     if no_usable_slot(&saves) {
-        println!(
-            "Aucune partie utilisable et aucun emplacement libre ({MAX_SLOTS} fichiers) : \
-             supprime un fichier de sauvegarde ou lance champignon --reset."
-        );
+        println!("{}", (tr().app.no_slot)(MAX_SLOTS));
         return;
     }
     // Terminal closed or kill: every screen quits like with Ctrl+C and the game is saved.
@@ -184,12 +179,13 @@ fn main() {
     match run(&saves, &purged, mute) {
         // let _: after SIGHUP stdout is gone and println! would panic.
         Ok(Some(path)) => {
-            let _ = writeln!(io::stdout(), "Partie sauvegardée dans {}", path.display());
+            let path = path.display().to_string();
+            let _ = writeln!(io::stdout(), "{}", (tr().app.saved_in)(&path));
         }
         Ok(None) => {}
         Err(e) => {
             term::restore_terminal();
-            eprintln!("Erreur : {e}");
+            eprintln!("{}", (tr().app.error)(&e.to_string()));
             std::process::exit(1);
         }
     }

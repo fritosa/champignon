@@ -59,6 +59,8 @@ pub struct DataTexts {
     /// (name, condition).
     pub achievements: Table<Named>,
     pub enemies: Table<EnemyText>,
+    /// Chest bonuses (events::CHEST_REWARDS).
+    pub chests: Table<&'static str>,
     /// (minimum level, headline): the news banner picks among the unlocked ones.
     pub news: &'static [(u32, &'static str)],
     /// Headlines added after a prestige.
@@ -110,6 +112,10 @@ impl DataTexts {
 
     pub fn achievement(&self, id: &str) -> &Named {
         find(self.achievements, id, "achievement")
+    }
+
+    pub fn chest(&self, id: &str) -> &'static str {
+        find(self.chests, id, "chest bonus")
     }
 
     pub fn enemy(&self, id: &str) -> &EnemyText {

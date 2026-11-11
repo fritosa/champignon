@@ -235,6 +235,16 @@ const TALENTS: &[(&str, Named)] = &[
               desc: "La masse critique se charge {} % plus vite par rang." }),
 ];
 
+const CHESTS: &[(&str, &str)] = &[
+    ("frenzy", "Frénésie"),
+    ("clickfrenzy", "Détonateur fou"),
+    ("lump", "Caisse d'uranium"),
+    ("pt", "Manuel tactique"),
+    ("gauge", "Plutonium"),
+    ("army", "Renforts"),
+    ("shield", "Pots-de-vin"),
+];
+
 const BRANCHES: &[(&str, &str)] = &[
     ("det", "DÉTONATION"),
     ("inf", "INFANTERIE"),
@@ -430,6 +440,7 @@ pub(super) const DATA: DataTexts = DataTexts {
     synergies: SYNERGIES,
     achievements: ACHIEVEMENTS,
     enemies: ENEMIES,
+    chests: CHESTS,
     news: NEWS,
     news_prestige: NEWS_PRESTIGE,
     news_nanar: NEWS_NANAR,

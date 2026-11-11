@@ -9,7 +9,8 @@ problèmes trouvés (voir `CLAUDE.md`). Les tables sont des tableaux de taille f
 (`[Unit; 9]`…) à chaque ajout. Toute valeur d'effet ou de réglage est une constante nommée près de sa table,
 et les textes la citent (valeur dans un `data::Desc`, `{}` dans le gabarit du catalogue, ou `format!` +
 `i18n::num`) au lieu de recopier le nombre. Les textes vont dans le catalogue de **chaque** langue
-(`src/i18n/fr/data.rs` pour les tables, par identifiant) : le test `every_table_entry_has_its_text` signale
+(`src/i18n/fr/data.rs` pour les tables, par identifiant, `msg.rs` pour les messages du jeu, `app.rs` pour
+ceux de `main.rs`) : le test `every_table_entry_has_its_text` signale
 un oubli (voir « Pas de nombre magique » dans [ARCHITECTURE.md](ARCHITECTURE.md#-règles-darchitecture)).
 
 **Nouvelle unité** : ajouter un `unit_def(…)` dans `data::UNITS` (le talent de déblocage `u_<id>` et le

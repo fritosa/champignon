@@ -1,7 +1,5 @@
 //! Random events, critical mass, mutations, achievements and news (pure logic).
 
-use std::sync::LazyLock;
-
 use crate::data::{self, Desc, percent};
 use crate::game::{BuffKind, Enemy, Game, Inspector, MsgKind, Plane, Qte, QteResult};
 use crate::i18n::{num, tr};
@@ -339,6 +337,16 @@ pub fn catch(g: &mut Game, letter: char) -> bool {
     true
 }
 
+/// Chest bonus of this id (None: unknown).
+pub fn find_chest(id: &str) -> Option<&'static str> {
+    CHEST_REWARDS.into_iter().find(|&k| k == id)
+}
+
+/// Known chest bonus id.
+pub fn is_chest(id: &str) -> bool {
+    find_chest(id).is_some()
+}
+
 /// Whether a chest bonus can be offered (or still be taken).
 pub fn chest_allowed(g: &Game, kind: &str) -> bool {
     match kind {
@@ -364,11 +372,6 @@ const ARMY_SHARE: f64 = 0.1;
 /// Bribes: seconds without inspectors.
 const BRIBE_TIME: f64 = 300.0;
 
-/// Buff names, shown in the UI.
-static FRENZY_NAME: LazyLock<String> = LazyLock::new(|| format!("Frénésie ×{}", num(FRENZY_MULT)));
-static CLICK_FRENZY_NAME: LazyLock<String> =
-    LazyLock::new(|| format!("Détonation ×{}", num(CLICK_FRENZY_MULT)));
-
 fn drop_power(g: &Game) -> f64 {
     1.0 + data::P_DROP_POWER * g.pr("p_drop") as f64
 }
@@ -376,49 +379,27 @@ fn drop_power(g: &Game) -> f64 {
 /// (name, description) of a chest bonus, numbers included.
 pub fn chest_text(g: &Game, kind: &str) -> (&'static str, String) {
     let power = drop_power(g);
+    let msg = &tr().msg;
+    let desc = match kind {
+        "frenzy" => (msg.chest_frenzy)(&num(FRENZY_MULT), FRENZY_TIME * power),
+        "clickfrenzy" => {
+            (msg.chest_click_frenzy)(&num(CLICK_FRENZY_MULT), CLICK_FRENZY_TIME * power)
+        }
+        "lump" => (msg.chest_lump)(&g.fmt(uranium_lump(g))),
+        "pt" => (msg.chest_pt_desc)(&g.fmt(chest_points(g) as f64)),
+        "gauge" => msg.chest_gauge.to_string(),
+        "army" => (msg.chest_army)(percent(ARMY_SHARE) * power),
+        _ => (msg.chest_shield)(BRIBE_TIME / 60.0 * power),
+    };
+    (tr().data.chest(kind), desc)
+}
+
+/// Name of an active buff, with its multiplier.
+pub fn buff_name(kind: BuffKind, mult: f64) -> String {
+    let msg = &tr().msg;
     match kind {
-        "frenzy" => (
-            "Frénésie",
-            format!(
-                "Production ×{} pendant {:.0} s.",
-                num(FRENZY_MULT),
-                FRENZY_TIME * power
-            ),
-        ),
-        "clickfrenzy" => (
-            "Détonateur fou",
-            format!(
-                "Détonation ×{} pendant {:.0} s.",
-                num(CLICK_FRENZY_MULT),
-                CLICK_FRENZY_TIME * power
-            ),
-        ),
-        "lump" => (
-            "Caisse d'uranium",
-            format!("+{} ☢ tout de suite.", g.fmt(uranium_lump(g))),
-        ),
-        "pt" => (
-            "Manuel tactique",
-            format!("+{} PT.", g.fmt(chest_points(g) as f64)),
-        ),
-        "gauge" => (
-            "Plutonium",
-            "Masse critique chargée à 100 % (appuie sur F).".to_string(),
-        ),
-        "army" => (
-            "Renforts",
-            format!(
-                "+{:.0} % de chaque type d'unité possédé (au moins 1).",
-                percent(ARMY_SHARE) * power
-            ),
-        ),
-        _ => (
-            "Pots-de-vin",
-            format!(
-                "Aucun inspecteur pendant {:.0} min (l'actuel repart).",
-                BRIBE_TIME / 60.0 * power
-            ),
-        ),
+        BuffKind::Prod => (msg.buff_prod)(&num(mult)),
+        BuffKind::Click => (msg.buff_click)(&num(mult)),
     }
 }
 
@@ -438,30 +419,24 @@ pub fn choose_chest(g: &mut Game, idx: usize) -> bool {
     };
     g.pending_chest = None;
     let power = drop_power(g);
-    let name = chest_text(g, kind).0;
-    let mut message = name.to_string();
+    let msg = &tr().msg;
+    let mut message = tr().data.chest(kind).to_string();
     match kind {
-        "frenzy" => g.add_buff(
-            BuffKind::Prod,
-            FRENZY_MULT,
-            FRENZY_TIME * power,
-            FRENZY_NAME.as_str(),
-        ),
+        "frenzy" => g.add_buff(BuffKind::Prod, FRENZY_MULT, FRENZY_TIME * power),
         "clickfrenzy" => g.add_buff(
             BuffKind::Click,
             CLICK_FRENZY_MULT,
             CLICK_FRENZY_TIME * power,
-            CLICK_FRENZY_NAME.as_str(),
         ),
         "lump" => {
             let amount = uranium_lump(g);
             g.gain(amount);
-            message += &format!(" (+{} ☢)", g.fmt(amount));
+            message += &(msg.chest_radiation)(&g.fmt(amount));
         }
         "pt" => {
             let pts = chest_points(g);
             g.pt += pts;
-            message += &format!(" (+{} PT)", g.fmt(pts as f64));
+            message += &(msg.chest_pt)(&g.fmt(pts as f64));
         }
         "gauge" => g.crit_gauge = 1.0,
         "army" => {
@@ -480,12 +455,8 @@ pub fn choose_chest(g: &mut Game, idx: usize) -> bool {
         }
     }
     g.sfx.push_back("chest");
-    g.run_stats.chests.push(name.to_string());
-    g.log(
-        format!("Coffre : {message} !"),
-        MsgKind::Loot,
-        Some("COFFRE"),
-    );
+    g.run_stats.chests.push(kind.to_string());
+    g.log((msg.chest)(&message), MsgKind::Loot, Some(msg.titles.chest));
     true
 }
 
@@ -602,14 +573,9 @@ fn inspector_gone(g: &mut Game, chased: bool) {
             .max(g.click_value(false) * INSPECTOR_LOOT_PRESSES)
             * loot_mult;
         g.gain(bonus);
-        g.log(
-            format!(
-                "L'inspecteur s'enfuit en courant ! (+{} ☢ de matériel abandonné)",
-                g.fmt(bonus)
-            ),
-            MsgKind::Good,
-            Some("OUSTE !"),
-        );
+        let msg = &tr().msg;
+        let text = (msg.inspector_chased)(&g.fmt(bonus));
+        g.log(text, MsgKind::Good, Some(msg.titles.chased));
     }
 }
 
@@ -699,23 +665,19 @@ pub fn wave_size(wave: u32) -> usize {
     WAVE_MAX.min(1 + wave as usize / WAVES_PER_EXTRA_ENEMY)
 }
 
-/// Current strength of an enemy's effect, as announced (None: no number).
-fn effect_strength(g: &Game, kind: EnemyKind) -> Option<String> {
+/// Current strength of an enemy's effect, as announced (`{}` of its description; none for the drone).
+pub fn effect_strength(g: &Game, kind: EnemyKind) -> Desc {
     match kind {
-        EnemyKind::Saboteur => Some(stolen_percent(g).to_string()),
-        EnemyKind::Commando => Some(sabotaged_percent(g).to_string()),
-        EnemyKind::Hippies => Some(num(protest_divisor(g))),
-        EnemyKind::Drone => None,
+        EnemyKind::Saboteur => Desc::new(&[f64::from(stolen_percent(g))]),
+        EnemyKind::Commando => Desc::new(&[f64::from(sabotaged_percent(g))]),
+        EnemyKind::Hippies => Desc::new(&[protest_divisor(g)]),
+        EnemyKind::Drone => Desc::new(&[]),
     }
 }
 
 /// Announced effect, with its current strength (it grows with the threat pressure).
 pub fn enemy_desc(g: &Game, kind: EnemyKind) -> String {
-    let desc = tr().data.enemy(kind.id()).desc;
-    match effect_strength(g, kind) {
-        Some(value) => desc.replace("{}", &value),
-        None => desc.to_string(),
-    }
+    effect_strength(g, kind).render(tr().data.enemy(kind.id()).desc)
 }
 
 pub fn enemy_progress(g: &Game, e: &Enemy) -> f64 {
@@ -750,12 +712,9 @@ pub fn spawn_enemy(g: &mut Game) {
     if !invasion {
         let kind = *g.rng.choice(&pool);
         g.enemies = vec![new_enemy(g, kind, g.time)];
-        let message = format!(
-            "{} en approche : {} ! Martèle X.",
-            kind.spec().name(),
-            enemy_desc(g, kind)
-        );
-        g.log(message, MsgKind::Bad, Some("ALERTE"));
+        let msg = &tr().msg;
+        let message = (msg.enemy_alert)(kind.spec().name(), &enemy_desc(g, kind));
+        g.log(message, MsgKind::Bad, Some(msg.titles.alert));
         return;
     }
     g.wave += 1;
@@ -768,12 +727,10 @@ pub fn spawn_enemy(g: &mut Game) {
         .map(|(i, &k)| new_enemy(g, k, g.time + i as f64 * WAVE_GAP))
         .collect();
     let names: Vec<&str> = kinds.iter().map(|k| k.spec().name()).collect();
-    let title = format!("VAGUE {}", g.wave);
-    g.log(
-        format!("Vague {} : {} ! Martèle X.", g.wave, names.join(", ")),
-        MsgKind::Bad,
-        Some(&title),
-    );
+    let msg = &tr().msg;
+    let title = (msg.titles.wave)(g.wave);
+    let text = (msg.wave)(g.wave, &names.join(msg.wave_join));
+    g.log(text, MsgKind::Bad, Some(&title));
 }
 
 fn enemy_gone(g: &mut Game, idx: usize, chased: bool) {
@@ -787,45 +744,34 @@ fn enemy_gone(g: &mut Game, idx: usize, chased: bool) {
         let bonus = (g.production() * ENEMY_LOOT_PROD_SECONDS)
             .max(g.click_value(false) * ENEMY_LOOT_PRESSES);
         g.gain(bonus);
-        g.log(
-            format!(
-                "{} repoussé ! (+{} ☢ de butin)",
-                kind.spec().name(),
-                g.fmt(bonus)
-            ),
-            MsgKind::Good,
-            Some("REPOUSSÉ"),
-        );
+        let msg = &tr().msg;
+        let text = (msg.enemy_chased)(kind.spec().name(), &g.fmt(bonus));
+        g.log(text, MsgKind::Good, Some(msg.titles.repelled));
     }
 }
 
 fn enemy_arrives(g: &mut Game, idx: usize) {
     let kind = g.enemies[idx].kind;
+    let msg = &tr().msg;
     match kind {
         EnemyKind::Saboteur => {
             let stolen = g.radiation * stolen_percent(g) as f64 / 100.0;
             g.radiation -= stolen;
-            g.log(
-                format!("Le saboteur s'enfuit avec {} ☢ !", g.fmt(stolen)),
-                MsgKind::Bad,
-                Some("VOLÉ !"),
-            );
+            let text = (msg.saboteur)(&g.fmt(stolen));
+            g.log(text, MsgKind::Bad, Some(msg.titles.stolen));
         }
         EnemyKind::Drone => {
             g.crit_gauge = 0.0;
             // The drone overrides neither bribes nor the fog.
             let bribed = g.time < g.bribe_until;
             let calls_inspector = g.inspector.is_none() && !bribed && inspector_can_come(g);
-            let outcome = if calls_inspector {
+            if calls_inspector {
                 g.next_inspector = g.next_inspector.min(g.time + DRONE_INSPECTOR_DELAY);
-                " : un inspecteur arrive bientôt !"
-            } else {
-                " et vidé ta masse critique !"
-            };
+            }
             g.log(
-                format!("Le drone a photographié le site{outcome}"),
+                (msg.drone)(calls_inspector),
                 MsgKind::Bad,
-                Some("REPÉRÉ"),
+                Some(msg.titles.spotted),
             );
         }
         EnemyKind::Commando => {
@@ -834,16 +780,16 @@ fn enemy_arrives(g: &mut Game, idx: usize) {
                 *n -= *n * percent / 100;
             }
             g.log(
-                format!("Le commando a saboté {percent} % de ton armée !"),
+                (msg.commando)(percent),
                 MsgKind::Bad,
-                Some("SABOTAGE"),
+                Some(msg.titles.sabotage),
             );
         }
         EnemyKind::Hippies => {
             g.log(
-                "Les manifestants rentrent chez eux.",
+                msg.hippies_leave,
                 MsgKind::Info,
-                Some("FIN DU SIT-IN"),
+                Some(msg.titles.sit_in_over),
             );
         }
     }
@@ -962,20 +908,17 @@ pub fn choose_mutation(g: &mut Game, idx: usize) {
     g.mutations.push(mid);
     g.stats.mutations += 1;
     g.pending_mutation = None;
+    let msg = &tr().msg;
     g.log(
-        format!("Mutation : {} !", mutation(mid).name()),
+        (msg.mutation)(mutation(mid).name()),
         MsgKind::Good,
-        Some("MUTATION"),
+        Some(msg.titles.mutation),
     );
     if let Some(syn) = syn {
         let discovered = g.synergies_found.insert(syn.id);
         g.sfx.push_back("synergy");
-        let found = if discovered { " découverte" } else { "" };
-        g.log(
-            format!("Synergie{found} : {} ! {}", syn.name(), syn.effect()),
-            MsgKind::Epic,
-            Some("SYNERGIE"),
-        );
+        let text = (msg.synergy)(syn.name(), &syn.effect(), discovered);
+        g.log(text, MsgKind::Epic, Some(msg.titles.synergy));
     }
     if g.mut_queue > 0 {
         g.mut_queue -= 1;
@@ -1040,21 +983,19 @@ fn tick_inspector(g: &mut Game) {
     if let Some(inspector) = g.inspector {
         let progress = (g.time - inspector.start) / inspector.dur;
         if g.tr("l_guard") > 0 && !g.in_challenge("watched") && progress > GUARD_PROGRESS {
-            g.log(
-                "Tes gardes escortent l'inspecteur vers la sortie.",
-                MsgKind::Good,
-                Some("GARDES"),
-            );
+            let msg = &tr().msg;
+            g.log(msg.inspector_guards, MsgKind::Good, Some(msg.titles.guards));
             inspector_gone(g, true);
         } else if progress >= 1.0 {
             let freeze = inspector_freeze(g);
             g.freeze_until = g.time + freeze as f64;
             g.stats.frozen += 1;
             g.sfx.push_back("freeze");
+            let msg = &tr().msg;
             g.log(
-                format!("L'inspecteur a mis les scellés : production gelée {freeze} s !"),
+                (msg.inspector_freeze)(freeze),
                 MsgKind::Bad,
-                Some("GELÉ !"),
+                Some(msg.titles.frozen),
             );
             inspector_gone(g, false);
         }

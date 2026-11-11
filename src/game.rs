@@ -197,7 +197,6 @@ pub struct Buff {
     pub kind: BuffKind,
     pub mult: f64,
     pub until: f64,
-    pub name: &'static str,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -330,6 +329,7 @@ pub struct RunStats {
     pub crits: u64,
     #[serde(deserialize_with = "or_default")]
     pub earned: f64,
+    /// Chest bonuses taken (events::CHEST_REWARDS ids).
     #[serde(deserialize_with = "or_default")]
     pub chests: Vec<String>,
     #[serde(deserialize_with = "or_default")]
@@ -359,11 +359,27 @@ pub struct RunReport {
     pub crits: u64,
     pub perfects: u64,
     pub inspectors: u64,
+    /// Ids (never texts, shown in the language of the moment): chest bonuses, mutations, synergies.
     pub chests: Vec<String>,
     pub units: u64,
     pub mutations: Vec<String>,
     pub synergies: Vec<String>,
     pub number: u64,
+}
+
+impl RunReport {
+    /// Every id it lists is known (saves before version 5 listed French names).
+    fn known_ids(&self) -> bool {
+        self.chests.iter().all(|c| events::is_chest(c))
+            && self
+                .mutations
+                .iter()
+                .all(|m| events::find_mutation(m).is_some())
+            && self
+                .synergies
+                .iter()
+                .all(|s| events::find_synergy(s).is_some())
+    }
 }
 
 // --- Save format -------------------------------------------------------------------
@@ -893,7 +909,7 @@ impl Game {
             .into_iter()
             .map(|c| data::challenge(c).name())
             .collect();
-        (!names.is_empty()).then(|| names.join(" + "))
+        (!names.is_empty()).then(|| names.join(tr().msg.challenge_join))
     }
 
     /// The challenge has a rank left whose target the current max level allows.
@@ -953,12 +969,11 @@ impl Game {
             .product()
     }
 
-    pub fn add_buff(&mut self, kind: BuffKind, mult: f64, duration: f64, name: &'static str) {
+    pub fn add_buff(&mut self, kind: BuffKind, mult: f64, duration: f64) {
         self.buffs.push(Buff {
             kind,
             mult,
             until: self.time + duration,
-            name,
         });
     }
 
@@ -1143,11 +1158,8 @@ impl Game {
         self.progress = 0.0;
         self.flash_until = self.time + EXPLOSION_FLASH;
         self.sfx.push_back("boom");
-        self.log(
-            "BOOM ! Le champignon est né.",
-            MsgKind::Epic,
-            Some("BOOM !"),
-        );
+        let msg = &tr().msg;
+        self.log(msg.boom, MsgKind::Epic, Some(msg.titles.boom));
     }
 
     /// A press on SPACE (manual) or by the auto-detonator.
@@ -1159,11 +1171,8 @@ impl Game {
         if manual {
             if self.in_challenge("onearm") {
                 self.sfx.push_back("nope");
-                self.log(
-                    "Défi Manchot : ESPACE est interdit !",
-                    MsgKind::Bad,
-                    Some("NON !"),
-                );
+                let msg = &tr().msg;
+                self.log(msg.onearm_forbidden, MsgKind::Bad, Some(msg.titles.no));
                 return;
             }
             if self.overheated() {
@@ -1226,8 +1235,12 @@ impl Game {
         let lost = self.radiation * data::WHITEFIRE_BRAWL_LOSS;
         self.radiation -= lost;
         self.sfx.push_back("nope");
-        let text = format!("Baston homérique ! -{} ☢", self.fmt(lost));
-        self.log(text, MsgKind::Bad, Some("BASTON"));
+        let msg = &tr().msg;
+        self.log(
+            (msg.brawl)(&self.fmt(lost)),
+            MsgKind::Bad,
+            Some(msg.titles.brawl),
+        );
     }
 
     /// Records the press; true if it exceeds the press threshold over the last second.
@@ -1255,11 +1268,8 @@ impl Game {
         self.click_times.clear();
         self.stats.overheats += 1;
         self.sfx.push_back("overheat");
-        self.log(
-            "SURCHAUFFE ! Doucement sur le détonateur...",
-            MsgKind::Bad,
-            Some("CHAUD !"),
-        );
+        let msg = &tr().msg;
+        self.log(msg.overheat, MsgKind::Bad, Some(msg.titles.overheat));
     }
 
     pub fn gain(&mut self, amount: f64) {
@@ -1304,11 +1314,8 @@ impl Game {
             }
         }
         if lvl == self.cap() {
-            self.log(
-                "NIVEAU MAX ! Le prestige est disponible (onglet 3).",
-                MsgKind::Epic,
-                Some("MAX !"),
-            );
+            let msg = &tr().msg;
+            self.log(msg.max_level, MsgKind::Epic, Some(msg.titles.max));
         }
         if self.run_target().is_some_and(|t| lvl >= t) {
             let double = self.challenge2.is_some();
@@ -1332,16 +1339,13 @@ impl Game {
             self.pending_story = Some((ch.id, "end"));
         }
         self.sfx.push_back("fanfare");
-        self.log(
-            format!(
-                "Défi {} {} réussi ! {}",
-                ch.name(),
-                data::RANK_NAMES[rank as usize - 1],
-                ch.reward_text()
-            ),
-            MsgKind::Star,
-            Some("DÉFI OK"),
+        let msg = &tr().msg;
+        let text = (msg.challenge_done)(
+            ch.name(),
+            data::RANK_NAMES[rank as usize - 1],
+            &ch.reward_text(),
         );
+        self.log(text, MsgKind::Star, Some(msg.titles.challenge_done));
     }
 
     pub fn unit_unlocked(&self, uid: &str) -> bool {
@@ -1398,12 +1402,10 @@ impl Game {
         for m in data::UNIT_MILESTONES {
             if before < m && m <= self.units[uid] {
                 self.sfx.push_back("milestone");
-                let text = format!(
-                    "Palier : {m} {}s, production ×{} !",
-                    data::unit(uid).name(),
-                    i18n::num(self.milestone_mult())
-                );
-                self.log(text, MsgKind::Good, Some("PALIER"));
+                let msg = &tr().msg;
+                let mult = i18n::num(self.milestone_mult());
+                let text = (msg.milestone)(m, data::unit(uid).name(), &mult);
+                self.log(text, MsgKind::Good, Some(msg.titles.milestone));
             }
         }
     }
@@ -1515,8 +1517,9 @@ impl Game {
         self.isotopes -= self.ptalent_cost(pid) as i64;
         self.ptalents.insert(p.id, self.pr(pid) + 1);
         if pid == "p_cap" {
-            let text = format!("Le cœur s'étend : niveau max {} !", fmt(self.cap() as f64));
-            self.log(text, MsgKind::Epic, Some("CŒUR +"));
+            let msg = &tr().msg;
+            let text = (msg.core_grows)(&fmt(self.cap() as f64));
+            self.log(text, MsgKind::Epic, Some(msg.titles.core));
         }
         true
     }
@@ -1568,16 +1571,8 @@ impl Game {
             inspectors: rs.inspectors,
             chests: rs.chests.clone(),
             units: self.units.total(),
-            mutations: self
-                .mutations
-                .iter()
-                .map(|m| events::mutation(m).name().to_string())
-                .collect(),
-            synergies: self
-                .synergies()
-                .iter()
-                .map(|s| s.name().to_string())
-                .collect(),
+            mutations: self.mutations.iter().map(|m| m.to_string()).collect(),
+            synergies: self.synergies().iter().map(|s| s.id.to_string()).collect(),
             number: self.prestige_count,
         });
         self.report_ready = true;
@@ -1592,13 +1587,10 @@ impl Game {
     /// Double challenge: both at their next rank, completed together at the highest of their targets.
     pub fn prestige_double(&mut self, a: &str, b: &str) -> bool {
         if data::double_forbidden(a, b) {
-            let text = format!(
-                "{} et {} ne se jouent pas ensemble.",
-                data::challenge(a).name(),
-                data::challenge(b).name()
-            );
+            let msg = &tr().msg;
+            let text = (msg.not_together)(data::challenge(a).name(), data::challenge(b).name());
             self.sfx.push_back("nope");
-            self.log(text, MsgKind::Bad, Some("NON !"));
+            self.log(text, MsgKind::Bad, Some(msg.titles.no));
             return false;
         }
         a != b && self.double_unlocked() && self.prestige_with(&[a, b])
@@ -1632,31 +1624,31 @@ impl Game {
             if challenges.len() < 2 {
                 self.sfx.push_back("prestige");
             }
+            let msg = &tr().msg;
             self.log(
-                format!("PRESTIGE ! +{gain} ⚛. Tout recommence..."),
+                (msg.prestige)(gain),
                 MsgKind::Epic,
-                Some("PRESTIGE"),
+                Some(msg.titles.prestige),
             );
         } else if challenge.is_none() || self.prestige_count == 0 {
             return false;
         }
         (self.challenge, self.challenge2) = (challenge, challenges.get(1).copied());
+        let msg = &tr().msg;
         let started: Vec<String> = challenges
             .iter()
             .map(|c| {
                 let rank = data::RANK_NAMES[self.challenge_rank(c) as usize];
-                format!("{} {rank}", data::challenge(c).name())
+                (msg.challenge_rank)(data::challenge(c).name(), rank)
             })
             .collect();
         if !started.is_empty() {
-            let kind = if started.len() > 1 {
+            let double = started.len() > 1;
+            if double {
                 self.sfx.push_back("double");
-                "Double défi"
-            } else {
-                "Défi"
-            };
-            let text = format!("{kind} {} lancé !", started.join(" + "));
-            self.log(text, MsgKind::Info, Some("DÉFI"));
+            }
+            let text = (msg.challenge_started)(&started.join(msg.challenge_join), double);
+            self.log(text, MsgKind::Info, Some(msg.titles.challenge));
         }
         if let [c] = challenges[..]
             && self.challenge_rank(c) == 0
@@ -1710,10 +1702,11 @@ impl Game {
         self.stats.iso_earned = 0;
         (self.challenge, self.challenge2) = (None, None);
         self.sfx.push_back("supernova");
+        let msg = &tr().msg;
         self.log(
-            format!("SUPERNOVA ! +{gain} ✦. L'univers recommence..."),
+            (msg.supernova)(gain),
             MsgKind::Epic,
-            Some("SUPERNOVA"),
+            Some(msg.titles.supernova),
         );
         self.reset_run();
         true
@@ -1782,7 +1775,12 @@ impl Game {
 
     pub fn abandon_challenge(&mut self) {
         if self.challenge.is_some() {
-            self.log("Défi abandonné.", MsgKind::Info, Some("ABANDON"));
+            let msg = &tr().msg;
+            self.log(
+                msg.challenge_abandoned,
+                MsgKind::Info,
+                Some(msg.titles.abandon),
+            );
             self.end_challenges();
         }
     }
@@ -1891,8 +1889,9 @@ impl Game {
         let n = self.units[uid];
         let eaten = ((n as f64 * data::CROCODILE_BITE) as u64).clamp(n.min(1), n);
         self.units[uid] -= eaten;
-        let text = format!("Croco ! -{eaten} {}", data::unit(uid).name());
-        self.log(text, MsgKind::Bad, Some("CROCO !"));
+        let msg = &tr().msg;
+        let text = (msg.crocodile)(eaten, data::unit(uid).name());
+        self.log(text, MsgKind::Bad, Some(msg.titles.crocodile));
     }
 
     fn auto_detonate(&mut self, dt: f64) {
@@ -1912,10 +1911,11 @@ impl Game {
             && let Some(name) = self.challenge_label()
         {
             self.end_challenges();
+            let msg = &tr().msg;
             self.log(
-                format!("Défi {name} échoué : trop lent !"),
+                (msg.challenge_failed)(&name),
                 MsgKind::Bad,
-                Some("ÉCHEC"),
+                Some(msg.titles.failed),
             );
         }
     }
@@ -1949,15 +1949,10 @@ impl Game {
             if !self.achievements.contains(a.id) && (a.check)(self) {
                 self.achievements.insert(a.id);
                 self.sfx.push_back("achievement");
-                self.log(
-                    format!(
-                        "★ Succès : {} (+{} % de production)",
-                        a.name(),
-                        i18n::num(data::percent(events::ACHIEVEMENT_BONUS))
-                    ),
-                    MsgKind::Star,
-                    Some("SUCCÈS"),
-                );
+                let msg = &tr().msg;
+                let bonus = i18n::num(data::percent(events::ACHIEVEMENT_BONUS));
+                let text = (msg.achievement)(a.name(), &bonus);
+                self.log(text, MsgKind::Star, Some(msg.titles.achievement));
             }
         }
     }
@@ -2245,16 +2240,15 @@ impl Game {
         g.synergies_found = ids(d.synergies_found, |s| events::find_synergy(s).map(|s| s.id))
             .map(BTreeSet::from_iter)
             .unwrap_or_default();
-        g.last_run = d.last_run;
+        g.last_run = d.last_run.filter(RunReport::known_ids);
         g.run_stats = d.run_stats.unwrap_or_default();
+        g.run_stats.chests.retain(|c| events::is_chest(c));
         g.mutations = ids(d.mutations, find_mutation).unwrap_or_default();
         g.pending_mutation = ids(d.pending_mutation, find_mutation).filter(|m| !m.is_empty());
         if let Some(skins) = ids(d.skins, data::find_skin) {
             g.skins = skins.into_iter().collect();
         }
-        let find_chest: fn(&str) -> Option<&'static str> =
-            |s| events::CHEST_REWARDS.into_iter().find(|&k| k == s);
-        g.pending_chest = ids(d.pending_chest, find_chest).filter(|c| !c.is_empty());
+        g.pending_chest = ids(d.pending_chest, events::find_chest).filter(|c| !c.is_empty());
         if g.in_challenge("watched") && g.inspector.is_none() {
             g.schedule_inspector(true); // reset_run ran before the challenge was loaded
         }
@@ -2285,12 +2279,9 @@ impl Game {
         let amount = self.production() * secs * data::P_OFFLINE_SHARE * rank as f64;
         if amount > 0.0 {
             self.gain(amount);
-            let text = format!(
-                "Pendant ton absence ({} min) : +{} ☢",
-                (secs / 60.0) as u64,
-                self.fmt(amount)
-            );
-            self.log(text, MsgKind::Good, Some("RETOUR"));
+            let msg = &tr().msg;
+            let text = (msg.offline)((secs / 60.0) as u64, &self.fmt(amount));
+            self.log(text, MsgKind::Good, Some(msg.titles.back));
         }
     }
 }
@@ -3198,7 +3189,7 @@ pub(crate) mod tests {
     fn prestige_report() {
         let mut g = exploded_game();
         g.mutations = vec!["spores", "mitosis"];
-        g.run_stats.chests = vec!["Frénésie".to_string()];
+        g.run_stats.chests = vec!["frenzy".to_string()];
         g.units["soldier"] = 12;
         (g.level, g.run_time) = (g.cap(), 300.0);
         let gain = g.prestige_gain();
@@ -3209,9 +3200,9 @@ pub(crate) mod tests {
             (r.kind, r.gain, r.level, r.time, r.units, r.number),
             (ReportKind::Prestige, gain, data::BASE_CAP, 300.0, 12, 1)
         );
-        assert_eq!(r.synergies, ["Prolifération"]);
-        assert_eq!(r.mutations, ["Spores radioactives", "Mitose"]);
-        assert_eq!(r.chests, ["Frénésie"]);
+        assert_eq!(r.synergies, ["proliferation"]);
+        assert_eq!(r.mutations, ["spores", "mitosis"]);
+        assert_eq!(r.chests, ["frenzy"]);
         assert!(g.run_stats.chests.is_empty()); // reset for the next run
     }
 
@@ -3258,6 +3249,24 @@ pub(crate) mod tests {
         assert!(load_raw(&path, &d).unwrap().last_run.is_none());
     }
 
+    /// Before version 5, the report and the run stats listed French names instead of ids.
+    #[test]
+    fn report_with_names_dropped() {
+        let tmp = TempDir::new();
+        let path = tmp.path("s.json");
+        let mut g = exploded_game();
+        g.level = g.cap();
+        g.prestige(None);
+        g.run_stats.chests = vec!["frenzy".to_string(), "pt".to_string()];
+        let mut d = g.to_json();
+        assert!(load_raw(&path, &d).unwrap().last_run.is_some());
+        d["last_run"]["chests"] = json!(["Frénésie"]);
+        d["run_stats"]["chests"] = json!(["Frénésie", "pt"]);
+        let h = load_raw(&path, &d).unwrap();
+        assert!(h.last_run.is_none());
+        assert_eq!(h.run_stats.chests, ["pt"]);
+    }
+
     #[test]
     fn corrupt_run_stats_repaired() {
         let tmp = TempDir::new();
@@ -3274,7 +3283,7 @@ pub(crate) mod tests {
             g.click(true);
             g.pending_chest = Some(vec!["frenzy"]);
             events::choose_chest(&mut g, 0); // no longer crashes
-            assert_eq!(g.run_stats.chests, ["Frénésie"]);
+            assert_eq!(g.run_stats.chests, ["frenzy"]);
             clicks.push(g.run_stats.clicks);
         }
         assert_eq!(clicks.last(), Some(&5)); // the valid value (4) is kept

@@ -1320,7 +1320,13 @@ impl<S: Screen> UI<S> {
             let txt: Vec<String> = g
                 .buffs
                 .iter()
-                .map(|b| format!("{} {:.0}s", b.name, b.until - g.time))
+                .map(|b| {
+                    format!(
+                        "{} {:.0}s",
+                        events::buff_name(b.kind, b.mult),
+                        b.until - g.time
+                    )
+                })
                 .collect();
             lines.push(vec![(txt.join("  "), self.c("yellow").bold())]);
         } else if !g.mutations.is_empty() {
@@ -2810,20 +2816,29 @@ pub fn report_lines(r: &RunReport) -> Vec<(&'static str, String)> {
         ("Inspecteurs chassés", fmt(r.inspectors as f64)),
         ("Unités", fmt(r.units as f64)),
     ];
-    let or_none = |names: &[String], none: &str| {
+    // The report lists ids (checked on load): their names are those of the current language.
+    let or_none = |names: Vec<&str>, none: &str| {
         if names.is_empty() {
             none.to_string()
         } else {
             names.join(", ")
         }
     };
-    lines.push(("Mutations", or_none(&r.mutations, "aucune")));
-    lines.push(("Synergies", or_none(&r.synergies, "aucune")));
+    let mutations = r
+        .mutations
+        .iter()
+        .map(|m| events::mutation(m).name())
+        .collect();
+    lines.push(("Mutations", or_none(mutations, "aucune")));
+    let synergies = r
+        .synergies
+        .iter()
+        .map(|s| events::synergy(s).name())
+        .collect();
+    lines.push(("Synergies", or_none(synergies, "aucune")));
     let chests = &r.chests;
-    let mut shown = or_none(
-        &chests[chests.len().saturating_sub(REPORT_CHESTS_SHOWN)..],
-        "aucun",
-    );
+    let latest = &chests[chests.len().saturating_sub(REPORT_CHESTS_SHOWN)..];
+    let mut shown = or_none(latest.iter().map(|c| tr().data.chest(c)).collect(), "aucun");
     if chests.len() > REPORT_CHESTS_SHOWN {
         shown += &format!(" (+{})", chests.len() - REPORT_CHESTS_SHOWN);
     }
@@ -3637,7 +3652,7 @@ pub(crate) mod tests {
         assert_eq!(lines["Synergies"], "Orage acide");
         assert_eq!(lines["Coffres"], "aucun");
         let run = u.g.last_run.as_mut().unwrap();
-        run.chests = vec!["A".to_string(); 9];
+        run.chests = vec!["pt".to_string(); 9];
         let lines: HashMap<_, _> = report_lines(run).into_iter().collect();
         assert!(lines["Coffres"].contains("(+3)"));
     }
@@ -3655,10 +3670,8 @@ pub(crate) mod tests {
     #[test]
     fn report_long_values_get_ellipsis() {
         let mut u = finished();
-        u.g.last_run.as_mut().unwrap().mutations = events::MUTATIONS
-            .iter()
-            .map(|m| m.name().to_string())
-            .collect();
+        u.g.last_run.as_mut().unwrap().mutations =
+            events::MUTATIONS.iter().map(|m| m.id.to_string()).collect();
         sized(&mut u, 20, 60);
         u.draw_report();
         assert!(u.scr.writes.iter().any(|(_, _, s)| s.ends_with('…')));

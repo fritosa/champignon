@@ -5,10 +5,14 @@
 //! its own word order and the compiler checks the values passed. Texts of the data tables (units, talents,
 //! challenges…) are keyed by identifier; the tests check that every language covers every identifier.
 
+pub mod app;
 pub mod data;
 pub mod fr;
+pub mod msg;
 
+use app::AppTexts;
 use data::DataTexts;
+use msg::MsgTexts;
 
 /// Every text shown to the player, in one language.
 pub struct Texts {
@@ -22,8 +26,14 @@ pub struct Texts {
     pub hidden: &'static str,
     /// Endless value or duration.
     pub infinity: &'static str,
+    /// Between the items of a list in a sentence ("Mitose, Lueur verte").
+    pub list_join: &'static str,
     /// Texts of the data tables.
     pub data: DataTexts,
+    /// Messages of the game.
+    pub msg: MsgTexts,
+    /// Texts of the program outside the game screens.
+    pub app: AppTexts,
 }
 
 /// Powers of 1000 with a suffix in game::fmt (beyond: scientific notation).
@@ -122,6 +132,7 @@ mod tests {
             same_ids(lang, "achievements", d.achievements, achievements);
             let enemies = events::ENEMIES.iter().map(|e| e.id);
             same_ids(lang, "enemies", d.enemies, enemies);
+            same_ids(lang, "chest bonuses", d.chests, events::CHEST_REWARDS);
         }
     }
 
@@ -131,6 +142,7 @@ mod tests {
     fn every_template_quotes_its_values() {
         use crate::data::{self, Desc, TalentText};
         use crate::events;
+        let exploded = crate::game::tests::exploded_game();
         for (lang, texts) in LANGS {
             let d = &texts.data;
             let mut descs: Vec<(Desc, &str)> = Vec::new();
@@ -152,6 +164,12 @@ mod tests {
             for s in &events::SYNERGIES {
                 descs.push((s.effect, d.synergy(s.id).desc));
             }
+            for kind in events::EnemyKind::ALL {
+                descs.push((
+                    events::effect_strength(&exploded, kind),
+                    d.enemy(kind.id()).desc,
+                ));
+            }
             for (desc, template) in descs {
                 assert!(
                     template.matches('{').count() >= desc.len,
@@ -168,6 +186,28 @@ mod tests {
                     );
                 }
             });
+        }
+    }
+
+    /// Big titles of the messages: every letter (accents folded) exists in the big font.
+    #[test]
+    fn titles_use_the_big_font() {
+        use crate::art::{BIG_FONT, plain};
+        for (lang, texts) in LANGS {
+            let titles = &texts.msg.titles;
+            for title in titles
+                .all()
+                .into_iter()
+                .map(String::from)
+                .chain([(titles.wave)(12)])
+            {
+                for c in plain(&title).chars() {
+                    assert!(
+                        BIG_FONT.iter().any(|(k, _)| *k == c),
+                        "{lang}: {c:?} in {title:?}"
+                    );
+                }
+            }
         }
     }
 

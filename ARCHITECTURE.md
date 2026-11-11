@@ -15,7 +15,7 @@ binaires, le jeu (`src/main.rs`), `sim` et `apercu`.
 
 | Fichier | Rôle | Dépend de |
 |---|---|---|
-| `src/i18n/mod.rs` | Textes du joueur : catalogue `Texts` (struct typée, une par langue : un texte oublié ne compile pas), `tr()` (langue courante, le français seul pour l'instant), `num` (nombre dans une phrase), `LANGS` (toutes les langues, vérifiées par les tests), `with_lang` (forcer une langue en test). Types des textes des tables dans `src/i18n/data.rs` (`DataTexts`, lus par identifiant). Une langue par sous-module (`src/i18n/fr/` : `mod.rs`, `data.rs`). | — |
+| `src/i18n/mod.rs` | Textes du joueur : catalogue `Texts` (struct typée, une par langue : un texte oublié ne compile pas), `tr()` (langue courante, le français seul pour l'instant), `num` (nombre dans une phrase), `LANGS` (toutes les langues, vérifiées par les tests), `with_lang` (forcer une langue en test). Types des textes par domaine : `src/i18n/data.rs` (`DataTexts`, tables lues par identifiant), `msg.rs` (`MsgTexts`, messages du jeu et leurs titres), `app.rs` (`AppTexts`, textes de `main.rs`). Une langue par sous-module, un fichier par domaine (`src/i18n/fr/` : `mod.rs`, `data.rs`, `msg.rs`, `app.rs`). | — |
 | `src/data.rs` | Données statiques : unités (`UNITS`), talents de run (`TALENTS`, ceux des unités générés), talents de prestige (⚛, `PTALENTS`) et de supernova (✦, `STALENTS`), défis (`CHALLENGES`), skins (`SKINS`). | — |
 | `src/rng.rs` | Trait `Rng` (`random`, `below`, `uniform`, `randint`) et son extension `RandomExt` (`choice`, `sample`) ; `StdRandom` (graine système ou `seeded`), `FixedRandom` pour les tests. | `rand` |
 | `src/events.rs` | Logique pure des systèmes annexes : ravitaillements/coffres, inspecteur de l'ONU, autres ennemis, masse critique (QTE), mutations et synergies, succès, flash info. | `data`, `game`, `rng` |
@@ -42,8 +42,11 @@ Les tests sont dans un module `#[cfg(test)] mod tests` en fin de chaque fichier 
   `g.sfx.push_back("nom")`, l'UI les vide dans `UI::play_sfx` (dédoublonnage par image, espacement minimal
   `SFX_GAP`, secousse d'écran `SHAKE`).
 - **Les messages passent par `g.log(msg, kind, title)`.** `kind` (`MsgKind::Info`, `Good`, `Bad`, `Loot`,
-  `Star`, `Epic`) donne la couleur du bandeau, `title` (`Some("TITRE")` ou `None`) un titre court en grosses
-  lettres.
+  `Star`, `Epic`) donne la couleur du bandeau, `title` (`Some(titre)` ou `None`) un titre court en grosses
+  lettres. Texte et titre viennent du catalogue : `let msg = &tr().msg;` puis `msg.overheat` ou
+  `(msg.brawl)(&montant)`, et `msg.titles.…` (lettres de `art::BIG_FONT` seulement, test
+  `titles_use_the_big_font`). Les messages gardent la langue du moment où ils sont émis (ils ne sont pas
+  sauvegardés).
 - **Le temps** : `g.time` (temps de jeu total), `g.run_time` (partie en cours). Les échéances sont stockées en
   temps absolu (`next_plane`, `next_inspector`, `next_enemy`, `freeze_until`, `bribe_until`...). Inspecteur et
   ennemis sont programmés par `Game::schedule_inspector` / `schedule_enemy` (délais selon le défi en cours).
@@ -186,7 +189,7 @@ le jeu ne rattrape pas tout d'un coup.
   `all_files` ; écriture atomique `.tmp` puis `fs::rename`, dossier créé au besoin) ; `game.rs` gère le
   contenu : `Game::save_data` remplit un `SaveData` (struct serde, un champ par clé JSON),
   `Game::save` / `Game::load` l'écrivent et le relisent, `Game::from_save` reconstruit la partie.
-- **Version du format** : clé `version` (`saves::SAVE_VERSION`, actuellement 4), à incrémenter quand le format
+- **Version du format** : clé `version` (`saves::SAVE_VERSION`, actuellement 5), à incrémenter quand le format
   change. Une sauvegarde est lisible si sa version est entre `MIN_SAVE_VERSION` et `SAVE_VERSION`
   (`saves::supported`). Au lancement, `purge_obsolete` efface celles qui sont plus anciennes (message en
   jeu). Celles d'une version plus récente sont ignorées sans être touchées : réécrites ici, elles prendraient
@@ -209,6 +212,10 @@ le jeu ne rattrape pas tout d'un coup.
   avant). Attention : `reset_run` tourne (dans `Game::new`) *avant* que le défi chargé soit appliqué ; les
   échéances qui dépendent du défi sont recalculées en fin de `from_save` (voir `watched` et `invasion`), puis
   `load_threats` les remplace si la sauvegarde en contient.
+- **Jamais de texte dans la sauvegarde**, seulement des identifiants (affichés dans la langue du moment) :
+  le rapport du dernier run (`RunReport`, clé `last_run` : coffres, mutations, synergies) et les coffres du run
+  en cours (`RunStats::chests`). Au chargement, un rapport qui cite un identifiant inconnu (comme les noms
+  français écrits avant la version 5) est écarté, et les coffres inconnus du run en cours sont retirés.
 - Défis réussis : clé `challenge_ranks` (rang par défi). L'ancienne clé `challenges_done` (liste, version 2)
   est encore lue comme rang I, mais plus écrite.
 - Gains hors ligne : `wall_time` est sauvegardé, `Game::apply_offline` crédite l'absence en fin de `from_save`

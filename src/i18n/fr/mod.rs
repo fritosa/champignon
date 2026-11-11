@@ -1,6 +1,8 @@
 //! French texts.
 
+mod app;
 mod data;
+mod msg;
 
 use super::Texts;
 
@@ -12,7 +14,10 @@ pub static FR: Texts = Texts {
     ],
     hidden: "???",
     infinity: "∞",
+    list_join: ", ",
     data: data::DATA,
+    msg: msg::MSG,
+    app: app::APP,
 };
 
 /// Decimal comma, at most 3 decimals without trailing zeros, thousands separated by spaces
