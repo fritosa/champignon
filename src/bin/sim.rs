@@ -2,7 +2,7 @@
 //!
 //! Usage: cargo run --release --bin sim -- [number_of_runs] [presses_per_second] [defis]
 //!
-//! With `defis`, each challenge is then tried once, from the state reached after the runs.
+//! With `defis`, the ranks of each challenge are then tried in turn, from the state reached after the runs.
 
 use champignon::data;
 use champignon::events;
@@ -156,9 +156,10 @@ impl Bot {
         }
     }
 
-    /// Plays a challenge until it ends (success or failure) or MAX_RUN_SECONDS; None if it cannot start,
-    /// else whether it was completed.
+    /// Plays the next rank of a challenge until it ends (success or failure) or MAX_RUN_SECONDS; None if it
+    /// cannot start, else whether the rank was completed.
     fn run_challenge(&mut self, g: &mut Game, id: &'static str) -> Option<bool> {
+        let before = g.challenge_rank(id);
         if !g.prestige(Some(id)) {
             return None;
         }
@@ -166,7 +167,7 @@ impl Bot {
             self.play(g);
             g.tick(DT);
         }
-        Some(g.challenges_done.contains(id))
+        Some(g.challenge_rank(id) > before)
     }
 
     /// Plays a run until the max level or MAX_RUN_SECONDS; returns (level mark, run time) in order.
@@ -300,16 +301,30 @@ fn try_challenges(cps: f64, start: &Game) {
         let mut g = Game::from_save(start.save_data(), wall_time());
         g.rng = Box::new(StdRandom::seeded(GAME_SEED));
         let mut bot = Bot::new(cps);
-        let result = match bot.run_challenge(&mut g, c.id) {
-            None => "cannot start (no prestige yet)".to_string(),
-            Some(true) => format!("done in {:.1}m", g.run_time / SECONDS_PER_MINUTE),
-            Some(false) => format!(
-                "failed at level {} after {:.1}m",
-                g.level,
-                g.run_time / SECONDS_PER_MINUTE
-            ),
-        };
-        println!("challenge {:<22} {result}", c.name);
+        let mut results = Vec::new();
+        // Its ranks one after the other, as long as they succeed.
+        while g.challenge_rank(c.id) < data::CHALLENGE_RANKS {
+            let rank = data::RANK_NAMES[g.challenge_rank(c.id) as usize];
+            let target = g.challenge_target(c.id);
+            match bot.run_challenge(&mut g, c.id) {
+                None => {
+                    results.push(format!("{rank}: needs max level {}", fmt(target as f64)));
+                    break;
+                }
+                Some(true) => {
+                    results.push(format!("{rank}: {:.1}m", g.run_time / SECONDS_PER_MINUTE));
+                }
+                Some(false) => {
+                    results.push(format!(
+                        "{rank}: failed at level {} after {:.1}m",
+                        fmt(g.level as f64),
+                        g.run_time / SECONDS_PER_MINUTE
+                    ));
+                    break;
+                }
+            }
+        }
+        println!("challenge {:<22} {}", c.name, results.join("  "));
     }
 }
 

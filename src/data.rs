@@ -479,7 +479,29 @@ pub struct Challenge {
     pub skin: &'static str,
     /// `{0}` is the target level, `{1}`... the values given to challenge_def.
     pub desc: Desc,
+    /// Effect of each rank.
     pub reward: Desc,
+}
+
+/// Ranks of each challenge; the target level is ×CHALLENGE_TARGET_MULT at each rank.
+pub const CHALLENGE_RANKS: u32 = 3;
+pub const CHALLENGE_TARGET_MULT: u32 = 10;
+/// Rank numbers shown to the player.
+pub const RANK_NAMES: [&str; CHALLENGE_RANKS as usize] = ["I", "II", "III"];
+
+impl Challenge {
+    /// Target level of the rank after `done` ranks.
+    pub fn target_at(&self, done: u32) -> u32 {
+        self.target
+            .saturating_mul(CHALLENGE_TARGET_MULT.saturating_pow(done))
+    }
+
+    /// Description of the rank after `done` ranks (with its target level).
+    pub fn desc_at(&self, done: u32) -> Desc {
+        let mut desc = self.desc;
+        desc.values[0] = self.target_at(done) as f64;
+        desc
+    }
 }
 
 #[rustfmt::skip]
@@ -511,8 +533,10 @@ pub const INVASION_ENEMY_DELAY: (f64, f64) = (15.0, 30.0);
 /// One press in NANAR_FIZZLE_EVERY fizzles.
 pub const NANAR_FIZZLE_EVERY: f64 = 3.0;
 pub const NANAR_PROD_DIVISOR: f64 = 2.0;
-/// Half-life of the stored radiation, in seconds.
+/// Half-life of the stored radiation and of the level progress, in seconds.
 pub const HALFLIFE_SECONDS: f64 = 10.0;
+/// Share of each unit type lost every second (rounded down).
+pub const HALFLIFE_UNIT_DECAY: f64 = 0.05;
 /// Seconds of production after each press.
 pub const STRIKE_WINDOW: f64 = 1.0;
 // Challenge rewards.
@@ -532,11 +556,11 @@ pub const INVASION_ENEMY_SLOWDOWN: f64 = 1.5;
 /// Critical mass charging speed multiplier.
 pub const STERILE_CRIT_SPEED: f64 = 1.5;
 pub const UNLUCKY_CRIT_CHANCE: f64 = 0.1;
-/// Critical press multiplier, without and with the Nanarland reward.
+/// Critical press multiplier, and the Nanarland reward per rank.
 pub const BASE_CRIT_MULT: f64 = 10.0;
-pub const NANAR_CRIT_MULT: f64 = 15.0;
-/// Unit milestone multiplier with the Monoculture reward (MILESTONE_MULT without).
-pub const MONO_MILESTONE_MULT: f64 = 2.25;
+pub const NANAR_CRIT_BONUS: f64 = 5.0;
+/// Unit milestone multiplier bonus per Monoculture rank (MILESTONE_MULT without).
+pub const MONO_MILESTONE_BONUS: f64 = 0.25;
 /// Max combo bonus.
 pub const HALFLIFE_COMBO: u32 = 2;
 /// "Onde de choc" multiplier.
@@ -545,61 +569,63 @@ pub const STRIKE_SHOCK_MULT: f64 = 2.0;
 #[rustfmt::skip]
 pub const CHALLENGES: [Challenge; 15] = [
     challenge_def("pacifist", "Pacifiste", 60, None, "toxic", "Aucune unité autorisée. Atteins le niveau {0}.", &[],
-                  Desc::new("Détonation ×{} permanente + skin Vert radioactif", &[PACIFIST_CLICK_MULT])),
+                  Desc::new("Détonation ×{} par rang + skin Vert radioactif", &[PACIFIST_CLICK_MULT])),
     challenge_def("onearm", "Manchot", 100, None, "rainbow",
                   "Ni ESPACE ni auto-détonateur ({1} soldats offerts). Atteins le niveau {0}.",
                   &[ONEARM_SOLDIERS as f64],
-                  Desc::new("Production ×{} permanente + skin Arc-en-ciel", &[ONEARM_PROD_MULT])),
+                  Desc::new("Production ×{} par rang + skin Arc-en-ciel", &[ONEARM_PROD_MULT])),
     challenge_def("race", "Course", 100, Some(RACE_TIME), "mario", "Atteins le niveau {0} en moins de {1} minutes.",
                   &[RACE_TIME / 60.0],
-                  Desc::new("Isotopes ×{} permanent + skin Champignon de Mario", &[RACE_ISO_MULT])),
+                  Desc::new("Isotopes ×{} par rang + skin Champignon de Mario", &[RACE_ISO_MULT])),
     challenge_def("inflation", "Inflation", 100, None, "gold",
                   "Les unités coûtent {1} fois plus cher. Atteins le niveau {0}.", &[INFLATION_COST_MULT],
-                  Desc::new("Unités -{} % permanent + skin Or", &[percent(1.0 - INFLATION_COST_REWARD)])),
+                  Desc::new("Coût des unités ×{} par rang + skin Or", &[INFLATION_COST_REWARD])),
     challenge_def("blind", "Brouillard de guerre", 100, None, "ghost",
                   "Niveau, radiation et production sont masqués. Atteins le niveau {0}.", &[],
-                  Desc::new("+{} mutation proposée permanente + skin Fantôme", &[BLIND_CHOICES as f64])),
+                  Desc::new("+{} mutation proposée par rang + skin Fantôme", &[BLIND_CHOICES as f64])),
     challenge_def("watched", "Sous surveillance", 100, None, "neon",
                   "Un inspecteur toutes les {1} à {2} s, gardes et brouillard inefficaces. Atteins le niveau {0}.",
                   &[WATCHED_INSPECTOR_DELAY.0, WATCHED_INSPECTOR_DELAY.1],
-                  Desc::new("Inspecteurs chassés ×{} de butin + skin Néon", &[WATCHED_LOOT_MULT])),
+                  Desc::new("Butin des inspecteurs chassés ×{} par rang + skin Néon", &[WATCHED_LOOT_MULT])),
     challenge_def("ascete", "Ascète", 100, None, "ice",
                   "Seuls les talents qui débloquent des unités sont autorisés. Atteins le niveau {0}.", &[],
-                  Desc::new("+{} PT au début de chaque run + skin Glace", &[ASCETE_PT as f64])),
+                  Desc::new("+{} PT au début de chaque run par rang + skin Glace", &[ASCETE_PT as f64])),
     challenge_def("hothead", "Tête brûlée", 100, None, "lava",
                   "Surchauffe dès {1} appuis/s, pendant {2} s, même avec les Doigts d'amiante. Atteins le niveau {0}.",
                   &[HOTHEAD_THRESHOLD as f64, HOTHEAD_OVERHEAT],
-                  Desc::new("Seuil de surchauffe +{} appuis/s permanent + skin Lave", &[HOTHEAD_THRESHOLD_BONUS as f64])),
+                  Desc::new("Seuil de surchauffe +{} appuis/s par rang + skin Lave", &[HOTHEAD_THRESHOLD_BONUS as f64])),
     challenge_def("invasion", "Invasion", 100, None, "camo",
                   "Un ennemi toutes les {1} à {2} s, tous types dès le début. Atteins le niveau {0}.",
                   &[INVASION_ENEMY_DELAY.0, INVASION_ENEMY_DELAY.1],
-                  Desc::new("Ennemis {} % plus lents permanent + skin Camouflage",
-                            &[percent(INVASION_ENEMY_SLOWDOWN - 1.0)])),
+                  Desc::new("Marche des ennemis ×{} par rang + skin Camouflage",
+                            &[INVASION_ENEMY_SLOWDOWN])),
     challenge_def("sterile", "Stérile", 100, None, "crystal",
                   "Aucune mutation ne t'est proposée. Atteins le niveau {0}.", &[],
-                  Desc::new("Masse critique {} % plus rapide permanente + skin Cristal",
-                            &[percent(STERILE_CRIT_SPEED - 1.0)])),
+                  Desc::new("Masse critique ×{} plus rapide par rang + skin Cristal",
+                            &[STERILE_CRIT_SPEED])),
     challenge_def("unlucky", "Chat noir", 100, None, "obsidian",
                   "Ni critiques, ni masse critique, ni ravitaillements. Atteins le niveau {0}.", &[],
-                  Desc::new("Chance de critique +{} % permanente + skin Obsidienne", &[percent(UNLUCKY_CRIT_CHANCE)])),
+                  Desc::new("Chance de critique +{} % par rang + skin Obsidienne", &[percent(UNLUCKY_CRIT_CHANCE)])),
     challenge_def("nanar", "Nanarland", 100, None, "carton",
                   "Effets spéciaux en carton : 1 détonation sur {1} fait pschitt, budget de série Z (production ÷{2}). \
                    Atteins le niveau {0}.",
                   &[NANAR_FIZZLE_EVERY, NANAR_PROD_DIVISOR],
-                  Desc::new("Critiques ×{} au lieu de ×{} permanent + skin Carton-pâte",
-                            &[NANAR_CRIT_MULT, BASE_CRIT_MULT])),
+                  Desc::new("Critiques +{} par rang (×{} sans) + skin Carton-pâte",
+                            &[NANAR_CRIT_BONUS, BASE_CRIT_MULT])),
     challenge_def("mono", "Monoculture", 100, None, "moss",
-                  "Une seule sorte d'unité : la première que tu possèdes. Atteins le niveau {0}.", &[],
-                  Desc::new("Paliers d'unités ×{} au lieu de ×{} permanent + skin Mousse",
-                            &[MONO_MILESTONE_MULT, MILESTONE_MULT])),
+                  "Une seule sorte d'unité, la première que tu achètes (sans Vétérans). Atteins le niveau {0}.", &[],
+                  Desc::new("Paliers d'unités +{} par rang (×{} sans) + skin Mousse",
+                            &[MONO_MILESTONE_BONUS, MILESTONE_MULT])),
     challenge_def("halflife", "Demi-vie", 100, None, "uranium",
-                  "La radiation stockée fond de moitié toutes les {1} s. Atteins le niveau {0}.", &[HALFLIFE_SECONDS],
-                  Desc::new("Combo max +{} permanent + skin Uranium", &[HALFLIFE_COMBO as f64])),
+                  "Radiation stockée et progression du niveau fondent de moitié toutes les {1} s, l'armée perd {2} % \
+                   de ses unités par seconde. Atteins le niveau {0}.",
+                  &[HALFLIFE_SECONDS, percent(HALFLIFE_UNIT_DECAY)],
+                  Desc::new("Combo max +{} par rang + skin Uranium", &[HALFLIFE_COMBO as f64])),
     challenge_def("strike", "Grève générale", 100, None, "sunset",
                   "L'armée ne produit que {1} s après chaque appui sur ESPACE (l'auto-détonateur ne compte pas). \
                    Atteins le niveau {0}.",
                   &[STRIKE_WINDOW],
-                  Desc::new("Onde de choc ×{} permanente + skin Crépuscule", &[STRIKE_SHOCK_MULT])),
+                  Desc::new("Onde de choc ×{} par rang + skin Crépuscule", &[STRIKE_SHOCK_MULT])),
 ];
 
 pub fn find_challenge(id: &str) -> Option<&'static Challenge> {
@@ -712,7 +738,7 @@ mod tests {
         );
         assert_eq!(
             challenge("nanar").reward.to_string(),
-            "Critiques ×15 au lieu de ×10 permanent + skin Carton-pâte"
+            "Critiques +5 par rang (×10 sans) + skin Carton-pâte"
         );
         assert_eq!(talent("t_combo").desc, "Combo max +1 par rang (×3 → ×5).");
     }

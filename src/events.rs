@@ -637,11 +637,7 @@ fn inspector_gone(g: &mut Game, chased: bool) {
         g.stats.inspectors += 1;
         g.run_stats.inspectors += 1;
         g.sfx.push_back("chased");
-        let loot_mult = if g.challenges_done.contains("watched") {
-            data::WATCHED_LOOT_MULT
-        } else {
-            1.0
-        };
+        let loot_mult = g.reward_pow("watched", data::WATCHED_LOOT_MULT);
         let bonus = (g.production() * INSPECTOR_LOOT_PROD_SECONDS)
             .max(g.click_value(false) * INSPECTOR_LOOT_PRESSES)
             * loot_mult;
@@ -768,12 +764,7 @@ pub fn enemy_progress(g: &Game, e: &Enemy) -> f64 {
 }
 
 pub fn enemy_duration(g: &Game, kind: EnemyKind) -> f64 {
-    kind.spec().dur
-        * if g.challenges_done.contains("invasion") {
-            data::INVASION_ENEMY_SLOWDOWN
-        } else {
-            1.0
-        }
+    kind.spec().dur * g.reward_pow("invasion", data::INVASION_ENEMY_SLOWDOWN)
 }
 
 fn new_enemy(g: &Game, kind: EnemyKind, start: f64) -> Enemy {
@@ -999,7 +990,7 @@ pub fn offer_mutation(g: &mut Game) {
     g.sfx.push_back("mutation");
     let choices = MUTATION_CHOICES
         + data::P_DNA_CHOICES * g.pr("p_dna") as usize
-        + data::BLIND_CHOICES * usize::from(g.challenges_done.contains("blind"));
+        + data::BLIND_CHOICES * g.challenge_rank("blind") as usize;
     g.pending_mutation = Some(g.rng.sample(&pool, pool.len().min(choices)));
 }
 
@@ -1058,9 +1049,7 @@ fn tick_crit_mass(g: &mut Game, dt: f64) {
         }
         * data::S_CRIT_MULT.powi(g.sr("s_crit") as i32)
         / CRIT_CHARGE_TIME;
-    if g.challenges_done.contains("sterile") {
-        rate *= data::STERILE_CRIT_SPEED;
-    }
+    rate *= g.reward_pow("sterile", data::STERILE_CRIT_SPEED);
     if g.challenge != Some("unlucky") {
         g.crit_gauge = (g.crit_gauge + rate * dt).min(1.0);
     }
@@ -1456,14 +1445,14 @@ mod tests {
         g.challenge = Some("inflation");
         assert!(approx(g.unit_cost("soldier", None), base * 4.0));
         g.challenge = None;
-        g.challenges_done.insert("inflation");
+        g.challenges_done.insert("inflation", 1);
         assert!(approx(g.unit_cost("soldier", None), base * 0.9));
     }
 
     #[test]
     fn blind_reward_extra_mutation() {
         let mut g = exploded_game();
-        g.challenges_done.insert("blind");
+        g.challenges_done.insert("blind", 1);
         offer_mutation(&mut g);
         assert_eq!(g.pending_mutation.unwrap().len(), 4);
     }
@@ -1499,7 +1488,7 @@ mod tests {
         chase(&mut g);
         let normal = g.radiation;
         let mut h = exploded_game();
-        h.challenges_done.insert("watched");
+        h.challenges_done.insert("watched", 1);
         h.inspector = inspector(h.time, INSPECTOR_HITS - 1);
         chase(&mut h);
         assert!(approx(h.radiation, normal * 3.0));
@@ -1516,7 +1505,7 @@ mod tests {
     #[test]
     fn master_achievement() {
         let mut g = exploded_game();
-        g.challenges_done = data::CHALLENGES.iter().map(|c| c.id).collect();
+        g.challenges_done = data::CHALLENGES.iter().map(|c| (c.id, 1)).collect();
         g.check_achievements();
         assert!(g.achievements.contains("challenges_all"));
     }
@@ -1975,7 +1964,7 @@ mod tests {
         (g.level, g.next_enemy) = (1, g.time);
         g.tick(0.1);
         assert!(!g.enemies.is_empty()); // every type from the start
-        g.challenges_done.insert("invasion");
+        g.challenges_done.insert("invasion", 1);
         assert_eq!(
             enemy_duration(&g, EnemyKind::Saboteur),
             EnemyKind::Saboteur.spec().dur * 1.5
@@ -2057,7 +2046,7 @@ mod tests {
         assert!(g.buy_talent("u_soldier"));
         g.auto_talents(); // doesn't loop forever on forbidden talents
         assert_eq!(g.tr("t_click"), 0);
-        g.challenges_done.insert("ascete");
+        g.challenges_done.insert("ascete", 1);
         g.challenge = None;
         g.reset_run();
         assert_eq!(g.pt, 10);
@@ -2074,7 +2063,7 @@ mod tests {
         assert!(g.overheated());
         assert!(approx(g.overheat_until - g.time, 6.0));
         g.challenge = None;
-        g.challenges_done.insert("hothead");
+        g.challenges_done.insert("hothead", 1);
         assert_eq!(g.overheat_threshold(), 17);
     }
 
@@ -2085,7 +2074,7 @@ mod tests {
         offer_mutation(&mut g);
         assert!(g.pending_mutation.is_none());
         (g.challenge, g.crit_gauge) = (None, 0.0);
-        g.challenges_done.insert("sterile");
+        g.challenges_done.insert("sterile", 1);
         (g.next_plane, g.next_inspector, g.next_enemy) = (1e9, 1e9, 1e9);
         g.tick(1.0);
         assert!(approx(g.crit_gauge, 1.5 / 90.0));
@@ -2101,7 +2090,7 @@ mod tests {
         assert_eq!(g.crit_gauge, 0.0);
         assert!(g.plane.is_none());
         g.challenge = None;
-        g.challenges_done.insert("unlucky");
+        g.challenges_done.insert("unlucky", 1);
         assert!(approx(g.crit_chance(), 0.35));
     }
 
@@ -2128,7 +2117,7 @@ mod tests {
     fn nanar_reward_and_news() {
         let mut g = exploded_game();
         assert_eq!(g.crit_mult(), 10.0);
-        g.challenges_done.insert("nanar");
+        g.challenges_done.insert("nanar", 1);
         assert_eq!(g.crit_mult(), 15.0);
         g.challenge = Some("nanar");
         let picked: Vec<&str> = (0..50).map(|_| pick_news(&mut g)).collect();

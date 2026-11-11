@@ -40,6 +40,8 @@ pub const AUTOBUY_PERIOD: f64 = 1.0;
 pub const ACHIEVEMENT_PERIOD: f64 = 1.0;
 /// Most units bought by the quartermaster at each period.
 pub const AUTOBUY_MAX: usize = 50;
+/// Period of the Demi-vie challenge unit losses (data::HALFLIFE_UNIT_DECAY is per second).
+const HALFLIFE_UNIT_PERIOD: f64 = 1.0;
 /// PT per level up, and bonus every PT_BONUS_EVERY levels up to data::BASE_CAP.
 pub const PT_PER_LEVEL: i64 = 1;
 pub const PT_BONUS: i64 = 5;
@@ -500,8 +502,12 @@ pub struct SaveData {
     pub threats: Option<ThreatsData>,
     #[serde(deserialize_with = "lenient_strings")]
     pub achievements: Option<Vec<String>>,
-    #[serde(deserialize_with = "lenient_strings")]
+    /// Challenges done before ranks existed (version 2): read as rank 1, no longer written.
+    #[serde(deserialize_with = "lenient_strings", skip_serializing)]
     pub challenges_done: Option<Vec<String>>,
+    /// Ranks done per challenge.
+    #[serde(deserialize_with = "lenient_map")]
+    pub challenge_ranks: Option<BTreeMap<String, u32>>,
     #[serde(deserialize_with = "lenient_strings")]
     pub synergies_found: Option<Vec<String>>,
     #[serde(deserialize_with = "lenient_strings")]
@@ -553,7 +559,8 @@ pub struct Game {
     pub report_ready: bool,
     /// (challenge id, "start" or "end"): the UI shows the story then resets it to None.
     pub pending_story: Option<(&'static str, &'static str)>,
-    pub challenges_done: BTreeSet<&'static str>,
+    /// Ranks done per challenge (1 to data::CHALLENGE_RANKS; absent: never done).
+    pub challenges_done: BTreeMap<&'static str, u32>,
     pub skins: BTreeSet<&'static str>,
     pub skin: &'static str,
     pub audio: &'static str,
@@ -603,6 +610,8 @@ pub struct Game {
     pub auto_acc: f64,
     pub autobuy_acc: f64,
     pub ach_acc: f64,
+    /// Time since the last unit loss of the Demi-vie challenge.
+    pub decay_acc: f64,
 }
 
 impl Default for Game {
@@ -627,7 +636,7 @@ impl Game {
             last_run: None,
             report_ready: false,
             pending_story: None,
-            challenges_done: BTreeSet::new(),
+            challenges_done: BTreeMap::new(),
             skins: BTreeSet::from(["classic"]),
             skin: "classic",
             audio: "all",
@@ -673,6 +682,7 @@ impl Game {
             next_inspector: 0.0,
             auto_acc: 0.0,
             autobuy_acc: 0.0,
+            decay_acc: 0.0,
             ach_acc: 0.0,
         };
         g.reset_run();
@@ -709,17 +719,13 @@ impl Game {
         self.next_pt_level = 0;
         self.radiation = 0.0;
         self.pt = data::P_PT_BONUS * self.pr("p_pt") as i64
-            + if self.challenges_done.contains("ascete") {
-                data::ASCETE_PT
-            } else {
-                0
-            };
+            + data::ASCETE_PT * self.challenge_rank("ascete") as i64;
         self.units = Units::default();
         self.talents = kept
             .into_iter()
             .filter(|&(t, r)| r > 0 && self.talent_allowed(t))
             .collect();
-        if self.pr("p_vets") > 0 {
+        if self.pr("p_vets") > 0 && self.challenge != Some("mono") {
             self.talents.insert("u_soldier", 1);
             self.units["soldier"] = data::P_VETS_SOLDIERS * self.pr("p_vets") as u64;
         }
@@ -755,6 +761,7 @@ impl Game {
         self.auto_acc = 0.0;
         self.autobuy_acc = 0.0;
         self.ach_acc = 0.0;
+        self.decay_acc = 0.0;
     }
 
     pub fn schedule_inspector(&mut self, first: bool) {
@@ -803,6 +810,26 @@ impl Game {
             kind,
             title: title.map(str::to_string),
         });
+    }
+
+    /// Ranks done of a challenge (0: never done).
+    pub fn challenge_rank(&self, cid: &str) -> u32 {
+        self.challenges_done.get(cid).copied().unwrap_or(0)
+    }
+
+    /// Reward multiplier of a challenge: `mult` per rank done.
+    pub fn reward_pow(&self, cid: &str, mult: f64) -> f64 {
+        mult.powi(self.challenge_rank(cid) as i32)
+    }
+
+    /// Target level of the next rank of a challenge.
+    pub fn challenge_target(&self, cid: &str) -> u32 {
+        data::challenge(cid).target_at(self.challenge_rank(cid))
+    }
+
+    /// The challenge has a rank left whose target the current max level allows.
+    pub fn challenge_available(&self, cid: &str) -> bool {
+        self.challenge_rank(cid) < data::CHALLENGE_RANKS && self.challenge_target(cid) <= self.cap()
     }
 
     pub fn tr(&self, tid: &str) -> u32 {
@@ -874,11 +901,7 @@ impl Game {
             } else {
                 0
             }
-            + if self.challenges_done.contains("halflife") {
-                data::HALFLIFE_COMBO
-            } else {
-                0
-            }
+            + data::HALFLIFE_COMBO * self.challenge_rank("halflife")
     }
 
     pub fn combo_mult(&self) -> f64 {
@@ -891,19 +914,11 @@ impl Game {
         }
         data::BASE_OVERHEAT_THRESHOLD
             + data::T_COOL_THRESHOLD * self.tr("t_cool")
-            + if self.challenges_done.contains("hothead") {
-                data::HOTHEAD_THRESHOLD_BONUS
-            } else {
-                0
-            }
+            + data::HOTHEAD_THRESHOLD_BONUS * self.challenge_rank("hothead")
     }
 
     pub fn crit_mult(&self) -> f64 {
-        if self.challenges_done.contains("nanar") {
-            data::NANAR_CRIT_MULT
-        } else {
-            data::BASE_CRIT_MULT
-        }
+        data::BASE_CRIT_MULT + data::NANAR_CRIT_BONUS * self.challenge_rank("nanar") as f64
     }
 
     pub fn crit_chance(&self) -> f64 {
@@ -916,11 +931,7 @@ impl Game {
             } else {
                 0.0
             }
-            + if self.challenges_done.contains("unlucky") {
-                data::UNLUCKY_CRIT_CHANCE
-            } else {
-                0.0
-            }
+            + data::UNLUCKY_CRIT_CHANCE * self.challenge_rank("unlucky") as f64
     }
 
     pub fn global_mult(&self) -> f64 {
@@ -938,18 +949,12 @@ impl Game {
         if self.has_syn("twins") {
             m *= events::TWINS_PROD_MULT;
         }
-        if self.challenges_done.contains("onearm") {
-            m *= data::ONEARM_PROD_MULT;
-        }
+        m *= self.reward_pow("onearm", data::ONEARM_PROD_MULT);
         m * self.buff_mult(BuffKind::Prod)
     }
 
     pub fn milestone_mult(&self) -> f64 {
-        if self.challenges_done.contains("mono") {
-            data::MONO_MILESTONE_MULT
-        } else {
-            data::MILESTONE_MULT
-        }
+        data::MILESTONE_MULT + data::MONO_MILESTONE_BONUS * self.challenge_rank("mono") as f64
     }
 
     pub fn unit_milestones(&self, uid: &str) -> u32 {
@@ -1017,9 +1022,7 @@ impl Game {
         if self.has_mut("acid") && !self.has_syn("storm") {
             m *= events::ACID_CLICK_MULT;
         }
-        if self.challenges_done.contains("pacifist") {
-            m *= data::PACIFIST_CLICK_MULT;
-        }
+        m *= self.reward_pow("pacifist", data::PACIFIST_CLICK_MULT);
         let mut v = (data::BASE_CLICK + data::T_CLICK_POWER * self.tr("t_click") as f64) * m;
         if manual {
             v *= self.combo_mult();
@@ -1029,12 +1032,9 @@ impl Game {
 
     /// Share of the production added to each press ("Onde de choc").
     pub fn shock_share(&self) -> f64 {
-        let mult = if self.challenges_done.contains("strike") {
-            data::STRIKE_SHOCK_MULT
-        } else {
-            1.0
-        };
-        data::T_SHOCK_SHARE * self.tr("t_shock") as f64 * mult
+        data::T_SHOCK_SHARE
+            * self.tr("t_shock") as f64
+            * self.reward_pow("strike", data::STRIKE_SHOCK_MULT)
     }
 
     // --- Actions -----------------------------------------------------------------
@@ -1196,23 +1196,31 @@ impl Game {
             );
         }
         if let Some(ch) = self.challenge.map(data::challenge)
-            && lvl >= ch.target
+            && lvl >= self.challenge_target(ch.id)
         {
             self.complete_challenge(ch);
         }
     }
 
     fn complete_challenge(&mut self, ch: &'static data::Challenge) {
-        self.challenges_done.insert(ch.id);
+        let rank = self.challenge_rank(ch.id) + 1;
+        self.challenges_done.insert(ch.id, rank);
         self.skins.insert(ch.skin);
         self.challenge = None;
-        self.pending_story = Some((ch.id, "end"));
+        if rank == 1 {
+            self.pending_story = Some((ch.id, "end"));
+        }
         if ch.id == "watched" {
             self.schedule_inspector(false);
         }
         self.sfx.push_back("fanfare");
         self.log(
-            format!("Défi {} réussi ! {}", ch.name, ch.reward),
+            format!(
+                "Défi {} {} réussi ! {}",
+                ch.name,
+                data::RANK_NAMES[rank as usize - 1],
+                ch.reward
+            ),
             MsgKind::Star,
             Some("DÉFI OK"),
         );
@@ -1232,9 +1240,7 @@ impl Game {
         if self.challenge == Some("inflation") {
             c *= data::INFLATION_COST_MULT;
         }
-        if self.challenges_done.contains("inflation") {
-            c *= data::INFLATION_COST_REWARD;
-        }
+        c *= self.reward_pow("inflation", data::INFLATION_COST_REWARD);
         c * if self.has_mut("acid") {
             events::ACID_COST_MULT
         } else {
@@ -1382,9 +1388,7 @@ impl Game {
         let mut g = PRESTIGE_GAIN
             * (self.level as f64 / PRESTIGE_LEVEL).powf(PRESTIGE_EXPONENT)
             * (1.0 + data::P_ISO_BONUS * self.pr("p_iso") as f64);
-        if self.challenges_done.contains("race") {
-            g *= data::RACE_ISO_MULT;
-        }
+        g *= self.reward_pow("race", data::RACE_ISO_MULT);
         (g * data::S_ISO_MULT.powi(self.sr("s_iso") as i32)) as i64
     }
 
@@ -1420,9 +1424,13 @@ impl Game {
         self.report_ready = true;
     }
 
-    /// Normal prestige (at max level) or start of a challenge (always possible after a 1st prestige).
+    /// Normal prestige (at max level) or start of the next rank of a challenge (possible after a 1st prestige,
+    /// if the max level allows its target).
     pub fn prestige(&mut self, challenge: Option<&str>) -> bool {
         let challenge = challenge.map(|c| data::challenge(c).id);
+        if challenge.is_some_and(|c| !self.challenge_available(c)) {
+            return false;
+        }
         if self.can_prestige() {
             let gain = self.prestige_gain();
             self.isotopes += gain;
@@ -1450,12 +1458,19 @@ impl Game {
         }
         self.challenge = challenge;
         if let Some(c) = challenge {
+            let done = self.challenge_rank(c);
             self.log(
-                format!("Défi {} lancé !", data::challenge(c).name),
+                format!(
+                    "Défi {} {} lancé !",
+                    data::challenge(c).name,
+                    data::RANK_NAMES[done as usize]
+                ),
                 MsgKind::Info,
                 Some("DÉFI"),
             );
-            self.pending_story = Some((c, "start"));
+            if done == 0 {
+                self.pending_story = Some((c, "start"));
+            }
         }
         self.reset_run();
         true
@@ -1600,9 +1615,7 @@ impl Game {
         }
 
         if self.challenge == Some("halflife") {
-            let decay = 0.5f64.powf(dt / data::HALFLIFE_SECONDS);
-            self.radiation *= decay;
-            self.progress *= decay;
+            self.half_life(dt);
         }
         self.gain(self.production() * dt);
         self.auto_detonate(dt);
@@ -1626,6 +1639,22 @@ impl Game {
         if self.ach_acc >= ACHIEVEMENT_PERIOD {
             self.ach_acc = 0.0;
             self.check_achievements();
+        }
+    }
+
+    /// Demi-vie challenge: radiation and level progress melt away, and every second each unit type loses
+    /// HALFLIFE_UNIT_DECAY of its units (rounded down: small armies are spared).
+    fn half_life(&mut self, dt: f64) {
+        let decay = 0.5f64.powf(dt / data::HALFLIFE_SECONDS);
+        self.radiation *= decay;
+        self.progress *= decay;
+        self.decay_acc += dt;
+        while self.decay_acc >= HALFLIFE_UNIT_PERIOD {
+            self.decay_acc -= HALFLIFE_UNIT_PERIOD;
+            for u in &UNITS {
+                let lost = (self.units[u.id] as f64 * data::HALFLIFE_UNIT_DECAY) as u64;
+                self.units[u.id] -= lost;
+            }
         }
     }
 
@@ -1819,7 +1848,8 @@ impl Game {
             last_run: self.last_run.clone(),
             threats: Some(self.threats_data()),
             achievements: list(&mut self.achievements.iter()),
-            challenges_done: list(&mut self.challenges_done.iter()),
+            challenges_done: None,
+            challenge_ranks: names(&self.challenges_done),
             synergies_found: list(&mut self.synergies_found.iter()),
             skins: list(&mut self.skins.iter()),
             wall_time: Some(wall_time()),
@@ -1948,9 +1978,14 @@ impl Game {
         })
         .map(BTreeSet::from_iter)
         .unwrap_or_default();
-        g.challenges_done = ids(d.challenges_done, find_challenge)
-            .map(BTreeSet::from_iter)
+        g.challenges_done = known_ids(d.challenge_ranks, find_challenge)
+            .or_else(|| {
+                ids(d.challenges_done, find_challenge)
+                    .map(|v| v.into_iter().map(|c| (c, 1)).collect())
+            })
             .unwrap_or_default();
+        g.challenges_done
+            .retain(|_, r| (1..=data::CHALLENGE_RANKS).contains(r));
         g.synergies_found = ids(d.synergies_found, |s| events::find_synergy(s).map(|s| s.id))
             .map(BTreeSet::from_iter)
             .unwrap_or_default();
@@ -2172,10 +2207,10 @@ pub(crate) mod tests {
         let mut g = exploded_game();
         g.units["soldier"] = data::UNIT_MILESTONES[0];
         let prod = g.unit_prod("soldier");
-        g.challenges_done.insert("mono");
+        g.challenges_done.insert("mono", 1);
         assert!(approx(
             g.unit_prod("soldier"),
-            prod / data::MILESTONE_MULT * data::MONO_MILESTONE_MULT
+            prod / data::MILESTONE_MULT * (data::MILESTONE_MULT + data::MONO_MILESTONE_BONUS)
         ));
     }
 
@@ -2188,8 +2223,30 @@ pub(crate) mod tests {
         assert!(approx(g.radiation, 50.0));
         assert!(approx(g.progress, 0.25));
         let combo = g.max_combo();
-        g.challenges_done.insert("halflife");
-        assert_eq!(g.max_combo(), combo + data::HALFLIFE_COMBO);
+        g.challenges_done.insert("halflife", 2);
+        assert_eq!(g.max_combo(), combo + 2 * data::HALFLIFE_COMBO);
+    }
+
+    #[test]
+    fn halflife_erodes_big_armies_only() {
+        let mut g = exploded_game();
+        g.challenge = Some("halflife");
+        (g.units["soldier"], g.units["mortar"]) = (100, 10);
+        g.tick(HALFLIFE_UNIT_PERIOD);
+        let lost = (100.0 * data::HALFLIFE_UNIT_DECAY) as u64;
+        assert_eq!((g.units["soldier"], g.units["mortar"]), (100 - lost, 10));
+    }
+
+    #[test]
+    fn mono_has_no_veterans() {
+        let mut g = exploded_game();
+        g.ptalents.insert("p_vets", 1);
+        g.challenge = Some("mono");
+        g.reset_run();
+        assert_eq!(g.units.total(), 0);
+        g.challenge = None;
+        g.reset_run();
+        assert!(g.units["soldier"] > 0);
     }
 
     #[test]
@@ -2207,7 +2264,7 @@ pub(crate) mod tests {
         assert_eq!(g.production(), 0.0);
         g.talents.insert("t_shock", 1);
         let share = g.shock_share();
-        g.challenges_done.insert("strike");
+        g.challenges_done.insert("strike", 1);
         assert!(approx(g.shock_share(), share * data::STRIKE_SHOCK_MULT));
     }
 
@@ -2419,6 +2476,57 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn challenge_ranks() {
+        let mut g = exploded_game();
+        g.prestige_count = 1;
+        let ch = data::challenge("onearm");
+        assert_eq!(g.challenge_target("onearm"), ch.target);
+        assert!(g.challenge_available("onearm"));
+        g.challenges_done.insert("onearm", 1);
+        // Rank II: target ×10, beyond the max level without core expansion.
+        assert_eq!(
+            g.challenge_target("onearm"),
+            ch.target * data::CHALLENGE_TARGET_MULT
+        );
+        assert!(!g.challenge_available("onearm"));
+        assert!(!g.prestige(Some("onearm")));
+        g.ptalents.insert("p_cap", 1);
+        assert!(g.prestige(Some("onearm")));
+        assert_eq!(g.pending_story, None); // the story is only told at rank I
+        g.exploded = true;
+        g.level = g.challenge_target("onearm") - 1;
+        g.mut_index = 20;
+        g.level += 1;
+        g.on_level_up();
+        assert_eq!(g.challenge_rank("onearm"), 2);
+        assert!(approx(g.reward_pow("onearm", 2.0), 4.0));
+        g.challenges_done.insert("onearm", data::CHALLENGE_RANKS);
+        g.ptalents.insert("p_cap", 4);
+        assert!(!g.challenge_available("onearm"));
+    }
+
+    #[test]
+    fn old_challenge_list_read_as_rank_one() {
+        let d: SaveData =
+            serde_json::from_value(serde_json::json!({"challenges_done": ["race", "nope"]}))
+                .unwrap();
+        let g = Game::from_save(d, 0.0);
+        assert_eq!(g.challenges_done, BTreeMap::from([("race", 1)]));
+        let d: SaveData = serde_json::from_value(
+            serde_json::json!({"challenge_ranks": {"race": 3, "nanar": 9, "blind": 0}}),
+        )
+        .unwrap();
+        let g = Game::from_save(d, 0.0);
+        assert_eq!(g.challenges_done, BTreeMap::from([("race", 3)]));
+        assert!(
+            serde_json::to_value(g.save_data())
+                .unwrap()
+                .get("challenges_done")
+                .is_none()
+        );
+    }
+
+    #[test]
     fn challenge_success() {
         let mut g = exploded_game();
         let ch = &data::CHALLENGES[0];
@@ -2428,7 +2536,7 @@ pub(crate) mod tests {
         g.mut_index = 20;
         g.level += 1;
         g.on_level_up();
-        assert!(g.challenges_done.contains(ch.id));
+        assert!(g.challenges_done.contains_key(ch.id));
         assert!(has(&g, "fanfare"));
         assert_eq!(g.pending_story, Some((ch.id, "end")));
     }
@@ -2475,7 +2583,7 @@ pub(crate) mod tests {
         g.ptalents.insert("p_prod", 5);
         g.achievements.insert("boom");
         g.skins.insert("plasma");
-        g.challenges_done.insert("race");
+        g.challenges_done.insert("race", 1);
         let gain = g.supernova_gain();
         assert!(g.supernova());
         assert_eq!((g.stars, g.supernova_count, g.isotopes), (gain, 1, 0));
@@ -2484,7 +2592,7 @@ pub(crate) mod tests {
         assert_eq!(g.prestige_count, 7);
         assert_eq!(g.stats.iso_earned, 0);
         assert!(g.achievements.contains("boom"));
-        assert!(g.challenges_done.contains("race"));
+        assert!(g.challenges_done.contains_key("race"));
         assert!(!g.exploded);
         assert!(has(&g, "supernova"));
         assert!(g.supernova_unlocked());
@@ -2829,7 +2937,7 @@ pub(crate) mod tests {
         g.achievements.insert("boom");
         g.talents.insert("t_click", 2);
         g.ptalents.insert("p_prod", 3);
-        g.challenges_done.insert("race");
+        g.challenges_done.insert("race", 2);
         g.skins.insert("mario");
         g.skin = "mario";
         g.challenge = Some("nanar");
@@ -2843,10 +2951,11 @@ pub(crate) mod tests {
         assert_eq!(h.achievements, BTreeSet::from(["boom"]));
         assert_eq!((h.tr("t_click"), h.pr("p_prod")), (2, 3));
         assert_eq!(
-            (h.skin, h.challenge, h.mutations),
+            (h.skin, h.challenge, h.mutations.clone()),
             ("mario", Some("nanar"), vec!["fog"])
         );
-        assert!(h.challenges_done.contains("race") && h.skins.contains("mario"));
+        assert_eq!(h.challenge_rank("race"), 2);
+        assert!(h.skins.contains("mario"));
         assert_eq!(h.stats, g.stats);
         assert!(!path.with_extension("json.tmp").exists());
     }

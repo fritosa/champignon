@@ -1318,6 +1318,54 @@ impl<S: Screen> UI<S> {
         }
     }
 
+    /// Challenge row: ranks done, next rank (if the max level allows it) or all ranks done.
+    fn challenge_row(&self, c: &'static data::Challenge) -> Row {
+        let g = &self.g;
+        let done = g.challenge_rank(c.id);
+        let all = data::CHALLENGE_RANKS;
+        let cur = if g.challenge == Some(c.id) {
+            " (en cours)"
+        } else {
+            ""
+        };
+        let mark = if done == all { '✔' } else { '·' };
+        let text = format!("{mark} Défi {} {done}/{all}{cur}", c.name);
+        let reward = format!("Récompense : {}.", c.reward);
+        if done == all {
+            return Row::new(
+                text,
+                self.c("green"),
+                None,
+                format!("Tous les rangs réussis. {reward}"),
+            );
+        }
+        let rank = data::RANK_NAMES[done as usize];
+        if !g.challenge_available(c.id) {
+            let needed = crate::game::fmt(g.challenge_target(c.id) as f64);
+            return Row::new(
+                text,
+                self.c("grey"),
+                None,
+                format!("Rang {rank} : niveau max {needed} requis (Expansion du cœur). {reward}"),
+            );
+        }
+        let note = if g.can_prestige() {
+            " Lance une nouvelle run (et fait le prestige)."
+        } else {
+            " Lance une nouvelle run sans gain d'isotopes."
+        };
+        Row::new(
+            text,
+            if done > 0 {
+                self.c("yellow")
+            } else {
+                self.c("white")
+            },
+            Some(Action::Challenge(c.id)),
+            format!("Rang {rank} : {} {reward}{note}", c.desc_at(done)),
+        )
+    }
+
     pub fn unit_rows(&self) -> Vec<Row> {
         let g = &self.g;
         let mut rows = Vec::new();
@@ -1494,27 +1542,7 @@ impl<S: Screen> UI<S> {
                 self.c("cyan"),
             ));
             for c in &data::CHALLENGES {
-                let done = g.challenges_done.contains(c.id);
-                let cur = if g.challenge == Some(c.id) {
-                    " (en cours)"
-                } else {
-                    ""
-                };
-                let note = if g.can_prestige() {
-                    " Lance une nouvelle run (et fait le prestige)."
-                } else {
-                    " Lance une nouvelle run sans gain d'isotopes."
-                };
-                rows.push(Row::new(
-                    format!("{} Défi {}{cur}", if done { '✔' } else { '·' }, c.name),
-                    if done {
-                        self.c("green")
-                    } else {
-                        self.c("white")
-                    },
-                    Some(Action::Challenge(c.id)),
-                    format!("{} Récompense : {}.{note}", c.desc, c.reward),
-                ));
+                rows.push(self.challenge_row(c));
             }
             if g.challenge.is_some() {
                 rows.push(Row::new(
@@ -1771,8 +1799,12 @@ impl<S: Screen> UI<S> {
             ("Scellés subis", count(st.frozen)),
             ("Mutations choisies", count(st.mutations)),
             (
-                "Défis réussis",
-                format!("{}/{}", g.challenges_done.len(), data::CHALLENGES.len()),
+                "Rangs de défis réussis",
+                format!(
+                    "{}/{}",
+                    g.challenges_done.values().sum::<u32>(),
+                    data::CHALLENGES.len() as u32 * data::CHALLENGE_RANKS
+                ),
             ),
             (
                 "Skins débloqués",
@@ -1805,7 +1837,7 @@ impl<S: Screen> UI<S> {
             let has_story = ["start", "end"]
                 .iter()
                 .any(|part| story(ch.id, part).is_some());
-            if g.challenges_done.contains(ch.id) && has_story {
+            if g.challenges_done.contains_key(ch.id) && has_story {
                 rows.push(Row::new(
                     format!("Revoir le défi {}", ch.name),
                     self.c("magenta"),
@@ -3544,7 +3576,7 @@ pub(crate) mod tests {
     #[test]
     fn replay_story_plays_its_parts() {
         let mut u = bare_ui();
-        u.g.challenges_done.insert("nanar");
+        u.g.challenges_done.insert("nanar", 1);
         u.tab = 4;
         let rows: Vec<Row> = u.info_rows().into_iter().filter(|r| r.sel).collect();
         u.sel[4] = rows
@@ -3568,7 +3600,7 @@ pub(crate) mod tests {
                 .iter()
                 .any(|t| t.starts_with(label))
         );
-        u.g.challenges_done.insert("nanar");
+        u.g.challenges_done.insert("nanar", 1);
         assert!(
             row_texts(&u.info_rows())
                 .iter()

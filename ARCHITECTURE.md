@@ -26,7 +26,7 @@ binaires, le jeu (`src/main.rs`), `sim` et `apercu`.
 | `src/screens.rs` | Écrans plein écran hors partie, qui pilotent le `Screen` eux-mêmes : introduction et histoires des défis (texte tapé à la machine), menu des parties ; aides de texte (`wrap`, `center`, `head`, `slice`). | `game`, `saves`, `sound`, `term` |
 | `src/ui.rs` | `UI<S: Screen>` : rendu des panneaux, onglets et overlays de la partie, bandeaux, particules, sons de l'interface, touches (`handle` → `Flow`). | tous les modules de la bibliothèque |
 | `src/main.rs` | Binaire `champignon` : choix de la partie, intro des nouvelles parties, boucle principale (20 images/s), autosauvegarde toutes les 30 s, sauvegarde même après une panique, signaux, `--reset`, `--mute`. | `game`, `saves`, `screens`, `sound`, `term`, `ui`, `signal-hook` |
-| `src/bin/sim.rs` | Bot qui joue sans affichage (achète l'unité la plus rentable, en économisant jusqu'à 30 s de production pour elle), pour vérifier l'équilibrage (`cargo run --release --bin sim -- [runs] [appuis/s] [defis]`, 8 runs et 6 appuis/s par défaut). Termine par un bilan : durée totale, runs de moins d'une minute, run le plus court, heure de chaque supernova. Avec `defis`, tente ensuite chaque défi une fois, chacun depuis une copie de l'état atteint (réussite et durée, ou niveau atteint). | `game`, `events`, `data`, `rng` |
+| `src/bin/sim.rs` | Bot qui joue sans affichage (achète l'unité la plus rentable, en économisant jusqu'à 30 s de production pour elle), pour vérifier l'équilibrage (`cargo run --release --bin sim -- [runs] [appuis/s] [defis]`, 8 runs et 6 appuis/s par défaut). Termine par un bilan : durée totale, runs de moins d'une minute, run le plus court, heure de chaque supernova. Avec `defis`, tente ensuite les rangs de chaque défi à la suite, chaque défi depuis une copie de l'état atteint (durée de chaque rang réussi, niveau atteint en cas d'échec, niveau max requis sinon). | `game`, `events`, `data`, `rng` |
 | `src/bin/apercu.rs` | Génère `apercu.svg`, la capture en couleurs du README : le vrai rendu de `UI` sur un `BufferScreen` de 100×30. À relancer (`cargo run --release --bin apercu`) quand l'écran change. | `game`, `ui`, `events`, `data`, `term`, `rng`, `sound` |
 | `install.sh` | Compile (`cargo build --release`) et crée (ou `--desinstaller` retire) la commande `champignon`, lien vers `target/release/champignon` dans `~/.local/bin` (ou le dossier passé en argument). Refuse d'écraser un fichier qui n'est pas un lien, et de retirer un lien qui pointe ailleurs. | `cargo` |
 | `Cargo.toml` | Crate `champignon` (édition 2024) ; dépendances : `crossterm`, `libloading`, `rand`, `serde`, `serde_json`, `signal-hook`. | |
@@ -123,8 +123,13 @@ le jeu ne rattrape pas tout d'un coup.
   `{}` dans le `desc` de l'`EnemySpec`, valeur fournie par `effect_strength`). Calculé sur le niveau actuel,
   donc rien à sauvegarder.
 - **Défis** (`data::CHALLENGES`) : contraintes codées en dur là où elles s'appliquent (chercher
-  `challenge == Some("<id>")`, dans `Game` comme dans `ui.rs`), récompense via
-  `challenges_done.contains("<id>")`. `g.challenge` vaut `Option<&'static str>`. Contraintes regroupées dans une
+  `challenge == Some("<id>")`, dans `Game` comme dans `ui.rs`). `g.challenge` vaut `Option<&'static str>`.
+  Chaque défi a `CHALLENGE_RANKS` (3) rangs : `g.challenges_done` donne le nombre de rangs réussis par défi
+  (`challenge_rank`), la cible du rang suivant est la cible de base ×`CHALLENGE_TARGET_MULT` (10) par rang réussi
+  (`Challenge::target_at` / `desc_at`, `Game::challenge_target`), et un rang ne se lance que si le niveau max
+  l'atteint (`challenge_available`, vérifié par `Game::prestige`). La récompense s'applique une fois par rang :
+  `reward_pow(id, mult)` (multiplicateur puissance rang) ou `X * challenge_rank(id)`. L'histoire n'est racontée
+  qu'au rang I. Contraintes regroupées dans une
   méthode quand elles servent à plusieurs endroits : `Game::mono_forbidden` (Monoculture), `Game::on_strike`
   (Grève générale) ; récompenses lues par `milestone_mult`, `max_combo`, `shock_share`, etc.
 - **Histoires de défis** (`screens::STORIES`, clés `(id, "start" | "end")`, lues par `screens::story`) : `Game`
@@ -132,7 +137,8 @@ le jeu ne rattrape pas tout d'un coup.
   `main::play`, pas par `draw`) l'affiche en plein écran (même écran tapé à la machine que l'introduction,
   `screens::intro`, touches ignorées pendant `STORY_GUARD` s) puis l'efface. Un défi sans histoire n'affiche
   rien ; une fois réussi, l'onglet Infos propose de la relire. Le lore : le professeur Amédée Morille
-  (`screens::INTRO`), Gérard Zédé (Nanarland : un nanar, mauvais film sympathique, jamais un navet).
+  (`screens::INTRO`), Gérard Zédé (Nanarland : un nanar, mauvais film sympathique, jamais un navet), l'inspecteur des récoltes
+  (Monoculture), le syndicat des troufions SUTA (Grève générale).
 - **Skins** : palettes dans `art::PALETTES` (sauf `rainbow`, géré dans `art::color`, et `mario`, géré à part
   dans `art::cap` et `art::stem`) ; `art::has_skin` connaît les deux.
 
@@ -144,7 +150,7 @@ le jeu ne rattrape pas tout d'un coup.
   `all_files` ; écriture atomique `.tmp` puis `fs::rename`, dossier créé au besoin) ; `game.rs` gère le
   contenu : `Game::save_data` remplit un `SaveData` (struct serde, un champ par clé JSON),
   `Game::save` / `Game::load` l'écrivent et le relisent, `Game::from_save` reconstruit la partie.
-- **Version du format** : clé `version` (`saves::SAVE_VERSION`, actuellement 2), à incrémenter quand le format
+- **Version du format** : clé `version` (`saves::SAVE_VERSION`, actuellement 3), à incrémenter quand le format
   change. Une sauvegarde est lisible si sa version est entre `MIN_SAVE_VERSION` et `SAVE_VERSION`
   (`saves::supported`). Au lancement, `purge_obsolete` efface celles qui sont plus anciennes (message en
   jeu). Celles d'une version plus récente sont ignorées sans être touchées : réécrites ici, elles prendraient
@@ -165,6 +171,8 @@ le jeu ne rattrape pas tout d'un coup.
   avant). Attention : `reset_run` tourne (dans `Game::new`) *avant* que le défi chargé soit appliqué ; les
   échéances qui dépendent du défi sont recalculées en fin de `from_save` (voir `watched` et `invasion`), puis
   `load_threats` les remplace si la sauvegarde en contient.
+- Défis réussis : clé `challenge_ranks` (rang par défi). L'ancienne clé `challenges_done` (liste, version 2)
+  est encore lue comme rang I, mais plus écrite.
 - Gains hors ligne : `wall_time` est sauvegardé, `Game::apply_offline` crédite l'absence en fin de `from_save`.
 
 ## 🔊 Son

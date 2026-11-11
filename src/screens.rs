@@ -75,6 +75,84 @@ pub const STORIES: &[((&str, &str), &[&str])] = &[
              ne répond toujours pas aux lettres.",
         ],
     ),
+    (
+        ("mono", "start"),
+        &[
+            "MONOCULTURE — UNE DIRECTIVE DU MINISTÈRE",
+            "Le ministère de l'Agriculture Militaire a envoyé un inspecteur des récoltes. Costume beige, moustache \
+             réglementaire, tampon encreur à la ceinture. Il compte tes troupes, fronce les sourcils et sort un \
+             formulaire en sept exemplaires.",
+            "« Trop de variétés ! On ne mélange pas les soldats et les mortiers, pas plus que les carottes et les \
+             navets. » Désormais, ton champ n'aura qu'UNE seule culture : la première que tu achèteras. Les \
+             vétérans, eux, sont priés de rester chez eux : ils n'ont pas rempli le bon formulaire.",
+            "Ta mission : atteindre le niveau demandé avec une armée en rangs parfaitement identiques. Le ministère \
+             appelle ça « l'harmonie des sillons ». Les soldats appellent ça « l'ennui ».",
+        ],
+    ),
+    (
+        ("mono", "end"),
+        &[
+            "MONOCULTURE — RAPPORT DE RÉCOLTE",
+            "L'inspecteur repasse, tampon levé. Il cherche une irrégularité, n'importe laquelle, jusque sous les \
+             casques. Rien. Tes troupes sont si bien alignées qu'on pourrait les labourer.",
+            "Ébloui, il te décerne la médaille du Rendement Agricole (catégorie militaire) et une méthode secrète \
+             du ministère : à chaque palier, tes unités produisent un peu plus qu'avant. Tu gagnes aussi un skin \
+             Mousse, couleur officielle des pelouses ministérielles.",
+            "En partant, il glisse sur une peau de banane. Une seule. Monoculture, on t'avait dit.",
+        ],
+    ),
+    (
+        ("halflife", "start"),
+        &[
+            "DEMI-VIE — UN COURRIER DU LABORATOIRE",
+            "Le laboratoire du professeur Morille a enfin livré l'uranium commandé en 1958. Il est arrivé par la \
+             poste, dans un colis marqué « FRAGILE » et « NE PAS LÉCHER ». Petit problème : la date de péremption \
+             est dépassée depuis longtemps.",
+            "Ta radiation s'évapore à vue d'œil : la moitié disparaît en quelques secondes, et ta progression vers le \
+             niveau suivant aussi. Pire, tes troupes se désintègrent peu à peu. Les petites escouades tiennent bon, \
+             les grosses armées fondent comme neige au soleil.",
+            "Ta mission : atteindre le niveau demandé avant que tout ne parte en fumée. Dépense vite, rachète \
+             souvent, et ne garde rien pour demain.",
+        ],
+    ),
+    (
+        ("halflife", "end"),
+        &[
+            "DEMI-VIE — RAPPORT DE DÉSINTÉGRATION",
+            "Contre toute attente, tu as tenu. Les physiciens du monde entier s'interrogent : comment un champignon \
+             peut-il grandir plus vite qu'il ne se désintègre ? Un prix Nobel est envisagé, puis annulé faute de \
+             candidat capable de rester entier jusqu'à la cérémonie.",
+            "Tes soldats ont appris à enchaîner les gestes sans perdre une seconde : ton combo max augmente. Tu \
+             gardes aussi le colis d'uranium, recyclé en skin Uranium. Il brille toujours. Ne pas lécher.",
+        ],
+    ),
+    (
+        ("strike", "start"),
+        &[
+            "GRÈVE GÉNÉRALE — COMMUNIQUÉ DU SYNDICAT DES TROUFIONS",
+            "Le Syndicat Unifié des Troufions Atomiques (SUTA) a voté à main levée, puis à main baissée, puis à main \
+             levée à nouveau, pour être sûr. Résultat : GRÈVE GÉNÉRALE jusqu'à nouvel ordre.",
+            "Leurs revendications : des casques à leur taille, une cantine sans soupe aux champignons, et surtout \
+             de la RECONNAISSANCE. Ils ne travailleront que quand ils verront le chef au boulot. À la seconde où tu \
+             lâches le détonateur, ils posent les outils. L'auto-détonateur ne les trompe pas : « C'est un robot, \
+             ça ne compte pas. »",
+            "Ta mission : atteindre le niveau demandé en montrant l'exemple. Appuie sans relâche. Le piquet de \
+             grève te surveille.",
+        ],
+    ),
+    (
+        ("strike", "end"),
+        &[
+            "GRÈVE GÉNÉRALE — FIN DU CONFLIT",
+            "Les négociations aboutissent tard dans la nuit, autour d'un café tiède et d'un paquet de biscuits secs. \
+             Le syndicat obtient des casques à sa taille. Tu obtiens la paix sociale et une poignée de main si ferme \
+             qu'elle a laissé une marque.",
+            "Galvanisées par ton exemple, tes troupes mettent du cœur à l'ouvrage à chaque appui : l'onde de choc \
+             porte deux fois plus loin. Le syndicat t'offre sa banderole, reconvertie en skin Crépuscule.",
+            "Le délégué syndical, ému, te nomme membre d'honneur. Tu devras maintenant faire grève contre toi-même. \
+             Le règlement est formel.",
+        ],
+    ),
 ];
 
 /// Story of a challenge part ("start" or "end"), if it has one.
