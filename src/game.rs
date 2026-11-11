@@ -1630,7 +1630,10 @@ impl Game {
             if self.prestige_count >= data::PLASMA_PRESTIGES {
                 self.skins.insert("plasma");
             }
-            self.sfx.push_back("prestige");
+            // A double challenge launched with the prestige plays its own jingle instead (one at a time).
+            if challenges.len() < 2 {
+                self.sfx.push_back("prestige");
+            }
             self.log(
                 format!("PRESTIGE ! +{gain} ⚛. Tout recommence..."),
                 MsgKind::Epic,
@@ -1649,6 +1652,7 @@ impl Game {
             .collect();
         if !started.is_empty() {
             let kind = if started.len() > 1 {
+                self.sfx.push_back("double");
                 "Double défi"
             } else {
                 "Défi"
@@ -1880,7 +1884,7 @@ impl Game {
         }
         let uid = *self.rng.choice(&owned);
         self.crocodile_bite(uid);
-        self.sfx.push_back("enemy");
+        self.sfx.push_back("chomp");
     }
 
     /// The crocodile eats CROCODILE_BITE of the units of type uid (rounded down, at least one), and the bite is
@@ -2942,7 +2946,9 @@ pub(crate) mod tests {
         assert!(!g.prestige_double("strike", "onearm"));
         assert!(!g.prestige_double("race", "pacifist")); // Pacifiste: never in a double
         assert!(has(&g, "nope"));
+        g.level = g.cap(); // launched with a prestige: its own jingle replaces the prestige one
         assert!(g.prestige_double("race", "nanar"));
+        assert!(has(&g, "double") && !has(&g, "prestige"));
         assert!(g.in_challenge("race") && g.in_challenge("nanar"));
         assert_eq!(g.challenge_label().unwrap(), "Course + Nanarland");
         assert_eq!(g.pending_story, None); // no story for a double

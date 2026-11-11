@@ -225,6 +225,10 @@ pub fn key_help() -> &'static [(&'static str, String)] {
             ("↑↓ / j k", "Sélectionne une ligne.".into()),
             ("Entrée", "Achète ou active la ligne sélectionnée.".into()),
             (
+                "Onglet 3",
+                "Défis à 3 rangs ; « Double défi : oui », puis Entrée sur deux défis.".into(),
+            ),
+            (
                 "M",
                 "Quantité achetée par Entrée : ×1, ×10, ×100 ou max.".into(),
             ),
@@ -268,6 +272,10 @@ pub enum Action {
     Abandon,
     /// Turns the double challenge mode on or off.
     DoubleMode,
+    /// Shows or hides the challenges done at every rank.
+    ToggleDone,
+    /// Shows or hides the challenge stories to read again.
+    ToggleStories,
     Supernova,
     Skin,
     Intro,
@@ -283,6 +291,21 @@ pub struct Row {
     pub desc: String,
     pub sel: bool,
     pub sprite: Option<(&'static str, bool)>,
+}
+
+/// Row folding or unfolding a list (`open`: unfolded): label, arrow, and what Enter shows or hides.
+fn fold_row(open: bool, label: &str, style: Style, action: Action, what: &str) -> Row {
+    let (arrow, verb) = if open {
+        ('▾', "masquer")
+    } else {
+        ('▸', "afficher")
+    };
+    Row::new(
+        format!("{label} {arrow}"),
+        style,
+        Some(action),
+        format!("Entrée : {verb} {what}."),
+    )
 }
 
 impl Row {
@@ -362,6 +385,10 @@ pub struct UI<S: Screen> {
     pub double: bool,
     /// First challenge picked in double mode.
     pub double_pick: Option<&'static str>,
+    /// Challenges done at every rank listed in the Prestige tab (folded by default).
+    pub show_done: bool,
+    /// Challenge stories listed in the Infos tab (folded by default).
+    pub show_stories: bool,
     pub shake_until: f64,
     /// Last terminal title; None: title disabled (main enables it with Some("")).
     pub title: Option<String>,
@@ -395,6 +422,8 @@ impl<S: Screen> UI<S> {
             qty: Qty::N(1),
             double: false,
             double_pick: None,
+            show_done: false,
+            show_stories: false,
             shake_until: 0.0,
             title: None,
             title_at: LONG_AGO,
@@ -1624,17 +1653,34 @@ impl<S: Screen> UI<S> {
                     "Retire la contrainte du défi sans réinitialiser la run.",
                 ));
             }
+            // Challenges done at every rank are folded behind one row (Enter shows them).
+            let all_done = |c: &&data::Challenge| g.challenge_rank(c.id) >= data::CHALLENGE_RANKS;
+            let done = data::CHALLENGES.iter().filter(all_done).count();
+            if done > 0 {
+                rows.push(fold_row(
+                    self.show_done,
+                    &format!("✔ {done} défi(s) terminé(s) au rang III"),
+                    self.c("green"),
+                    Action::ToggleDone,
+                    "les défis réussis à tous les rangs",
+                ));
+            }
+            let shown = |c: &&data::Challenge| self.show_done || !all_done(c);
             // Classic challenges first, then those that unlock a unit (their monster), under their own rule.
             let (monsters, classics): (Vec<_>, Vec<_>) = data::CHALLENGES
                 .iter()
+                .filter(shown)
                 .partition(|c| data::challenge_unit(c.id).is_some());
             for c in classics {
                 rows.push(self.challenge_row(c));
             }
-            rows.push(Row::label(
-                format!("── MONSTRES {}", "─".repeat(RULE)),
-                self.c("cyan"),
-            ));
+            // No empty section when all the monster challenges are folded.
+            if !monsters.is_empty() {
+                rows.push(Row::label(
+                    format!("── MONSTRES {}", "─".repeat(RULE)),
+                    self.c("cyan"),
+                ));
+            }
             for c in monsters {
                 rows.push(self.challenge_row(c));
             }
@@ -1920,10 +1966,24 @@ impl<S: Screen> UI<S> {
             Some(Action::Intro),
             "Entrée : relire l'histoire du professeur Morille et de son champignon.",
         ));
-        for ch in &data::CHALLENGES {
-            if g.challenges_done.contains_key(ch.id) {
+        // The stories of the challenges done, folded behind one row.
+        let read: Vec<&data::Challenge> = data::CHALLENGES
+            .iter()
+            .filter(|c| g.challenges_done.contains_key(c.id))
+            .collect();
+        if !read.is_empty() {
+            rows.push(fold_row(
+                self.show_stories,
+                &format!("Histoires des défis ({})", read.len()),
+                self.c("magenta"),
+                Action::ToggleStories,
+                "les histoires des défis réussis",
+            ));
+        }
+        if self.show_stories {
+            for ch in read {
                 rows.push(Row::new(
-                    format!("Revoir le défi {}", ch.name),
+                    format!("  Revoir le défi {}", ch.name),
                     self.c("magenta"),
                     Some(Action::Story(ch.id)),
                     format!("Entrée : relire l'histoire du défi {}.", ch.name),
@@ -2626,6 +2686,8 @@ impl<S: Screen> UI<S> {
                 self.double = !self.double;
                 self.double_pick = None;
             }
+            Action::ToggleDone => self.show_done = !self.show_done,
+            Action::ToggleStories => self.show_stories = !self.show_stories,
             Action::Challenge(id) if self.double && self.double_pick.is_none_or(|p| p == id) => {
                 // First pick, or a second Enter on it to drop it.
                 self.double_pick = if self.double_pick == Some(id) {
@@ -3226,6 +3288,26 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn done_challenges_folded() {
+        let mut u = supernova_ui();
+        u.g.challenges_done.insert("race", data::CHALLENGE_RANKS);
+        let texts = row_texts(&u.prestige_rows());
+        assert!(
+            texts
+                .iter()
+                .any(|t| t.starts_with("✔ 1 défi(s) terminé(s)"))
+        );
+        assert!(!texts.iter().any(|t| t.contains("Défi Course")));
+        select(&mut u, |a| *a == Action::ToggleDone);
+        u.activate();
+        assert!(
+            row_texts(&u.prestige_rows())
+                .iter()
+                .any(|t| t.contains("Défi Course"))
+        );
+    }
+
+    #[test]
     fn monster_challenges_have_their_section() {
         let u = supernova_ui();
         let texts = row_texts(&u.prestige_rows());
@@ -3242,6 +3324,18 @@ pub(crate) mod tests {
             .position(|t| t.contains("Défi Course"))
             .unwrap();
         assert!(race < header && header < moussaka);
+        // All the monster challenges done and folded: no empty section.
+        let mut u = u;
+        for c in data::CHALLENGES.iter() {
+            if data::challenge_unit(c.id).is_some() {
+                u.g.challenges_done.insert(c.id, data::CHALLENGE_RANKS);
+            }
+        }
+        assert!(
+            !row_texts(&u.prestige_rows())
+                .iter()
+                .any(|t| t.starts_with("── MONSTRES"))
+        );
     }
 
     #[test]
@@ -3792,10 +3886,16 @@ pub(crate) mod tests {
         let mut u = bare_ui();
         u.g.challenges_done.insert("nanar", 1);
         u.tab = 4;
+        assert!(
+            !row_texts(&u.info_rows())
+                .iter()
+                .any(|t| t.contains("Revoir le défi"))
+        ); // folded
+        u.show_stories = true;
         let rows: Vec<Row> = u.info_rows().into_iter().filter(|r| r.sel).collect();
         u.sel[4] = rows
             .iter()
-            .position(|r| r.text.starts_with("Revoir le défi"))
+            .position(|r| r.text.contains("Revoir le défi"))
             .unwrap();
         u.scr
             .keys
@@ -3815,10 +3915,11 @@ pub(crate) mod tests {
                 .any(|t| t.starts_with(label))
         );
         u.g.challenges_done.insert("nanar", 1);
+        u.show_stories = true; // folded behind « Histoires des défis » by default
         assert!(
             row_texts(&u.info_rows())
                 .iter()
-                .any(|t| t.starts_with(label))
+                .any(|t| t.trim_start().starts_with(label))
         );
     }
 

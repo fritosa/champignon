@@ -135,7 +135,10 @@ le jeu ne rattrape pas tout d'un coup.
   `g.in_challenge("<id>")` (dans `Game`, `events.rs` comme dans `ui.rs`), jamais en comparant `g.challenge`.
   Pendant un défi qui débloque une unité (moussaka, nanars), son monstre (le sprite de l'unité) traverse le
   terrain de droite à gauche en boucle (`UI::draw_challenge_monsters`, `MONSTER_CROSSING`). L'onglet Prestige
-  range ces défis, dont le monstre rejoint l'armée, sous leur propre titre « MONSTRES ».
+  range ces défis, dont le monstre rejoint l'armée, sous leur propre titre « MONSTRES » ; les défis terminés
+  au rang III y sont repliés derrière une ligne (`UI::show_done`), comme les histoires à relire dans
+  l'onglet Infos (`UI::show_stories`). Sons propres : « double » au lancement d'un double défi, « chomp » à
+  chaque morsure du crocodile.
   **Double défi** (ouvert après `DOUBLE_UNLOCK` défis réussis ; jamais avec les défis de `DOUBLE_SOLO`, ni pour les paires de
   `DOUBLE_FORBIDDEN`) : `g.challenge` et `g.challenge2`
   (`Option<&'static str>`), lancés par `Game::prestige_double` ; la cible est la plus haute des deux

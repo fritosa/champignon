@@ -58,6 +58,7 @@ Fermer le terminal sauvegarde la partie (SIGHUP/SIGTERM traités comme Ctrl+C).
 | *la lettre de l'avion* | Attrape le coffre de ravitaillement |
 | `1`-`5`, `Tab`, `←→` | Onglets (ou choix d'un bonus / d'une mutation) |
 | `↑↓` / `j k`, `Entrée`, `M` | Sélectionner, acheter, changer la quantité (×1, ×10, ×100, max) |
+| onglet `3` | Défis à 3 rangs ; « Double défi : oui », puis `Entrée` sur deux défis |
 | `0`, `+` / `-` | Mode son (musique + effets → effets seuls → muet), volume |
 | `Q` | Sauvegarde et quitte |
 

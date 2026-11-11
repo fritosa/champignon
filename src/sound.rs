@@ -33,12 +33,14 @@ pub const PRIORITY: &[(&str, u8)] = &[
     ("boom", 5),
     ("perfect", 5),
     ("fanfare", 4),
+    ("double", 6),
     ("synergy", 4),
     ("achievement", 4),
     ("mutation", 3),
     ("alarm", 3),
     ("freeze", 3),
     ("chased", 3),
+    ("chomp", 3),
     ("milestone", 3),
     ("chest", 3),
     ("enemy", 3),
@@ -734,6 +736,33 @@ pub fn build() -> Bank {
                 Timbre { secs: 0.5, ..brass }.at(C5),
             ],
             gap,
+        ),
+    );
+    // Double challenge: the fanfare a third higher, twice.
+    add(
+        "double",
+        seq(
+            vec![
+                brass.at(C5),
+                brass.at(E5),
+                brass.at(C5),
+                brass.at(E5),
+                Timbre { secs: 0.5, ..brass }.at(G5),
+            ],
+            gap,
+        ),
+    );
+    // Crocodile bite: two snapping jaws.
+    add(
+        "chomp",
+        arpeggio(
+            &[G4, D4],
+            Timbre {
+                secs: 0.09,
+                wave: Saw,
+                vol: 0.3,
+                env: decay(0.03),
+            },
         ),
     );
     // Bring each sound to its target peak: stacked layers don't clip, faint sounds stay audible.
