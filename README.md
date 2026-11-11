@@ -17,7 +17,7 @@ ASCII, toute la musique synthétisée au vol. Tourné intégralement en mode tex
 - 🕵️ **L'INSPECTEUR DE L'ONU**, venu « vérifier ». Avec ses complices : saboteur, drone, manifestants, commando. Plus le champignon grossit, plus ils viennent souvent, plus ils sont coriaces et plus ils font mal. Martèle X !
 - ✈️ **L'AVION DE RAVITAILLEMENT**, qui ne fait que passer. Tape sa lettre ou adieu le coffre.
 - 💥 **LE PRESTIGE ⚛ ET LA SUPERNOVA ✦** : tu meurs, tu recommences, tu reviens *plus fort*. Comme dans toute bonne suite.
-- 🎬 **LES DÉFIS**, vingt et un tournages sous contrainte, en trois rangs chacun : sans armée, sans ESPACE, en pleine grève, avec de l'uranium périmé… face à **LA MOUSSAKA GÉANTE**, et dans les remakes des nanars cultes de [Nanarland](https://www.nanarland.com) (*Turkish Star Wars*, *White Fire*, *Crocodile Fury*, *Devil Story*, *Black Ninja*). Chaque monstre vaincu rejoint ton armée.
+- 🎬 **LES DÉFIS**, vingt et un tournages sous contrainte, en trois rangs chacun : sans armée, sans ESPACE, en pleine grève, avec de l'uranium périmé… face à **LA MOUSSAKA GÉANTE**, et dans les remakes des nanars cultes de [Nanarland](https://www.nanarland.com) (*Turkish Star Wars*, *White Fire*, *Crocodile Fury*, *Devil Story*, *Black Ninja*). Chaque monstre vaincu rejoint ton armée. Les vétérans peuvent même tenter le **double défi** : deux tournages à la fois, deux rangs d'un coup.
 - 🎵 **LA BANDE ORIGINALE**, synthétisée en direct, en trois ambiances : calme, tension, épique.
 
 > ⭐⭐⭐⭐⭐ *« J'ai appuyé sur ESPACE pendant quatre heures. »* — un spectateur\

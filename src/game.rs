@@ -439,6 +439,12 @@ pub struct ThreatsData {
     pub bribe: Option<f64>,
     #[serde(deserialize_with = "lenient")]
     pub freeze: Option<f64>,
+    /// Time since the last Crocodile Fury bite.
+    #[serde(deserialize_with = "lenient")]
+    pub challenge_acc: Option<f64>,
+    /// Time since the last unit bought, while it still matters (Devil Story wait).
+    #[serde(deserialize_with = "lenient")]
+    pub unit_buy_ago: Option<f64>,
 }
 
 /// Content of a save file. Every field is optional on reading: a missing or invalid value is ignored on its
@@ -458,6 +464,8 @@ pub struct SaveData {
     pub skin: Option<String>,
     #[serde(deserialize_with = "lenient")]
     pub challenge: Option<Option<String>>,
+    #[serde(deserialize_with = "lenient")]
+    pub challenge2: Option<Option<String>>,
     #[serde(deserialize_with = "lenient")]
     pub stats: Option<Stats>,
     #[serde(deserialize_with = "lenient")]
@@ -572,6 +580,8 @@ pub struct Game {
     pub audio: &'static str,
     pub volume: u32,
     pub challenge: Option<&'static str>,
+    /// Second challenge of a double challenge (data::DOUBLE_UNLOCK challenges done), played with `challenge`.
+    pub challenge2: Option<&'static str>,
     pub stats: Stats,
     pub messages: VecDeque<Message>,
     pub qte_result: Option<QteResult>,
@@ -616,8 +626,10 @@ pub struct Game {
     pub auto_acc: f64,
     pub autobuy_acc: f64,
     pub ach_acc: f64,
-    /// Time since the last periodic effect of the current challenge (Demi-vie losses, Crocodile Fury bites).
+    /// Time since the last Crocodile Fury bite.
     pub challenge_acc: f64,
+    /// Time since the last Demi-vie unit losses (apart from challenge_acc: both can run in a double challenge).
+    pub halflife_acc: f64,
     /// Time of the last unit bought (Devil Story challenge).
     pub last_unit_buy: f64,
 }
@@ -650,6 +662,7 @@ impl Game {
             audio: "all",
             volume: MAX_VOLUME,
             challenge: None,
+            challenge2: None,
             stats: Stats::default(),
             messages: VecDeque::new(),
             qte_result: None,
@@ -691,6 +704,7 @@ impl Game {
             auto_acc: 0.0,
             autobuy_acc: 0.0,
             challenge_acc: 0.0,
+            halflife_acc: 0.0,
             last_unit_buy: LONG_AGO,
             ach_acc: 0.0,
         };
@@ -700,7 +714,7 @@ impl Game {
 
     /// Number formatted for messages, hidden during the Brouillard de guerre challenge.
     pub fn fmt(&self, n: f64) -> String {
-        if self.challenge == Some("blind") {
+        if self.in_challenge("blind") {
             "???".to_string()
         } else {
             fmt(n)
@@ -734,11 +748,11 @@ impl Game {
             .into_iter()
             .filter(|&(t, r)| r > 0 && self.talent_allowed(t))
             .collect();
-        if self.pr("p_vets") > 0 && self.challenge != Some("mono") {
+        if self.pr("p_vets") > 0 && !self.in_challenge("mono") {
             self.talents.insert("u_soldier", 1);
             self.units["soldier"] = data::P_VETS_SOLDIERS * self.pr("p_vets") as u64;
         }
-        if self.challenge == Some("onearm") {
+        if self.in_challenge("onearm") {
             self.talents.insert("u_soldier", 1);
             self.units["soldier"] = self.units["soldier"].max(data::ONEARM_SOLDIERS);
         }
@@ -771,11 +785,12 @@ impl Game {
         self.autobuy_acc = 0.0;
         self.ach_acc = 0.0;
         self.challenge_acc = 0.0;
+        self.halflife_acc = 0.0;
         self.last_unit_buy = LONG_AGO;
     }
 
     pub fn schedule_inspector(&mut self, first: bool) {
-        let delay = if self.challenge == Some("watched") {
+        let delay = if self.in_challenge("watched") {
             let (low, high) = data::WATCHED_INSPECTOR_DELAY;
             self.rng.uniform(low, high)
         } else {
@@ -790,7 +805,7 @@ impl Game {
     }
 
     pub fn schedule_enemy(&mut self, first: bool) {
-        let delay = if self.challenge == Some("invasion") {
+        let delay = if self.in_challenge("invasion") {
             let (low, high) = data::INVASION_ENEMY_DELAY;
             self.rng.uniform(low, high)
         } else {
@@ -835,6 +850,47 @@ impl Game {
     /// Target level of the next rank of a challenge.
     pub fn challenge_target(&self, cid: &str) -> u32 {
         data::challenge(cid).target_at(self.challenge_rank(cid))
+    }
+
+    /// The challenge is being played (alone or in a double challenge).
+    pub fn in_challenge(&self, cid: &str) -> bool {
+        self.challenge == Some(cid) || self.challenge2 == Some(cid)
+    }
+
+    /// Challenges being played: none, one, or two (double challenge).
+    pub fn active_challenges(&self) -> Vec<&'static str> {
+        self.challenge.into_iter().chain(self.challenge2).collect()
+    }
+
+    /// Level to reach to complete the current challenge(s): the highest of their targets.
+    pub fn run_target(&self) -> Option<u32> {
+        self.active_challenges()
+            .into_iter()
+            .map(|c| self.challenge_target(c))
+            .max()
+    }
+
+    /// Time limit of the current challenge(s): the shortest of their limits.
+    pub fn run_time_limit(&self) -> Option<f64> {
+        self.active_challenges()
+            .into_iter()
+            .filter_map(|c| data::challenge(c).time_at(self.challenge_rank(c)))
+            .reduce(f64::min)
+    }
+
+    /// Double challenges are open once data::DOUBLE_UNLOCK challenges are done (rank I at least).
+    pub fn double_unlocked(&self) -> bool {
+        self.challenges_done.len() >= data::DOUBLE_UNLOCK
+    }
+
+    /// Name of the current challenge(s): "Course" or "Course + Inflation".
+    pub fn challenge_label(&self) -> Option<String> {
+        let names: Vec<&str> = self
+            .active_challenges()
+            .into_iter()
+            .map(|c| data::challenge(c).name)
+            .collect();
+        (!names.is_empty()).then(|| names.join(" + "))
     }
 
     /// The challenge has a rank left whose target the current max level allows.
@@ -919,7 +975,7 @@ impl Game {
     }
 
     pub fn overheat_threshold(&self) -> u32 {
-        if self.challenge == Some("hothead") {
+        if self.in_challenge("hothead") {
             return data::HOTHEAD_THRESHOLD;
         }
         data::BASE_OVERHEAT_THRESHOLD
@@ -932,7 +988,7 @@ impl Game {
     }
 
     pub fn crit_chance(&self) -> f64 {
-        if self.challenge == Some("unlucky") {
+        if self.in_challenge("unlucky") {
             return 0.0;
         }
         data::T_CRIT_CHANCE * self.tr("t_crit") as f64
@@ -1002,7 +1058,7 @@ impl Game {
     }
 
     pub fn production(&self) -> f64 {
-        if self.challenge == Some("savior") {
+        if self.in_challenge("savior") {
             return 0.0;
         }
         self.army_production()
@@ -1019,10 +1075,10 @@ impl Game {
             .filter(|&(_, n)| n > 0)
             .map(|(uid, n)| n as f64 * self.unit_prod(uid))
             .sum();
-        if self.challenge == Some("nanar") {
+        if self.in_challenge("nanar") {
             p /= data::NANAR_PROD_DIVISOR;
         }
-        if self.challenge == Some("moussaka") {
+        if self.in_challenge("moussaka") {
             p /= self.moussaka_size();
         }
         let protesters = self.enemies.iter().any(|e| e.kind == EnemyKind::Hippies);
@@ -1040,7 +1096,7 @@ impl Game {
 
     /// Grève générale challenge: no production more than STRIKE_WINDOW seconds after the last press.
     pub fn on_strike(&self) -> bool {
-        self.challenge == Some("strike") && self.time - self.last_click > data::STRIKE_WINDOW
+        self.in_challenge("strike") && self.time - self.last_click > data::STRIKE_WINDOW
     }
 
     pub fn click_value(&self, manual: bool) -> f64 {
@@ -1089,7 +1145,7 @@ impl Game {
             return;
         }
         if manual {
-            if self.challenge == Some("onearm") {
+            if self.in_challenge("onearm") {
                 self.sfx.push_back("nope");
                 self.log(
                     "Défi Manchot : ESPACE est interdit !",
@@ -1107,7 +1163,7 @@ impl Game {
                 return;
             }
             let combo_top = (self.max_combo() - 1) as f64;
-            if self.challenge != Some("ninja") {
+            if !self.in_challenge("ninja") {
                 self.combo = combo_top.min(self.combo + COMBO_STEP);
                 if self.combo >= combo_top {
                     self.stats.max_combo = true;
@@ -1119,7 +1175,7 @@ impl Game {
                 .min((self.combo / combo_top.max(1.0) * CLICK_PITCHES as f64) as usize);
             self.sfx.push_back(CLICK_SOUNDS[pitch]);
         }
-        if self.challenge == Some("nanar") && self.rng.random() < NANAR_FIZZLE {
+        if self.in_challenge("nanar") && self.rng.random() < NANAR_FIZZLE {
             if manual {
                 self.run_stats.clicks += 1;
                 self.sfx.push_back("fizzle");
@@ -1127,7 +1183,7 @@ impl Game {
             return;
         }
         let mut v = self.click_value(manual);
-        if self.challenge == Some("savior") {
+        if self.in_challenge("savior") {
             v += self.army_production() * data::SAVIOR_PUNCH;
         }
         if self.rng.random() < self.crit_chance() {
@@ -1149,7 +1205,7 @@ impl Game {
         }
         self.gain(v);
         if manual
-            && self.challenge == Some("whitefire")
+            && self.in_challenge("whitefire")
             && self.rng.random() < data::WHITEFIRE_BRAWL_CHANCE
         {
             self.brawl();
@@ -1175,13 +1231,13 @@ impl Game {
         {
             self.click_times.pop_front();
         }
-        let immune = self.has_mut("asbestos") && self.challenge != Some("hothead");
+        let immune = self.has_mut("asbestos") && !self.in_challenge("hothead");
         self.click_times.len() > self.overheat_threshold() as usize && !immune
     }
 
     fn overheat(&mut self) {
         self.overheat_until = self.time
-            + if self.challenge == Some("hothead") {
+            + if self.in_challenge("hothead") {
                 data::HOTHEAD_OVERHEAT
             } else {
                 OVERHEAT_TIME
@@ -1245,23 +1301,23 @@ impl Game {
                 Some("MAX !"),
             );
         }
-        if let Some(ch) = self.challenge.map(data::challenge)
-            && lvl >= self.challenge_target(ch.id)
-        {
-            self.complete_challenge(ch);
+        if self.run_target().is_some_and(|t| lvl >= t) {
+            let double = self.challenge2.is_some();
+            for c in self.active_challenges() {
+                self.complete_challenge(data::challenge(c), double);
+            }
+            self.end_challenges();
         }
     }
 
-    fn complete_challenge(&mut self, ch: &'static data::Challenge) {
+    /// One more rank of the challenge (the caller clears the current challenges). The end of its story is told
+    /// at rank I, unless it was won in a double challenge.
+    fn complete_challenge(&mut self, ch: &'static data::Challenge, double: bool) {
         let rank = self.challenge_rank(ch.id) + 1;
         self.challenges_done.insert(ch.id, rank);
         self.skins.insert(ch.skin);
-        self.challenge = None;
-        if rank == 1 {
+        if rank == 1 && !double {
             self.pending_story = Some((ch.id, "end"));
-        }
-        if ch.id == "watched" {
-            self.schedule_inspector(false);
         }
         self.sfx.push_back("fanfare");
         self.log(
@@ -1287,7 +1343,7 @@ impl Game {
         let mut c = u.cost
             * data::UNIT_COST_GROWTH.powf(n as f64)
             * (1.0 - data::L_DISCOUNT * self.tr("l_discount") as f64);
-        if self.challenge == Some("inflation") {
+        if self.in_challenge("inflation") {
             c *= data::INFLATION_COST_MULT;
         }
         c *= self.reward_pow("inflation", data::INFLATION_COST_REWARD);
@@ -1300,12 +1356,12 @@ impl Game {
 
     /// Monoculture challenge: another unit type is already owned.
     pub fn mono_forbidden(&self, uid: &str) -> bool {
-        self.challenge == Some("mono") && self.units.iter().any(|(u, n)| n > 0 && u != uid)
+        self.in_challenge("mono") && self.units.iter().any(|(u, n)| n > 0 && u != uid)
     }
 
     /// Unit unlocked and allowed by the current challenge (affordable or not).
     pub fn unit_allowed(&self, uid: &str) -> bool {
-        self.challenge != Some("pacifist") && !self.mono_forbidden(uid) && self.unit_unlocked(uid)
+        !self.in_challenge("pacifist") && !self.mono_forbidden(uid) && self.unit_unlocked(uid)
     }
 
     pub fn can_buy_unit(&self, uid: &str) -> bool {
@@ -1316,7 +1372,7 @@ impl Game {
 
     /// Devil Story challenge: the last unit was bought less than DEVIL_BUY_GAP seconds ago.
     pub fn devil_waiting(&self) -> bool {
-        self.challenge == Some("devil") && self.time - self.last_unit_buy < data::DEVIL_BUY_GAP
+        self.in_challenge("devil") && self.time - self.last_unit_buy < data::DEVIL_BUY_GAP
     }
 
     pub fn buy_unit(&mut self, uid: &str) -> bool {
@@ -1348,7 +1404,7 @@ impl Game {
 
     /// Most units bought at once: MAX_BULK, 1 during Devil Story.
     pub fn max_bulk(&self) -> u64 {
-        if self.challenge == Some("devil") {
+        if self.in_challenge("devil") {
             1
         } else {
             MAX_BULK
@@ -1391,7 +1447,7 @@ impl Game {
 
     /// Ascète challenge: unit unlocks only.
     pub fn talent_allowed(&self, tid: &str) -> bool {
-        self.challenge != Some("ascete") || tid.starts_with("u_")
+        !self.in_challenge("ascete") || tid.starts_with("u_")
     }
 
     pub fn talent_available(&self, tid: &str) -> bool {
@@ -1518,10 +1574,32 @@ impl Game {
     /// Normal prestige (at max level) or start of the next rank of a challenge (possible after a 1st prestige,
     /// if the max level allows its target).
     pub fn prestige(&mut self, challenge: Option<&str>) -> bool {
-        let challenge = challenge.map(|c| data::challenge(c).id);
-        if challenge.is_some_and(|c| !self.challenge_available(c)) {
+        self.prestige_with(challenge.as_slice())
+    }
+
+    /// Double challenge: both at their next rank, completed together at the highest of their targets.
+    pub fn prestige_double(&mut self, a: &str, b: &str) -> bool {
+        if data::double_forbidden(a, b) {
+            let text = format!(
+                "{} et {} ne se jouent pas ensemble.",
+                data::challenge(a).name,
+                data::challenge(b).name
+            );
+            self.sfx.push_back("nope");
+            self.log(text, MsgKind::Bad, Some("NON !"));
             return false;
         }
+        a != b && self.double_unlocked() && self.prestige_with(&[a, b])
+    }
+
+    /// Prestige (if at max level) and start of a run with these challenges (none, one or two).
+    fn prestige_with(&mut self, challenges: &[&str]) -> bool {
+        let challenges: Vec<&'static str> =
+            challenges.iter().map(|c| data::challenge(c).id).collect();
+        if challenges.iter().any(|c| !self.challenge_available(c)) {
+            return false;
+        }
+        let challenge = challenges.first().copied();
         if self.can_prestige() {
             let gain = self.prestige_gain();
             self.isotopes += gain;
@@ -1547,21 +1625,27 @@ impl Game {
         } else if challenge.is_none() || self.prestige_count == 0 {
             return false;
         }
-        self.challenge = challenge;
-        if let Some(c) = challenge {
-            let done = self.challenge_rank(c);
-            self.log(
-                format!(
-                    "Défi {} {} lancé !",
-                    data::challenge(c).name,
-                    data::RANK_NAMES[done as usize]
-                ),
-                MsgKind::Info,
-                Some("DÉFI"),
-            );
-            if done == 0 {
-                self.pending_story = Some((c, "start"));
-            }
+        (self.challenge, self.challenge2) = (challenge, challenges.get(1).copied());
+        let started: Vec<String> = challenges
+            .iter()
+            .map(|c| {
+                let rank = data::RANK_NAMES[self.challenge_rank(c) as usize];
+                format!("{} {rank}", data::challenge(c).name)
+            })
+            .collect();
+        if !started.is_empty() {
+            let kind = if started.len() > 1 {
+                "Double défi"
+            } else {
+                "Défi"
+            };
+            let text = format!("{kind} {} lancé !", started.join(" + "));
+            self.log(text, MsgKind::Info, Some("DÉFI"));
+        }
+        if let [c] = challenges[..]
+            && self.challenge_rank(c) == 0
+        {
+            self.pending_story = Some((c, "start"));
         }
         self.reset_run();
         true
@@ -1608,7 +1692,7 @@ impl Game {
             self.ptalents.insert("p_cap", kept_core);
         }
         self.stats.iso_earned = 0;
-        self.challenge = None;
+        (self.challenge, self.challenge2) = (None, None);
         self.sfx.push_back("supernova");
         self.log(
             format!("SUPERNOVA ! +{gain} ✦. L'univers recommence..."),
@@ -1681,12 +1765,18 @@ impl Game {
     }
 
     pub fn abandon_challenge(&mut self) {
-        if let Some(challenge) = self.challenge {
+        if self.challenge.is_some() {
             self.log("Défi abandonné.", MsgKind::Info, Some("ABANDON"));
-            self.challenge = None;
-            if challenge == "watched" {
-                self.schedule_inspector(false);
-            }
+            self.end_challenges();
+        }
+    }
+
+    /// The current challenge(s) end within the run (won, abandoned or failed).
+    fn end_challenges(&mut self) {
+        let watched = self.in_challenge("watched");
+        (self.challenge, self.challenge2) = (None, None);
+        if watched {
+            self.schedule_inspector(false); // back to the normal delays
         }
     }
 
@@ -1709,10 +1799,10 @@ impl Game {
             self.combo = (self.combo - decay_rate * dt).max(0.0);
         }
 
-        if self.challenge == Some("halflife") {
+        if self.in_challenge("halflife") {
             self.half_life(dt);
         }
-        if self.challenge == Some("crocodile") {
+        if self.in_challenge("crocodile") {
             self.crocodile(dt);
         }
         self.gain(self.production() * dt);
@@ -1746,9 +1836,9 @@ impl Game {
         let decay = 0.5f64.powf(dt / data::HALFLIFE_SECONDS);
         self.radiation *= decay;
         self.progress *= decay;
-        self.challenge_acc += dt;
-        while self.challenge_acc >= HALFLIFE_UNIT_PERIOD {
-            self.challenge_acc -= HALFLIFE_UNIT_PERIOD;
+        self.halflife_acc += dt;
+        while self.halflife_acc >= HALFLIFE_UNIT_PERIOD {
+            self.halflife_acc -= HALFLIFE_UNIT_PERIOD;
             for u in &UNITS {
                 let lost = (self.units[u.id] as f64 * data::HALFLIFE_UNIT_DECAY) as u64;
                 self.units[u.id] -= lost;
@@ -1786,7 +1876,7 @@ impl Game {
     }
 
     fn auto_detonate(&mut self, dt: f64) {
-        if self.tr("t_auto") > 0 && self.challenge != Some("onearm") {
+        if self.tr("t_auto") > 0 && !self.in_challenge("onearm") {
             self.auto_acc += dt * data::T_AUTO_RATE * self.tr("t_auto") as f64;
             while self.auto_acc >= 1.0 {
                 self.auto_acc -= 1.0;
@@ -1796,14 +1886,14 @@ impl Game {
     }
 
     fn fail_slow_challenge(&mut self) {
-        if let Some(ch) = self.challenge.map(data::challenge)
-            && ch
-                .time_at(self.challenge_rank(ch.id))
-                .is_some_and(|limit| self.run_time > limit)
+        if self
+            .run_time_limit()
+            .is_some_and(|limit| self.run_time > limit)
+            && let Some(name) = self.challenge_label()
         {
-            self.challenge = None;
+            self.end_challenges();
             self.log(
-                format!("Défi {} échoué : trop lent !", ch.name),
+                format!("Défi {name} échoué : trop lent !"),
                 MsgKind::Bad,
                 Some("ÉCHEC"),
             );
@@ -1879,6 +1969,9 @@ impl Game {
             next_enemy: Some(left(self.next_enemy)),
             bribe: Some(left(self.bribe_until)),
             freeze: Some(left(self.freeze_until)),
+            challenge_acc: Some(self.challenge_acc),
+            unit_buy_ago: Some(self.time - self.last_unit_buy)
+                .filter(|&ago| ago < data::DEVIL_BUY_GAP),
         }
     }
 
@@ -1929,6 +2022,12 @@ impl Game {
         if let Some(wave) = t.wave.filter(|&w| w <= WAVE_NUMBER_MAX) {
             self.wave = wave;
         }
+        if let Some(v) = is_delay(t.challenge_acc) {
+            self.challenge_acc = v;
+        }
+        if let Some(v) = is_delay(t.unit_buy_ago) {
+            self.last_unit_buy = self.time - v;
+        }
     }
 
     /// Content of the save file.
@@ -1946,6 +2045,7 @@ impl Game {
             prestige_count: Some(self.prestige_count),
             skin: Some(self.skin.to_string()),
             challenge: Some(self.challenge.map(str::to_string)),
+            challenge2: Some(self.challenge2.map(str::to_string)),
             stats: Some(self.stats.clone()),
             exploded: Some(self.exploded),
             level: Some(self.level),
@@ -2041,6 +2141,13 @@ impl Game {
         if let Some(c) = d.challenge {
             g.challenge = c.as_deref().and_then(find_challenge);
         }
+        if let Some(c) = d.challenge2 {
+            // Only as the partner of a first challenge, and a different one.
+            g.challenge2 = c
+                .as_deref()
+                .and_then(find_challenge)
+                .filter(|&c| g.challenge.is_some_and(|first| first != c));
+        }
         if let Some(v) = d.stats {
             g.stats = v;
         }
@@ -2128,10 +2235,10 @@ impl Game {
         let find_chest: fn(&str) -> Option<&'static str> =
             |s| events::CHEST_REWARDS.into_iter().find(|&k| k == s);
         g.pending_chest = ids(d.pending_chest, find_chest).filter(|c| !c.is_empty());
-        if g.challenge == Some("watched") && g.inspector.is_none() {
+        if g.in_challenge("watched") && g.inspector.is_none() {
             g.schedule_inspector(true); // reset_run ran before the challenge was loaded
         }
-        if g.challenge == Some("invasion") {
+        if g.in_challenge("invasion") {
             g.schedule_enemy(false);
         }
         if let Some(t) = &d.threats {
@@ -2148,7 +2255,9 @@ impl Game {
         if rank == 0
             || elapsed < OFFLINE_MIN
             || !self.exploded
-            || matches!(self.challenge, Some("halflife" | "moussaka" | "crocodile"))
+            || ["halflife", "moussaka", "crocodile"]
+                .iter()
+                .any(|c| self.in_challenge(c))
         {
             return;
         }
@@ -2722,6 +2831,17 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn crocodile_bites_during_half_life() {
+        let mut g = exploded_game();
+        (g.challenge, g.challenge2) = (Some("halflife"), Some("crocodile"));
+        g.units["soldier"] = 1000;
+        for _ in 0..data::CROCODILE_PERIOD as u32 {
+            g.tick(1.0);
+        }
+        assert!(g.messages.iter().any(|m| m.text.contains("croco")));
+    }
+
+    #[test]
     fn devil_buys_one_unit_at_a_time() {
         let mut g = exploded_game();
         g.challenge = Some("devil");
@@ -2759,6 +2879,56 @@ pub(crate) mod tests {
         );
         let race = data::challenge("race");
         assert_eq!(race.target_at(1), race.target * data::CHALLENGE_TARGET_MULT);
+    }
+
+    #[test]
+    fn challenge_timers_survive_a_reload() {
+        let mut g = exploded_game();
+        g.challenge = Some("devil");
+        g.talents.insert("u_soldier", 1);
+        g.radiation = 1e9;
+        g.time = 100.0;
+        assert!(g.buy_unit("soldier"));
+        g.time += 0.5;
+        g.challenge_acc = 12.0;
+        let h = Game::from_save(g.save_data(), 0.0);
+        assert!(h.devil_waiting());
+        assert_eq!(h.challenge_acc, 12.0);
+    }
+
+    #[test]
+    fn double_challenge() {
+        let mut g = exploded_game();
+        g.prestige_count = 1;
+        g.ptalents.insert("p_cap", 1);
+        assert!(!g.prestige_double("race", "nanar")); // locked
+        for c in data::CHALLENGES.iter().take(data::DOUBLE_UNLOCK) {
+            g.challenges_done.insert(c.id, 1);
+        }
+        g.challenges_done.remove("race");
+        g.challenges_done.remove("nanar");
+        g.challenges_done.insert("strike", 1);
+        g.challenges_done.insert("mono", 1);
+        assert!(g.double_unlocked());
+        assert!(!g.prestige_double("race", "race"));
+        assert!(!g.prestige_double("strike", "onearm"));
+        assert!(has(&g, "nope"));
+        assert!(g.prestige_double("race", "nanar"));
+        assert!(g.in_challenge("race") && g.in_challenge("nanar"));
+        assert_eq!(g.challenge_label().unwrap(), "Course + Nanarland");
+        assert_eq!(g.pending_story, None); // no story for a double
+        let h = Game::from_save(g.save_data(), 0.0);
+        assert_eq!((h.challenge, h.challenge2), (Some("race"), Some("nanar")));
+        g.exploded = true;
+        g.mut_index = 20;
+        g.level = g.run_target().unwrap() - 1;
+        g.level += 1;
+        g.on_level_up();
+        assert_eq!(
+            (g.challenge_rank("race"), g.challenge_rank("nanar")),
+            (1, 1)
+        );
+        assert_eq!((g.challenge, g.challenge2), (None, None));
     }
 
     #[test]

@@ -529,6 +529,17 @@ pub struct Challenge {
 /// its own `rank_mult`).
 pub const CHALLENGE_RANKS: u32 = 3;
 pub const CHALLENGE_TARGET_MULT: u32 = 10;
+/// Challenges to complete (rank I) before double challenges open.
+pub const DOUBLE_UNLOCK: usize = 10;
+/// Pairs that cannot be played together: without presses (Manchot), these challenges produce nothing.
+pub const DOUBLE_FORBIDDEN: [(&str, &str); 2] = [("onearm", "strike"), ("onearm", "savior")];
+
+/// The two challenges cannot be played together (in either order).
+pub fn double_forbidden(a: &str, b: &str) -> bool {
+    DOUBLE_FORBIDDEN
+        .iter()
+        .any(|&(x, y)| (x, y) == (a, b) || (x, y) == (b, a))
+}
 /// Rank numbers shown to the player.
 pub const RANK_NAMES: [&str; CHALLENGE_RANKS as usize] = ["I", "II", "III"];
 

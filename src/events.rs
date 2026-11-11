@@ -314,12 +314,12 @@ pub fn pick_news(g: &mut Game) -> &'static str {
     if g.prestige_count > 0 {
         pool.extend(NEWS_PRESTIGE);
     }
-    if g.challenge == Some("nanar") {
+    if g.in_challenge("nanar") {
         for _ in 0..NANAR_NEWS_WEIGHT {
             pool.extend(NEWS_NANAR); // the challenge sets the mood
         }
     }
-    if g.challenge == Some("crocodile") {
+    if g.in_challenge("crocodile") {
         pool.extend([NEWS_CROCODILE; NANAR_NEWS_WEIGHT]);
     }
     g.rng.choice(&pool)
@@ -386,10 +386,8 @@ pub fn catch(g: &mut Game, letter: char) -> bool {
 pub fn chest_allowed(g: &Game, kind: &str) -> bool {
     match kind {
         "gauge" => g.qte.is_none() && g.crit_gauge < 1.0,
-        "army" => g.challenge != Some("pacifist") && g.units.any(),
-        "shield" => {
-            g.challenge != Some("watched") && g.level >= INSPECTOR_LEVEL && !g.has_mut("fog")
-        }
+        "army" => !g.in_challenge("pacifist") && g.units.any(),
+        "shield" => !g.in_challenge("watched") && g.level >= INSPECTOR_LEVEL && !g.has_mut("fog"),
         _ => CHEST_REWARDS.contains(&kind),
     }
 }
@@ -607,7 +605,7 @@ pub fn protest_divisor(g: &Game) -> f64 {
 
 /// The fog hides the mushroom from inspectors, except during the Sous surveillance challenge.
 fn inspector_can_come(g: &Game) -> bool {
-    g.level >= INSPECTOR_LEVEL && (g.challenge == Some("watched") || !g.has_mut("fog"))
+    g.level >= INSPECTOR_LEVEL && (g.in_challenge("watched") || !g.has_mut("fog"))
 }
 
 /// X hits the inspector if there is one, otherwise the other enemy present.
@@ -783,7 +781,7 @@ fn new_enemy(g: &Game, kind: EnemyKind, start: f64) -> Enemy {
 }
 
 pub fn spawn_enemy(g: &mut Game) {
-    let invasion = g.challenge == Some("invasion");
+    let invasion = g.in_challenge("invasion");
     let pool: Vec<EnemyKind> = ENEMIES
         .iter()
         .filter(|e| g.level >= e.level || invasion)
@@ -980,7 +978,7 @@ fn qte_resolve(g: &mut Game, timeout: bool) {
 const MUTATION_CHOICES: usize = 3;
 
 pub fn offer_mutation(g: &mut Game) {
-    if g.challenge == Some("sterile") {
+    if g.in_challenge("sterile") {
         g.mut_queue = 0;
         return;
     }
@@ -1056,7 +1054,7 @@ fn tick_crit_mass(g: &mut Game, dt: f64) {
         * data::S_CRIT_MULT.powi(g.sr("s_crit") as i32)
         / CRIT_CHARGE_TIME;
     rate *= g.reward_pow("sterile", data::STERILE_CRIT_SPEED);
-    if g.challenge != Some("unlucky") {
+    if !g.in_challenge("unlucky") {
         g.crit_gauge = (g.crit_gauge + rate * dt).min(1.0);
     }
 }
@@ -1070,7 +1068,7 @@ fn tick_plane(g: &mut Game) {
     } else if g.time >= g.next_plane
         && g.level >= PLANE_LEVEL
         && g.pending_chest.is_none()
-        && g.challenge != Some("unlucky")
+        && !g.in_challenge("unlucky")
     {
         g.sfx.push_back("plane");
         let letters: Vec<char> = DROP_LETTERS.chars().collect();
@@ -1086,7 +1084,7 @@ fn tick_plane(g: &mut Game) {
 fn tick_inspector(g: &mut Game) {
     if let Some(inspector) = g.inspector {
         let progress = (g.time - inspector.start) / inspector.dur;
-        if g.tr("l_guard") > 0 && g.challenge != Some("watched") && progress > GUARD_PROGRESS {
+        if g.tr("l_guard") > 0 && !g.in_challenge("watched") && progress > GUARD_PROGRESS {
             g.log(
                 "Tes gardes escortent l'inspecteur vers la sortie.",
                 MsgKind::Good,

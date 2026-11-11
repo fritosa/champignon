@@ -129,8 +129,13 @@ le jeu ne rattrape pas tout d'un coup.
   diviseur des manifestants (`protest_divisor`) ; les alertes annoncent la force du moment (`enemy_desc`,
   `{}` dans le `desc` de l'`EnemySpec`, valeur fournie par `effect_strength`). Calculé sur le niveau actuel,
   donc rien à sauvegarder.
-- **Défis** (`data::CHALLENGES`) : contraintes codées en dur là où elles s'appliquent (chercher
-  `challenge == Some("<id>")`, dans `Game` comme dans `ui.rs`). `g.challenge` vaut `Option<&'static str>`.
+- **Défis** (`data::CHALLENGES`) : contraintes codées en dur là où elles s'appliquent, toujours testées par
+  `g.in_challenge("<id>")` (dans `Game`, `events.rs` comme dans `ui.rs`), jamais en comparant `g.challenge`.
+  **Double défi** (ouvert après `DOUBLE_UNLOCK` défis réussis, sauf les paires de `DOUBLE_FORBIDDEN`) : `g.challenge` et `g.challenge2`
+  (`Option<&'static str>`), lancés par `Game::prestige_double` ; la cible est la plus haute des deux
+  (`run_target`), le temps limite le plus court (`run_time_limit`), et la réussite donne un rang à chacun,
+  sans histoire. Dans l'onglet, la ligne « Double défi » bascule `UI::double` ; Entrée sur un défi le choisit
+  (`UI::double_pick`, ◆), puis sur un second lance les deux (après confirmation).
   Chaque défi a `CHALLENGE_RANKS` (3) rangs : `g.challenges_done` donne le nombre de rangs réussis par défi
   (`challenge_rank`), la cible du rang suivant est la cible de base ×`CHALLENGE_TARGET_MULT` (10) par rang réussi (×3, ×4 et ×4 pour
   Pacifiste, Chat noir et Monoculture : `Challenge::rank_mult`)
@@ -178,7 +183,9 @@ le jeu ne rattrape pas tout d'un coup.
 - Menaces en cours (clé `threats`, `ThreatsData`, `Game::threats_data` / `load_threats`) : inspecteur,
   ennemis, échéances `next_inspector` / `next_enemy`, pots-de-vin et gel. Toujours en **temps relatif**
   (écoulé / restant), car `g.time` repart de 0 au chargement. Chaque valeur invalide est ignorée
-  individuellement (durées bornées par `THREAT_MAX`).
+  individuellement (durées bornées par `THREAT_MAX`). On y range aussi les minuteurs des défis :
+  `challenge_acc` (Crocodile Fury) et l'attente de Devil Story (`unit_buy_ago`). Demi-vie a son propre
+  `halflife_acc` (non sauvegardé, période d'1 s) pour que les deux tournent ensemble en double défi.
 - Non sauvegardé (recréé par `reset_run`) : avion, QTE, buffs ; `pending_story` (histoire non vue si on quitte
   avant). Attention : `reset_run` tourne (dans `Game::new`) *avant* que le défi chargé soit appliqué ; les
   échéances qui dépendent du défi sont recalculées en fin de `from_save` (voir `watched` et `invasion`), puis

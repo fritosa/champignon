@@ -264,6 +264,8 @@ pub enum Action {
     Prestige,
     Challenge(&'static str),
     Abandon,
+    /// Turns the double challenge mode on or off.
+    DoubleMode,
     Supernova,
     Skin,
     Intro,
@@ -354,6 +356,10 @@ pub struct UI<S: Screen> {
     pub sound: Option<Box<dyn SoundSink>>,
     pub sfx_last: HashMap<&'static str, f64>,
     pub qty: Qty,
+    /// Double challenge mode: Enter on a challenge picks it, then Enter on a second one starts both.
+    pub double: bool,
+    /// First challenge picked in double mode.
+    pub double_pick: Option<&'static str>,
     pub shake_until: f64,
     /// Last terminal title; None: title disabled (main enables it with Some("")).
     pub title: Option<String>,
@@ -385,6 +391,8 @@ impl<S: Screen> UI<S> {
             sound,
             sfx_last: HashMap::new(),
             qty: Qty::N(1),
+            double: false,
+            double_pick: None,
             shake_until: 0.0,
             title: None,
             title_at: LONG_AGO,
@@ -1090,7 +1098,7 @@ impl<S: Screen> UI<S> {
 
     /// Formatted number, hidden during the Fog of War challenge.
     pub fn num(&self, x: f64) -> String {
-        if self.g.challenge == Some("blind") {
+        if self.g.in_challenge("blind") {
             "???".to_string()
         } else {
             game::fmt(x)
@@ -1110,9 +1118,9 @@ impl<S: Screen> UI<S> {
             game::fmt(f64::from(g.cap()))
         );
         let mut tag = String::new();
-        if let Some(ch) = g.challenge.and_then(data::find_challenge) {
-            tag = format!("Défi {}", ch.name);
-            if let Some(time) = ch.time_at(g.challenge_rank(ch.id)) {
+        if let Some(name) = g.challenge_label() {
+            tag = format!("Défi {name}");
+            if let Some(time) = g.run_time_limit() {
                 let left = (time - g.run_time).max(0.0);
                 tag += &format!(
                     " {:.0}:{:02.0}",
@@ -1146,7 +1154,7 @@ impl<S: Screen> UI<S> {
             } else {
                 0.0
             };
-            let percent = if g.challenge == Some("blind") {
+            let percent = if g.in_challenge("blind") {
                 " ???".to_string()
             } else {
                 format!(" {:3}%", (frac * 100.0) as i64)
@@ -1323,13 +1331,18 @@ impl<S: Screen> UI<S> {
         let g = &self.g;
         let done = g.challenge_rank(c.id);
         let all = data::CHALLENGE_RANKS;
-        let cur = if g.challenge == Some(c.id) {
+        let cur = if g.in_challenge(c.id) {
             " (en cours)"
         } else {
             ""
         };
         let mark = if done == all { '✔' } else { '·' };
-        let text = format!("{mark} Défi {} {done}/{all}{cur}", c.name);
+        let picked = if self.double_pick == Some(c.id) {
+            "◆ "
+        } else {
+            ""
+        };
+        let text = format!("{mark} {picked}Défi {} {done}/{all}{cur}", c.name);
         let reward = format!("Récompense : {}.", c.reward);
         if done == all {
             return Row::new(
@@ -1369,22 +1382,22 @@ impl<S: Screen> UI<S> {
     pub fn unit_rows(&self) -> Vec<Row> {
         let g = &self.g;
         let mut rows = Vec::new();
-        let warning = match g.challenge {
-            Some("moussaka") => Some(format!(
-                "Moussaka géante : production ÷{}",
-                g.moussaka_size()
-            )),
-            Some("pacifist") => Some("Défi Pacifiste : unités interdites !".to_string()),
-            Some("mono") => Some("Défi Monoculture : une seule unité !".to_string()),
-            Some("strike") if g.on_strike() => Some("Grève : appuie sur ESPACE !".to_string()),
-            Some("savior") => Some("Le héros frappe, l'armée suit !".to_string()),
-            Some("devil") if g.devil_waiting() => {
-                Some("Cheval noir : attends un peu...".to_string())
+        for c in g.active_challenges() {
+            let warning = match c {
+                "moussaka" => Some(format!(
+                    "Moussaka géante : production ÷{}",
+                    g.moussaka_size()
+                )),
+                "pacifist" => Some("Défi Pacifiste : unités interdites !".to_string()),
+                "mono" => Some("Défi Monoculture : une seule unité !".to_string()),
+                "strike" if g.on_strike() => Some("Grève : appuie sur ESPACE !".to_string()),
+                "savior" => Some("Le héros frappe, l'armée suit !".to_string()),
+                "devil" if g.devil_waiting() => Some("Cheval noir : attends un peu...".to_string()),
+                _ => None,
+            };
+            if let Some(text) = warning {
+                rows.push(Row::label(text, self.c("magenta")));
             }
-            _ => None,
-        };
-        if let Some(text) = warning {
-            rows.push(Row::label(text, self.c("magenta")));
         }
         let nw = UNIT_NAME_MIN_W.max(self.tab_w - UNIT_COLUMNS_W);
         let mut teased = false;
@@ -1421,7 +1434,7 @@ impl<S: Screen> UI<S> {
                         data::fr_num(g.milestone_mult())
                     );
                 }
-                if !ok && g.unit_allowed(uid) && g.challenge != Some("blind") {
+                if !ok && g.unit_allowed(uid) && !g.in_challenge("blind") {
                     let prod = g.production();
                     desc += &if prod > 0.0 {
                         format!(" Encore {} d'attente.", dur((cost - g.radiation) / prod))
@@ -1557,6 +1570,20 @@ impl<S: Screen> UI<S> {
                 format!("── DÉFIS {}", "─".repeat(RULE)),
                 self.c("cyan"),
             ));
+            if g.double_unlocked() {
+                let (state, style) = if self.double {
+                    ("oui", self.c("yellow"))
+                } else {
+                    ("non", self.c("white"))
+                };
+                rows.push(Row::new(
+                    format!("Double défi : {state}"),
+                    style,
+                    Some(Action::DoubleMode),
+                    "Deux défis à la fois, chacun à son rang suivant : atteins la plus haute des deux cibles et les \
+                     deux gagnent un rang. Entrée sur un premier défi (◆), puis sur le second.",
+                ));
+            }
             for c in &data::CHALLENGES {
                 rows.push(self.challenge_row(c));
             }
@@ -2555,6 +2582,18 @@ impl<S: Screen> UI<S> {
                 }
             }
             Action::Abandon => g.abandon_challenge(),
+            Action::DoubleMode => {
+                self.double = !self.double;
+                self.double_pick = None;
+            }
+            Action::Challenge(id) if self.double && self.double_pick.is_none_or(|p| p == id) => {
+                // First pick, or a second Enter on it to drop it.
+                self.double_pick = if self.double_pick == Some(id) {
+                    None
+                } else {
+                    Some(id)
+                };
+            }
             Action::Intro => {
                 if intro(
                     &mut self.scr,
@@ -2603,12 +2642,16 @@ impl<S: Screen> UI<S> {
                     .is_some_and(|(a, until)| a == action && until > self.t)
                 {
                     self.confirm = None;
-                    let ok = match action {
-                        Action::Supernova => g.supernova(),
-                        Action::Challenge(id) => g.prestige(Some(id)),
+                    let ok = match (action, self.double_pick) {
+                        (Action::Supernova, _) => g.supernova(),
+                        (Action::Challenge(id), Some(first)) if self.double => {
+                            g.prestige_double(first, id)
+                        }
+                        (Action::Challenge(id), _) => g.prestige(Some(id)),
                         _ => g.prestige(None),
                     };
                     if ok {
+                        self.double_pick = None;
                         self.particles.clear();
                         self.spawn_acc.clear();
                     }
@@ -3085,6 +3128,41 @@ pub(crate) mod tests {
         select(&mut u, |a| *a == Action::Supernova);
         u.activate();
         assert_eq!(u.g.supernova_count, 1);
+    }
+
+    #[test]
+    fn double_challenge_picked_then_started() {
+        let mut u = supernova_ui();
+        u.g.level = 1;
+        assert!(
+            !row_texts(&u.prestige_rows())
+                .iter()
+                .any(|t| t.starts_with("Double défi"))
+        );
+        for c in data::CHALLENGES.iter().skip(2).take(data::DOUBLE_UNLOCK) {
+            u.g.challenges_done.insert(c.id, 1);
+        }
+        select(&mut u, |a| *a == Action::DoubleMode);
+        u.activate();
+        assert!(u.double);
+        select(&mut u, |a| *a == Action::Challenge("pacifist"));
+        u.activate();
+        assert_eq!(u.double_pick, Some("pacifist"));
+        assert!(
+            row_texts(&u.prestige_rows())
+                .iter()
+                .any(|t| t.contains("◆ Défi Pacifiste"))
+        );
+        select(&mut u, |a| *a == Action::Challenge("onearm"));
+        u.activate(); // confirmation
+        assert_eq!(u.g.challenge, None);
+        select(&mut u, |a| *a == Action::Challenge("onearm"));
+        u.activate();
+        assert_eq!(
+            (u.g.challenge, u.g.challenge2),
+            (Some("pacifist"), Some("onearm"))
+        );
+        assert_eq!(u.double_pick, None);
     }
 
     #[test]

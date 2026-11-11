@@ -27,7 +27,7 @@ la liste `ENEMIES` des tests de `art.rs`. Les tests `every_enemy_has_spec_and_ne
 
 **Nouveau défi** : un `challenge_def(…)` dans `data::CHALLENGES` (avec `skin`) + skin dans `data::SKINS` +
 palette dans `art::PALETTES` (et dans la liste du test `known_skins`) + la contrainte
-(`challenge == Some("<id>")`) et la récompense par rang (`g.reward_pow("<id>", MULT)` ou `X * g.challenge_rank("<id>")`)
+(`g.in_challenge("<id>")`, pour qu'il marche aussi en double défi) et la récompense par rang (`g.reward_pow("<id>", MULT)` ou `X * g.challenge_rank("<id>")`)
 dans le code, leurs valeurs en constantes `<DÉFI>_…` dans `data.rs` citées par `desc` et `reward` (« … par rang »).
 Vérifier ses trois rangs avec `cargo run --release --bin sim -- <runs> 6 defis`. Si le défi
 change une échéance de début de run, penser à la fin de `Game::from_save`. Le succès « Maître des défis » suit

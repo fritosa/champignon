@@ -167,7 +167,7 @@ impl Bot {
         if !g.prestige(Some(id)) {
             return None;
         }
-        while g.run_time < MAX_RUN_SECONDS && g.challenge == Some(id) {
+        while g.run_time < MAX_RUN_SECONDS && g.in_challenge(id) {
             self.play(g);
             g.tick(DT);
         }
