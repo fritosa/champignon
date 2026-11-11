@@ -1370,9 +1370,13 @@ impl<S: Screen> UI<S> {
         let g = &self.g;
         let mut rows = Vec::new();
         let warning = match g.challenge {
-            Some("pacifist") => Some("Défi Pacifiste : unités interdites !"),
-            Some("mono") => Some("Défi Monoculture : une seule unité !"),
-            Some("strike") if g.on_strike() => Some("Grève : appuie sur ESPACE !"),
+            Some("moussaka") => Some(format!(
+                "Moussaka géante : production ÷{}",
+                g.moussaka_size()
+            )),
+            Some("pacifist") => Some("Défi Pacifiste : unités interdites !".to_string()),
+            Some("mono") => Some("Défi Monoculture : une seule unité !".to_string()),
+            Some("strike") if g.on_strike() => Some("Grève : appuie sur ESPACE !".to_string()),
             _ => None,
         };
         if let Some(text) = warning {
@@ -1426,15 +1430,18 @@ impl<S: Screen> UI<S> {
                 );
             } else if !teased {
                 teased = true;
-                rows.push(
-                    Row::new(
+                let (text, desc) = match u.challenge.filter(|&c| g.challenge_rank(c) == 0) {
+                    Some(c) => (
+                        "??? — réussis un défi".to_string(),
+                        format!("Se débloque après le défi {}.", data::challenge(c).name),
+                    ),
+                    None => (
                         format!("??? — talent « {} »", u.unlock_name),
-                        self.c("grey"),
-                        None,
-                        "Débloque de nouvelles unités dans l'onglet Talents (2), branche Infanterie.",
-                    )
-                    .with_sprite(uid, false),
-                );
+                        "Débloque de nouvelles unités dans l'onglet Talents (2), branche Infanterie."
+                            .to_string(),
+                    ),
+                };
+                rows.push(Row::new(text, self.c("grey"), None, desc).with_sprite(uid, false));
             }
         }
         rows

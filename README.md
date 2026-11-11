@@ -17,7 +17,7 @@ ASCII, toute la musique synthétisée au vol. Tourné intégralement en mode tex
 - 🕵️ **L'INSPECTEUR DE L'ONU**, venu « vérifier ». Avec ses complices : saboteur, drone, manifestants, commando. Plus le champignon grossit, plus ils viennent souvent, plus ils sont coriaces et plus ils font mal. Martèle X !
 - ✈️ **L'AVION DE RAVITAILLEMENT**, qui ne fait que passer. Tape sa lettre ou adieu le coffre.
 - 💥 **LE PRESTIGE ⚛ ET LA SUPERNOVA ✦** : tu meurs, tu recommences, tu reviens *plus fort*. Comme dans toute bonne suite.
-- 🎬 **LES DÉFIS**, quinze tournages sous contrainte, en trois rangs chacun : sans armée, sans ESPACE, en pleine grève, avec de l'uranium périmé…
+- 🎬 **LES DÉFIS**, seize tournages sous contrainte, en trois rangs chacun : sans armée, sans ESPACE, en pleine grève, avec de l'uranium périmé… et face à **LA MOUSSAKA GÉANTE**, qui finit par rejoindre ton armée.
 - 🎵 **LA BANDE ORIGINALE**, synthétisée en direct, en trois ambiances : calme, tension, épique.
 
 > ⭐⭐⭐⭐⭐ *« J'ai appuyé sur ESPACE pendant quatre heures. »* — un spectateur\

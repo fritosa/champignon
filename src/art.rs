@@ -28,6 +28,7 @@ pub const PALETTES: &[(&str, &[ColorName])] = &[
     ("moss", &[Green, Yellow, Green, Grey, Green]),
     ("uranium", &[Green, White, Yellow, Green, Cyan]),
     ("sunset", &[Magenta, Orange, Red, Magenta, Yellow]),
+    ("moussaka", &[Yellow, White, Orange, Magenta, Orange]),
 ];
 pub const RAINBOW: &[ColorName] = &[Red, Orange, Yellow, Green, Cyan, Blue, Magenta];
 const DENSE: &[char] = &['@', '#', '%', '&'];
@@ -405,6 +406,10 @@ pub const UNIT_ART: &[(&str, Frames)] = &[
         "blackhole",
         [&[" .-. ", "( @ )", " `-' "], &[" .-. ", "( O )", " `-' "]],
     ),
+    (
+        "moussaka",
+        [&[" ~~~ ", "(o_o)", "[###]"], &[" ~~~ ", "(-_-)", "[###]"]],
+    ),
 ];
 
 pub const ENEMY_ART: &[(&str, Frames)] = &[
@@ -597,7 +602,7 @@ pub fn big_width(text: &str) -> i32 {
 mod tests {
     use super::*;
 
-    const UNITS: [&str; 9] = [
+    const UNITS: [&str; 10] = [
         "soldier",
         "mortar",
         "artillery",
@@ -607,6 +612,7 @@ mod tests {
         "icbm",
         "reactor",
         "blackhole",
+        "moussaka",
     ];
     const ENEMIES: [&str; 4] = ["saboteur", "drone", "hippies", "commando"];
 
@@ -685,6 +691,7 @@ mod tests {
         for skin in [
             "classic", "toxic", "rainbow", "mario", "plasma", "gold", "ghost", "neon", "ice",
             "lava", "camo", "crystal", "obsidian", "carton", "moss", "uranium", "sunset",
+            "moussaka",
         ] {
             assert!(has_skin(skin), "{skin}");
         }

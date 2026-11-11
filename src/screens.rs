@@ -153,6 +153,32 @@ pub const STORIES: &[((&str, &str), &[&str])] = &[
              Le règlement est formel.",
         ],
     ),
+    (
+        ("moussaka", "start"),
+        &[
+            "L'ATTAQUE DE LA MOUSSAKA GÉANTE — UN REMAKE DE GÉRARD ZÉDÉ",
+            "Gérard Zédé est de retour. Il a revu un chef-d'œuvre méconnu du cinéma grec de 1999, en a pleuré deux \
+             nuits, et veut en tourner le remake chez toi. Il manquait un effet spécial : ton champignon atomique \
+             a irradié le gratin de la cantine.",
+            "Le plat a mal tourné. Ou plutôt, il a très bien tourné : aubergines, viande hachée, trois kilos de \
+             béchamel, et une faim insatiable. La MOUSSAKA GÉANTE avance dans la ville et grossit de minute en \
+             minute. Plus elle grossit, plus elle avale ta radiation.",
+            "Ta mission : atteindre le niveau demandé avant qu'elle ne recouvre tout. Le neveu enrhumé fait les \
+             bruits de mastication. Le perchman, lui, a été englouti dès la première prise.",
+        ],
+    ),
+    (
+        ("moussaka", "end"),
+        &[
+            "L'ATTAQUE DE LA MOUSSAKA GÉANTE — GÉNÉRIQUE DE FIN",
+            "Repue, la moussaka s'allonge sur la place du marché et pousse un soupir de béchamel. Elle ne veut plus \
+             rien dévorer, juste qu'on lui gratte la croûte. Gérard Zédé crie « coupez ! » puis « on garde ! ».",
+            "Elle s'engage dans ton armée sous le nom de Moussaka apprivoisée : une unité qui produit plus qu'un \
+             trou noir et sent nettement meilleur. Tu gagnes aussi le skin Moussaka géante, gratiné à souhait.",
+            "Le perchman est retrouvé sous la troisième couche, vivant et rassasié. Il ne veut plus entendre parler \
+             de cinéma. Il ouvre une taverne.",
+        ],
+    ),
 ];
 
 /// Story of a challenge part ("start" or "end"), if it has one.

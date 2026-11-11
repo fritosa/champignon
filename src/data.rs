@@ -106,6 +106,18 @@ pub struct Unit {
     pub unlock_name: &'static str,
     pub unlock_cost: u32,
     pub mult_name: &'static str,
+    /// Challenge to complete (rank I) before its unlock talent can be bought.
+    pub challenge: Option<&'static str>,
+}
+
+impl Unit {
+    /// Same unit, unlockable only once this challenge is done.
+    const fn after_challenge(self, challenge: &'static str) -> Unit {
+        Unit {
+            challenge: Some(challenge),
+            ..self
+        }
+    }
 }
 
 #[rustfmt::skip]
@@ -122,11 +134,11 @@ const fn unit_def(
     unlock_cost: u32,
     mult_name: &'static str,
 ) -> Unit {
-    Unit { id, name, icon, cost, prod, proj, color, unlock_name, unlock_cost, mult_name }
+    Unit { id, name, icon, cost, prod, proj, color, unlock_name, unlock_cost, mult_name, challenge: None }
 }
 
 #[rustfmt::skip]
-pub const UNITS: [Unit; 9] = [
+pub const UNITS: [Unit; 10] = [
     unit_def("soldier", "Soldat", "i", 15.0, 0.5, "o", "green", "Conscription", 1, "Grenades à fragmentation"),
     unit_def("mortar", "Mortier", "y", 150.0, 4.0, "*", "yellow", "Mortiers", 3, "Obus explosifs"),
     unit_def("artillery", "Artilleur", "F", 1_500.0, 30.0, "°", "orange", "Artillerie lourde", 5, "Obus perforants"),
@@ -139,6 +151,8 @@ pub const UNITS: [Unit; 9] = [
              "Plasma confiné"),
     unit_def("blackhole", "Trou noir de poche", "O", 2.6e9, 5.5e6, "·", "white", "Singularité", 30,
              "Horizon des événements"),
+    unit_def("moussaka", "Moussaka apprivoisée", "#", 3e10, 4.2e7, "~", "orange", "Recette de mamie", 35,
+             "Béchamel enrichie").after_challenge("moussaka"),
 ];
 pub const UNIT_COUNT: usize = UNITS.len();
 pub const UNIT_COST_GROWTH: f64 = 1.15;
@@ -216,7 +230,14 @@ fn unit_talents() -> Vec<Talent> {
             0,
             1,
             (unit.unlock_cost as i64, 0),
-            format!("Débloque l'unité : {}.", unit.name),
+            match unit.challenge {
+                Some(c) => format!(
+                    "Débloque l'unité : {}. Après le défi {}.",
+                    unit.name,
+                    challenge(c).name
+                ),
+                None => format!("Débloque l'unité : {}.", unit.name),
+            },
             &unlock_req,
         ));
         talents.push(talent_def(
@@ -544,6 +565,8 @@ pub const HALFLIFE_SECONDS: f64 = 10.0;
 pub const HALFLIFE_UNIT_DECAY: f64 = 0.05;
 /// Seconds of production after each press.
 pub const STRIKE_WINDOW: f64 = 1.0;
+/// The giant moussaka grows by 1 every MOUSSAKA_GROWTH seconds; production is divided by its size.
+pub const MOUSSAKA_GROWTH: f64 = 60.0;
 // Challenge rewards.
 pub const PACIFIST_CLICK_MULT: f64 = 3.0;
 pub const ONEARM_PROD_MULT: f64 = 2.0;
@@ -570,9 +593,11 @@ pub const MONO_MILESTONE_BONUS: f64 = 0.25;
 pub const HALFLIFE_COMBO: u32 = 2;
 /// "Onde de choc" multiplier.
 pub const STRIKE_SHOCK_MULT: f64 = 2.0;
+/// Production of the tamed moussakas.
+pub const MOUSSAKA_PROD_MULT: f64 = 2.0;
 
 #[rustfmt::skip]
-pub const CHALLENGES: [Challenge; 15] = [
+pub const CHALLENGES: [Challenge; 16] = [
     challenge_def("pacifist", "Pacifiste", 60, None, "toxic", "Aucune unité autorisée. Atteins le niveau {0}.", &[],
                   Desc::new("Détonation ×{} par rang + skin Vert radioactif", &[PACIFIST_CLICK_MULT])),
     challenge_def("onearm", "Manchot", 100, None, "rainbow",
@@ -631,6 +656,12 @@ pub const CHALLENGES: [Challenge; 15] = [
                    Atteins le niveau {0}.",
                   &[STRIKE_WINDOW],
                   Desc::new("Onde de choc ×{} par rang + skin Crépuscule", &[STRIKE_SHOCK_MULT])),
+    challenge_def("moussaka", "L'attaque de la moussaka géante", 100, None, "moussaka",
+                  "Une moussaka géante dévore la ville : production divisée par sa taille, qui grossit de 1 \
+                   toutes les {1} s. Atteins le niveau {0}.",
+                  &[MOUSSAKA_GROWTH],
+                  Desc::new("Débloque la Moussaka apprivoisée, sa production ×{} par rang + skin Moussaka géante",
+                            &[MOUSSAKA_PROD_MULT])),
 ];
 
 pub fn find_challenge(id: &str) -> Option<&'static Challenge> {
@@ -645,7 +676,7 @@ pub fn challenge(id: &str) -> &'static Challenge {
 pub const PLASMA_PRESTIGES: u64 = 5;
 
 /// (id, name), in cycling order.
-pub const SKINS: [(&str, &str); 17] = [
+pub const SKINS: [(&str, &str); 18] = [
     ("classic", "Classique (feu)"),
     ("toxic", "Vert radioactif"),
     ("rainbow", "Arc-en-ciel"),
@@ -663,6 +694,7 @@ pub const SKINS: [(&str, &str); 17] = [
     ("moss", "Mousse"),
     ("uranium", "Uranium"),
     ("sunset", "Crépuscule"),
+    ("moussaka", "Moussaka géante"),
 ];
 
 /// Skin id as a static string (None if unknown).
@@ -686,6 +718,10 @@ mod tests {
         assert_eq!(talent("m_blackhole").cost, (15, 1));
         assert!(talent("u_soldier").req.is_empty());
         assert_eq!(TALENTS.len(), 6 + 2 * UNIT_COUNT + 7);
+        assert_eq!(
+            talent("u_moussaka").desc,
+            "Débloque l'unité : Moussaka apprivoisée. Après le défi L'attaque de la moussaka géante."
+        );
         assert_eq!(UNIT_TALENT_IDS[1], ("u_mortar", "m_mortar"));
     }
 

@@ -13,7 +13,8 @@ nombre (voir « Pas de nombre magique » dans [ARCHITECTURE.md](ARCHITECTURE.md#
 **Nouvelle unité** : ajouter un `unit_def(…)` dans `data::UNITS` (le talent de déblocage `u_<id>` et le
 multiplicateur `m_<id>` sont générés par `unit_talents`) + un sprite dans `art::UNIT_ART` (2 images, lignes
 alignées en bas, tourné vers la droite ; le miroir est automatique pour le côté droit) + l'identifiant dans la
-liste `UNITS` des tests de `art.rs`. Le même sprite s'affiche dans l'onglet Unités à côté de la description, en
+liste `UNITS` des tests de `art.rs`. Unité réservée aux joueurs qui ont réussi un défi : `.after_challenge("<id>")`
+après son `unit_def`. Le même sprite s'affiche dans l'onglet Unités à côté de la description, en
 silhouette grise tant que l'unité n'est pas débloquée.
 
 **Nouvel ennemi** : variante dans `events::EnemyKind` (et dans `EnemyKind::ALL`) + `EnemySpec` dans

@@ -253,9 +253,12 @@ impl Units {
         self.0.iter().sum()
     }
 
-    /// At least one unit of each type.
+    /// At least one unit of each type (except the units reserved to a challenge).
     pub fn all(&self) -> bool {
-        self.0.iter().all(|&n| n > 0)
+        UNITS
+            .iter()
+            .zip(self.0)
+            .all(|(u, n)| n > 0 || u.challenge.is_some())
     }
 
     pub fn any(&self) -> bool {
@@ -976,7 +979,11 @@ impl Game {
 
     /// Production of one unit of this type (multipliers included, freeze excluded).
     pub fn unit_prod(&self, uid: &str) -> f64 {
-        let mut p = data::unit(uid).prod
+        let unit = data::unit(uid);
+        let mut p = unit.prod
+            * unit
+                .challenge
+                .map_or(1.0, |c| self.reward_pow(c, data::MOUSSAKA_PROD_MULT))
             * data::UNIT_TALENT_MULT.powi(self.tr(data::UNIT_TALENT_IDS[unit_slot(uid)].1) as i32)
             * self.milestone_mult().powi(self.unit_milestones(uid) as i32);
         if self.has_mut("spores") {
@@ -1003,12 +1010,20 @@ impl Game {
         if self.challenge == Some("nanar") {
             p /= data::NANAR_PROD_DIVISOR;
         }
+        if self.challenge == Some("moussaka") {
+            p /= self.moussaka_size();
+        }
         let protesters = self.enemies.iter().any(|e| e.kind == EnemyKind::Hippies);
         if protesters {
             p / events::protest_divisor(self)
         } else {
             p
         }
+    }
+
+    /// L'attaque de la moussaka géante challenge: size of the moussaka (production divisor).
+    pub fn moussaka_size(&self) -> f64 {
+        1.0 + (self.run_time / data::MOUSSAKA_GROWTH).floor()
     }
 
     /// Grève générale challenge: no production more than STRIKE_WINDOW seconds after the last press.
@@ -1332,7 +1347,19 @@ impl Game {
 
     pub fn talent_available(&self, tid: &str) -> bool {
         let t = data::talent(tid);
-        self.tr(tid) < t.max && t.req.iter().all(|&(r, n)| self.tr(r) >= n)
+        self.tr(tid) < t.max
+            && t.req.iter().all(|&(r, n)| self.tr(r) >= n)
+            && self.unit_challenge_done(tid)
+    }
+
+    /// False for the unlock talent of a unit whose challenge is not done yet.
+    fn unit_challenge_done(&self, tid: &str) -> bool {
+        UNITS
+            .iter()
+            .zip(data::UNIT_TALENT_IDS.iter())
+            .find(|(_, (unlock, _))| *unlock == tid)
+            .and_then(|(u, _)| u.challenge)
+            .is_none_or(|c| self.challenge_rank(c) > 0)
     }
 
     pub fn buy_talent(&mut self, tid: &str) -> bool {
@@ -2033,11 +2060,12 @@ impl Game {
 
     pub fn apply_offline(&mut self, elapsed: f64) {
         let rank = self.pr("p_offline");
-        // Demi-vie: the stored radiation would have melted away during the absence.
+        // Demi-vie: the stored radiation would have melted away during the absence; moussaka: it would have
+        // kept growing (run_time does not advance offline).
         if rank == 0
             || elapsed < OFFLINE_MIN
             || !self.exploded
-            || self.challenge == Some("halflife")
+            || matches!(self.challenge, Some("halflife" | "moussaka"))
         {
             return;
         }
@@ -2520,6 +2548,30 @@ pub(crate) mod tests {
         assert!(g.supernova());
         assert_eq!(g.ptalents, BTreeMap::from([("p_cap", data::S_KEEP_CORE)]));
         assert_eq!(g.cap(), data::BASE_CAP * data::P_CAP_MULT);
+    }
+
+    #[test]
+    fn moussaka_divides_production_and_unlocks_its_unit() {
+        let mut g = exploded_game();
+        g.units["soldier"] = 10;
+        let prod = g.production();
+        g.challenge = Some("moussaka");
+        g.run_time = 2.5 * data::MOUSSAKA_GROWTH;
+        assert_eq!(g.moussaka_size(), 3.0);
+        assert!(approx(g.production(), prod / 3.0));
+        g.challenge = None;
+        g.pt = 1000;
+        g.talents.insert("u_blackhole", 1);
+        assert!(!g.talent_available("u_moussaka"));
+        assert!(!g.buy_talent("u_moussaka"));
+        g.challenges_done.insert("moussaka", 1);
+        assert!(g.buy_talent("u_moussaka"));
+        let one = g.unit_prod("moussaka");
+        g.challenges_done.insert("moussaka", 2);
+        assert!(approx(
+            g.unit_prod("moussaka"),
+            one * data::MOUSSAKA_PROD_MULT
+        ));
     }
 
     #[test]
@@ -3232,10 +3284,12 @@ pub(crate) mod tests {
         g.apply_offline(3600.0);
         assert!(approx(g.radiation, 5.0 * 3600.0 * 0.25));
         assert_eq!(last_kind(&g), MsgKind::Good);
-        g.challenge = Some("halflife");
         let before = g.radiation;
-        g.apply_offline(3600.0);
-        assert_eq!(g.radiation, before);
+        for ch in ["halflife", "moussaka"] {
+            g.challenge = Some(ch);
+            g.apply_offline(3600.0);
+            assert_eq!(g.radiation, before, "{ch}");
+        }
     }
 
     #[test]

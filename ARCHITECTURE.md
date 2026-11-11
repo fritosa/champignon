@@ -97,7 +97,9 @@ le jeu ne rattrape pas tout d'un coup.
 - **Unités** (`data::UNITS`) : coût ×1,15 par unité (`UNIT_COST_GROWTH`), paliers ×2 à
   50/100/200... (`UNIT_MILESTONES` ; les unités achetées ou offertes en jeu passent par `Game::add_units`, qui
   annonce les paliers franchis), débloquées par les talents `u_<id>` et boostées par `m_<id>` (générés par
-  `unit_talents` dans `data.rs`). `g.units` s'indexe par identifiant (`g.units["soldier"]`).
+  `unit_talents` dans `data.rs`). `g.units` s'indexe par identifiant (`g.units["soldier"]`). Une unité
+  `.after_challenge("<id>")` (la Moussaka apprivoisée) ne se débloque qu'après le rang I de ce défi
+  (`Game::talent_available`), et sa production est ×`MOUSSAKA_PROD_MULT` par rang du défi.
 - **Talents de run** (PT, branches DÉTONATION / INFANTERIE / LOGISTIQUE, `data::BRANCHES`), **prestige**
   (⚛, arbre `PTALENTS`), **supernova** (✦, arbre `STALENTS`, remet aussi à zéro le prestige, sauf les rangs
   d'Expansion du cœur gardés par Cœur stellaire, `s_keep`). Rangs lus par `g.tr(id)`, `g.pr(id)`, `g.sr(id)`.
@@ -141,7 +143,8 @@ le jeu ne rattrape pas tout d'un coup.
   `screens::intro`, touches ignorées pendant `STORY_GUARD` s) puis l'efface. Un défi sans histoire n'affiche
   rien ; une fois réussi, l'onglet Infos propose de la relire. Le lore : le professeur Amédée Morille
   (`screens::INTRO`), Gérard Zédé (Nanarland : un nanar, mauvais film sympathique, jamais un navet), l'inspecteur des récoltes
-  (Monoculture), le syndicat des troufions SUTA (Grève générale).
+  (Monoculture), le syndicat des troufions SUTA (Grève générale), le remake de Gérard Zédé (L'attaque de la
+  moussaka géante, hommage au film grec de 1999).
 - **Skins** : palettes dans `art::PALETTES` (sauf `rainbow`, géré dans `art::color`, et `mario`, géré à part
   dans `art::cap` et `art::stem`) ; `art::has_skin` connaît les deux.
 
@@ -176,7 +179,8 @@ le jeu ne rattrape pas tout d'un coup.
   `load_threats` les remplace si la sauvegarde en contient.
 - Défis réussis : clé `challenge_ranks` (rang par défi). L'ancienne clé `challenges_done` (liste, version 2)
   est encore lue comme rang I, mais plus écrite.
-- Gains hors ligne : `wall_time` est sauvegardé, `Game::apply_offline` crédite l'absence en fin de `from_save`.
+- Gains hors ligne : `wall_time` est sauvegardé, `Game::apply_offline` crédite l'absence en fin de `from_save`
+  (rien pendant les défis Demi-vie et moussaka, où le temps compte).
 
 ## 🔊 Son
 
