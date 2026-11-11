@@ -1526,7 +1526,12 @@ impl<S: Screen> UI<S> {
                 format!("☢ PRESTIGE : +{} ⚛ ☢", g.prestige_gain()),
                 self.c("green").bold(),
                 Some(Action::Prestige),
-                reset_desc,
+                format!(
+                    "{reset_desc} Surplus : ×{} (+{} par ×10 de la radiation qu'il fallait pour le niveau max : \
+                     rester au niveau max rapporte plus).",
+                    data::fr_num((g.surplus_mult() * 100.0).floor() / 100.0),
+                    data::fr_num(crate::game::SURPLUS_BONUS)
+                ),
             ));
         } else {
             rows.push(Row::new(
@@ -1611,7 +1616,8 @@ impl<S: Screen> UI<S> {
             self.c("magenta").bold(),
         )];
         let desc = format!(
-            "Réinitialise aussi les isotopes et l'arbre de prestige. Garde ✦, succès, skins et défis. \
+            "Réinitialise aussi les isotopes et l'arbre de prestige (sauf les rangs d'Expansion du cœur gardés par \
+             Cœur stellaire). Garde ✦, succès, skins et défis. \
              Gain : racine des isotopes gagnés depuis la dernière supernova / {}.",
             data::SUPERNOVA_DIVISOR
         );

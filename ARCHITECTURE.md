@@ -26,7 +26,7 @@ binaires, le jeu (`src/main.rs`), `sim` et `apercu`.
 | `src/screens.rs` | Écrans plein écran hors partie, qui pilotent le `Screen` eux-mêmes : introduction et histoires des défis (texte tapé à la machine), menu des parties ; aides de texte (`wrap`, `center`, `head`, `slice`). | `game`, `saves`, `sound`, `term` |
 | `src/ui.rs` | `UI<S: Screen>` : rendu des panneaux, onglets et overlays de la partie, bandeaux, particules, sons de l'interface, touches (`handle` → `Flow`). | tous les modules de la bibliothèque |
 | `src/main.rs` | Binaire `champignon` : choix de la partie, intro des nouvelles parties, boucle principale (20 images/s), autosauvegarde toutes les 30 s, sauvegarde même après une panique, signaux, `--reset`, `--mute`. | `game`, `saves`, `screens`, `sound`, `term`, `ui`, `signal-hook` |
-| `src/bin/sim.rs` | Bot qui joue sans affichage (achète l'unité la plus rentable, en économisant jusqu'à 30 s de production pour elle), pour vérifier l'équilibrage (`cargo run --release --bin sim -- [runs] [appuis/s] [defis]`, 8 runs et 6 appuis/s par défaut). Termine par un bilan : durée totale, runs de moins d'une minute, run le plus court, heure de chaque supernova. Avec `defis`, tente ensuite les rangs de chaque défi à la suite, chaque défi depuis une copie de l'état atteint (durée de chaque rang réussi, niveau atteint en cas d'échec, niveau max requis sinon). | `game`, `events`, `data`, `rng` |
+| `src/bin/sim.rs` | Bot qui joue sans affichage (achète l'unité la plus rentable, en économisant jusqu'à 30 s de production pour elle ; au niveau max, reste pour le bonus de surplus tant que ses isotopes par seconde ne baissent pas), pour vérifier l'équilibrage (`cargo run --release --bin sim -- [runs] [appuis/s] [defis]`, 8 runs et 6 appuis/s par défaut). Termine par un bilan : durée totale, runs de moins d'une minute, run le plus court, heure de chaque supernova. Avec `defis`, tente ensuite les rangs de chaque défi à la suite, chaque défi depuis une copie de l'état atteint (durée de chaque rang réussi, niveau atteint en cas d'échec, niveau max requis sinon). | `game`, `events`, `data`, `rng` |
 | `src/bin/apercu.rs` | Génère `apercu.svg`, la capture en couleurs du README : le vrai rendu de `UI` sur un `BufferScreen` de 100×30. À relancer (`cargo run --release --bin apercu`) quand l'écran change. | `game`, `ui`, `events`, `data`, `term`, `rng`, `sound` |
 | `install.sh` | Compile (`cargo build --release`) et crée (ou `--desinstaller` retire) la commande `champignon`, lien vers `target/release/champignon` dans `~/.local/bin` (ou le dossier passé en argument). Refuse d'écraser un fichier qui n'est pas un lien, et de retirer un lien qui pointe ailleurs. | `cargo` |
 | `Cargo.toml` | Crate `champignon` (édition 2024) ; dépendances : `crossterm`, `libloading`, `rand`, `serde`, `serde_json`, `signal-hook`. | |
@@ -99,8 +99,11 @@ le jeu ne rattrape pas tout d'un coup.
   annonce les paliers franchis), débloquées par les talents `u_<id>` et boostées par `m_<id>` (générés par
   `unit_talents` dans `data.rs`). `g.units` s'indexe par identifiant (`g.units["soldier"]`).
 - **Talents de run** (PT, branches DÉTONATION / INFANTERIE / LOGISTIQUE, `data::BRANCHES`), **prestige**
-  (⚛, arbre `PTALENTS`), **supernova** (✦, arbre `STALENTS`, remet aussi à zéro le prestige). Rangs lus par
-  `g.tr(id)`, `g.pr(id)`, `g.sr(id)`.
+  (⚛, arbre `PTALENTS`), **supernova** (✦, arbre `STALENTS`, remet aussi à zéro le prestige, sauf les rangs
+  d'Expansion du cœur gardés par Cœur stellaire, `s_keep`). Rangs lus par `g.tr(id)`, `g.pr(id)`, `g.sr(id)`.
+- **Gain de prestige** (`Game::prestige_gain`) : selon le niveau atteint, ×`surplus_mult` : +`SURPLUS_BONUS` par
+  ×10 de radiation gagnée pendant le run au-delà de celle qu'il fallait pour le niveau max
+  (`Game::radiation_for_level`, intégrale de `need`). Rester au niveau max rapporte donc plus.
 - **Mutations** aux niveaux 25, 50, 75, 100, 200, 400... (`events::mutation_milestone`) ; **synergies** quand
   une paire précise est réunie.
 - **Masse critique** : jauge qui se remplit, F lance une QTE, F au bon moment (vert ×300, jaune ×60).

@@ -445,10 +445,12 @@ pub const S_ISO_MULT: f64 = 1.5;
 pub const S_CORE_DISCOUNT: f64 = 0.2;
 /// Critical mass charging speed multiplier.
 pub const S_CRIT_MULT: f64 = 2.0;
+/// "Expansion du cœur" ranks kept through a supernova.
+pub const S_KEEP_CORE: u32 = 1;
 
 /// Supernova talents, paid in stars (✦). Never reset.
 #[rustfmt::skip]
-pub const STALENTS: [Perk; 5] = [
+pub const STALENTS: [Perk; 6] = [
     perk("s_prod", "Fusion stellaire", 10, Desc::new("Production ×{} par rang.", &[S_PROD_MULT]), 1.0, 2.0),
     perk("s_iso", "Nucléosynthèse", 10, Desc::new("Isotopes gagnés ×{} par rang.", &[S_ISO_MULT]), 1.0, 2.0),
     perk_costs("s_core", "Cœur dense", 4,
@@ -457,6 +459,9 @@ pub const STALENTS: [Perk; 5] = [
     perk("s_crit", "Pulsar", 3, Desc::new("La masse critique se charge {}× plus vite par rang.", &[S_CRIT_MULT]),
          3.0, 2.0),
     perk_costs("s_auto", "Chaîne de montage", 1, Desc::new("Achète automatiquement les talents de run.", &[]), &[5]),
+    perk_costs("s_keep", "Cœur stellaire", 2,
+               Desc::new("Garde {} rang d'Expansion du cœur après une supernova, par rang.", &[S_KEEP_CORE as f64]),
+               &[8, 20]),
 ];
 
 pub fn find_stalent(id: &str) -> Option<&'static Perk> {

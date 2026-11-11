@@ -18,6 +18,8 @@ const BOT_SEED: u64 = 1;
 const GAME_SEED: u64 = 2;
 /// Longest wait (in seconds of production) to save up for the best unit rather than buy a worse one.
 const SAVE_SECONDS: f64 = 30.0;
+/// Share of the best isotopes-per-second rate under which the bot stops farming the surplus bonus.
+const SURPLUS_STOP: f64 = 0.98;
 /// Units bought at most per tick (the bot stops earlier when it can no longer afford any).
 const MAX_UNIT_BUYS: usize = 100;
 /// Critical mass presses: chance (cumulative) of landing in the green, then in the yellow, else missing;
@@ -170,7 +172,7 @@ impl Bot {
         Some(g.challenge_rank(id) > before)
     }
 
-    /// Plays a run until the max level or MAX_RUN_SECONDS; returns (level mark, run time) in order.
+    /// Plays a run until the max level or MAX_RUN_SECONDS, then farms the surplus bonus; returns (level mark, run time) in order.
     fn run_once(&mut self, g: &mut Game) -> Vec<(u32, f64)> {
         let mut marks: Vec<(u32, f64)> = Vec::new();
         while g.run_time < MAX_RUN_SECONDS && g.level < g.cap() {
@@ -182,7 +184,20 @@ impl Bot {
                 }
             }
         }
+        self.farm_surplus(g);
         marks
+    }
+
+    /// At the max level, keeps playing for the surplus bonus as long as the isotopes per second do not drop
+    /// below SURPLUS_STOP of the best rate seen.
+    fn farm_surplus(&mut self, g: &mut Game) {
+        let rate = |g: &Game| g.prestige_gain() as f64 / g.run_time.max(DT);
+        let mut best = rate(g);
+        while g.can_prestige() && g.run_time < MAX_RUN_SECONDS && rate(g) >= best * SURPLUS_STOP {
+            self.play(g);
+            g.tick(DT);
+            best = best.max(rate(g));
+        }
     }
 }
 

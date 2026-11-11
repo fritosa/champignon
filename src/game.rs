@@ -66,6 +66,9 @@ pub const NEED_EXPONENT: f64 = 2.6;
 pub const PRESTIGE_GAIN: f64 = 10.0;
 pub const PRESTIGE_LEVEL: f64 = 100.0;
 pub const PRESTIGE_EXPONENT: f64 = 0.6;
+/// Surplus bonus of a prestige: +SURPLUS_BONUS per ×10 of the radiation needed for the max level earned
+/// during the run.
+pub const SURPLUS_BONUS: f64 = 0.5;
 /// Below this, numbers are shown with one decimal (fmt).
 const ONE_DECIMAL_BELOW: f64 = 100.0;
 
@@ -1384,8 +1387,20 @@ impl Game {
         self.level >= self.cap()
     }
 
+    /// Radiation needed to go from level 0 to `level` (integral of `need`, close to the exact sum).
+    pub fn radiation_for_level(level: u32) -> f64 {
+        NEED_BASE * (level as f64).powf(NEED_EXPONENT + 1.0) / (NEED_EXPONENT + 1.0)
+    }
+
+    /// Prestige multiplier for the radiation earned in the run beyond what the max level needed (1 below).
+    pub fn surplus_mult(&self) -> f64 {
+        let ratio = self.run_stats.earned / Game::radiation_for_level(self.cap());
+        1.0 + SURPLUS_BONUS * ratio.max(1.0).log10()
+    }
+
     pub fn prestige_gain(&self) -> i64 {
         let mut g = PRESTIGE_GAIN
+            * self.surplus_mult()
             * (self.level as f64 / PRESTIGE_LEVEL).powf(PRESTIGE_EXPONENT)
             * (1.0 + data::P_ISO_BONUS * self.pr("p_iso") as f64);
         g *= self.reward_pow("race", data::RACE_ISO_MULT);
@@ -1512,6 +1527,10 @@ impl Game {
         self.supernova_count += 1;
         self.isotopes = 0;
         self.ptalents = BTreeMap::new();
+        let kept_core = (data::S_KEEP_CORE * self.sr("s_keep")).min(data::ptalent("p_cap").max);
+        if kept_core > 0 {
+            self.ptalents.insert("p_cap", kept_core);
+        }
         self.stats.iso_earned = 0;
         self.challenge = None;
         self.sfx.push_back("supernova");
@@ -2473,6 +2492,34 @@ pub(crate) mod tests {
     fn prestige_requires_max_level() {
         let mut g = exploded_game();
         assert!(!g.prestige(None));
+    }
+
+    #[test]
+    fn surplus_raises_prestige_gain() {
+        let mut g = exploded_game();
+        g.level = g.cap();
+        g.run_stats.earned = Game::radiation_for_level(g.cap()) / 2.0;
+        assert_eq!(g.surplus_mult(), 1.0);
+        let base = g.prestige_gain();
+        g.run_stats.earned = Game::radiation_for_level(g.cap()) * 100.0;
+        assert!(approx(g.surplus_mult(), 1.0 + 2.0 * SURPLUS_BONUS));
+        // prestige_gain truncates, so the scaled gain can exceed the scaled truncated base by less than the factor.
+        let factor = 1.0 + 2.0 * SURPLUS_BONUS;
+        let expected = base as f64 * factor;
+        let gain = g.prestige_gain() as f64;
+        assert!(gain >= expected && gain < expected + factor);
+    }
+
+    #[test]
+    fn stellar_core_kept_through_supernova() {
+        let mut g = exploded_game();
+        g.ptalents.insert("p_cap", 4);
+        g.ptalents.insert("p_prod", 3);
+        g.level = g.cap();
+        g.stalents.insert("s_keep", 1);
+        assert!(g.supernova());
+        assert_eq!(g.ptalents, BTreeMap::from([("p_cap", data::S_KEEP_CORE)]));
+        assert_eq!(g.cap(), data::BASE_CAP * data::P_CAP_MULT);
     }
 
     #[test]
