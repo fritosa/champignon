@@ -300,6 +300,239 @@ pub const STORIES: &[((&str, &str), &[&str])] = &[
              gagnes le skin Black Carambar. Il ne reste aucune pastèque intacte sur le plateau.",
         ],
     ),
+    (
+        ("pacifist", "start"),
+        &[
+            "PACIFISTE — UNE PÉTITION DU VOISINAGE",
+            "Le comité des fêtes a fait signer une pétition : plus de soldats dans le jardin, ça abîme les \
+             hortensias. Trois cents signatures, dont celle du chat de la voisine, tamponnée avec la patte.",
+            "Ton armée est donc renvoyée à la maison, avec un sandwich et un bon de réduction pour le musée de la \
+             Paix. Il ne te reste que le détonateur, ton index et ta détermination.",
+            "Ta mission : faire grandir le champignon à la seule force du doigt. Les hortensias te regardent.",
+        ],
+    ),
+    (
+        ("pacifist", "end"),
+        &[
+            "PACIFISTE — LA COLOMBE ET LE CHAMPIGNON",
+            "Le champignon a grandi sans un seul soldat. Le comité des fêtes en fait la mascotte de la kermesse ; \
+             une colombe vient même faire son nid dans la fumée, ce qui pose des questions sanitaires.",
+            "Ton index, devenu légendaire, frappe désormais plus fort à chaque détonation. Tu gagnes aussi le skin \
+             Vert radioactif, couleur officielle des hortensias depuis l'incident.",
+        ],
+    ),
+    (
+        ("onearm", "start"),
+        &[
+            "MANCHOT — UN ACCIDENT DE PÉTANQUE",
+            "Le tournoi de pétanque du professeur Morille a mal tourné : ton bras droit est dans le plâtre, ton bras \
+             gauche tient le pastis. Impossible d'appuyer sur ESPACE. L'auto-détonateur, jaloux, refuse de \
+             travailler sans toi.",
+            "Le ministère t'envoie trois soldats « pour le principe ». Ils ont lu le manuel. Le reste, c'est à \
+             l'armée de le faire toute seule.",
+            "Ta mission : atteindre le niveau demandé sans toucher au détonateur. Le plâtre est signé par tout le \
+             régiment.",
+        ],
+    ),
+    (
+        ("onearm", "end"),
+        &[
+            "MANCHOT — LE PLÂTRE TOMBE",
+            "Le médecin découpe le plâtre : ton bras est guéri, et l'armée a appris à se débrouiller sans toi. Elle \
+             en est très fière ; elle en parle à chaque repas.",
+            "Cette autonomie lui reste : la production de toute l'armée augmente à chaque rang du défi. Le plâtre, \
+             couvert de dessins, devient le skin Arc-en-ciel.",
+        ],
+    ),
+    (
+        ("race", "start"),
+        &[
+            "COURSE — LE GRAND PRIX DU CHAMPIGNON",
+            "Un organisateur de rallye a vu ton champignon depuis l'autoroute. Il veut l'inscrire au Grand Prix des \
+             Phénomènes Inexpliqués : départ immédiat, arrivée au niveau demandé, chronomètre en main.",
+            "Le règlement est simple : si le temps est écoulé avant la ligne d'arrivée, le champignon est \
+             disqualifié et doit rentrer à pied. Le drapeau à damier est déjà en position.",
+            "Ta mission : aller vite. Très vite. Le public a apporté des sandwichs mais pas de patience.",
+        ],
+    ),
+    (
+        ("race", "end"),
+        &[
+            "COURSE — SUR LE PODIUM",
+            "Ligne d'arrivée franchie ! Le champignon monte sur le podium, où il ne tient pas. On l'arrose de \
+             champagne, qui s'évapore instantanément. La foule acclame un nuage.",
+            "En récompense, les isotopes gagnés à chaque prestige augmentent à chaque rang. Tu gagnes aussi le skin \
+             Champignon de Mario, coiffé comme un pilote. Les avocats d'un plombier moustachu ont été prévenus.",
+        ],
+    ),
+    (
+        ("inflation", "start"),
+        &[
+            "INFLATION — LA CRISE",
+            "Les marchés s'affolent : le prix du soldat a été multiplié par quatre pendant la nuit. Les économistes \
+             accusent le champignon, le champignon accuse les économistes, et le boulanger augmente la baguette \
+             par solidarité.",
+            "Chaque unité coûte une fortune. Le ministère te conseille de « faire des efforts », puis augmente ses \
+             propres honoraires.",
+            "Ta mission : atteindre le niveau demandé avec un budget en carton. Compte bien la monnaie.",
+        ],
+    ),
+    (
+        ("inflation", "end"),
+        &[
+            "INFLATION — FIN DE LA CRISE",
+            "La crise est finie : les prix redescendent, les économistes trouvent un autre coupable, et le \
+             boulanger garde ses nouveaux prix « par habitude ».",
+            "Toi, tu as appris à négocier : tes unités coûtent moins cher à chaque rang du défi. Ta cagnotte, \
+             fondue en lingot, devient le skin Or massif.",
+        ],
+    ),
+    (
+        ("blind", "start"),
+        &[
+            "BROUILLARD DE GUERRE — UNE NUIT SANS LUNE",
+            "Une purée de pois tombe sur le jardin. On n'y voit plus rien : ni le niveau, ni la radiation, ni la \
+             production. Les soldats se perdent entre le potager et la cabane à outils.",
+            "Les instruments de mesure ont tous été prêtés au voisin, qui ne les rendra pas. Il faudra jouer à \
+             l'instinct, à l'oreille, et au flair.",
+            "Ta mission : atteindre le niveau demandé à l'aveugle. Tu le sauras quand tu y seras.",
+        ],
+    ),
+    (
+        ("blind", "end"),
+        &[
+            "BROUILLARD DE GUERRE — LE BROUILLARD SE LÈVE",
+            "Le soleil revient. Le champignon est là, plus grand que jamais, entouré de soldats qui se demandent \
+             depuis combien de temps ils montent la garde devant la mauvaise cabane.",
+            "Ton instinct s'est aiguisé : on te propose une mutation de plus à chaque rang du défi. Un soldat \
+             resté dans la brume, devenu translucide, te donne le skin Fantôme.",
+        ],
+    ),
+    (
+        ("watched", "start"),
+        &[
+            "SOUS SURVEILLANCE — UNE VISITE DE L'ONU",
+            "L'ONU a envoyé toute une délégation. Un inspecteur arrive, puis un autre, puis un troisième, chacun \
+             avec un formulaire différent et le même imperméable beige.",
+            "Les gardes ont été mis en congé « pour transparence ». Les brouillards de mutation ne trompent plus \
+             personne. Il faudra chasser chaque inspecteur toi-même, et vite.",
+            "Ta mission : atteindre le niveau demandé malgré le défilé. Garde une main sur X.",
+        ],
+    ),
+    (
+        ("watched", "end"),
+        &[
+            "SOUS SURVEILLANCE — RAPPORT FINAL",
+            "La délégation repart avec un rapport de quatre cents pages qui conclut, en substance, que « c'est un \
+             champignon ». Une copie est classée, une autre sert à caler une table.",
+            "Tu as l'habitude, maintenant : chaque inspecteur chassé laisse plus de butin à chaque rang du défi. \
+             Les gyrophares de la délégation deviennent le skin Néon.",
+        ],
+    ),
+    (
+        ("ascete", "start"),
+        &[
+            "ASCÈTE — UNE RETRAITE SPIRITUELLE",
+            "Un moine en tournée a convaincu ton champignon de renoncer au superflu. Plus de détonateur renforcé, \
+             plus de propagande, plus de marché noir : seulement l'essentiel, c'est-à-dire de nouvelles unités.",
+            "Les talents de confort sont rangés au grenier. Le champignon médite, l'armée aussi, et le sergent \
+             fait du yoga en treillis.",
+            "Ta mission : atteindre le niveau demandé avec le strict minimum. Respire. Recrute.",
+        ],
+    ),
+    (
+        ("ascete", "end"),
+        &[
+            "ASCÈTE — L'ILLUMINATION",
+            "Le champignon atteint l'illumination, ou peut-être juste le niveau demandé. Le moine repart, satisfait, \
+             avec un souvenir radioactif dans son baluchon.",
+            "La sagesse reste : tu commences chaque run avec plus de PT à chaque rang du défi. Le calme glacial du \
+             monastère t'offre le skin Glace.",
+        ],
+    ),
+    (
+        ("hothead", "start"),
+        &[
+            "TÊTE BRÛLÉE — CANICULE",
+            "Quarante-deux degrés à l'ombre, et il n'y a pas d'ombre. Le détonateur fond à moitié et surchauffe \
+             au moindre effort ; même les Doigts d'amiante transpirent.",
+            "Le moindre emballement le bloque de longues secondes. Il faudra appuyer en mesure, comme un métronome \
+             en vacances.",
+            "Ta mission : atteindre le niveau demandé sans griller le détonateur. Un ventilateur est en route. Il \
+             est en panne.",
+        ],
+    ),
+    (
+        ("hothead", "end"),
+        &[
+            "TÊTE BRÛLÉE — L'ORAGE",
+            "Un orage éclate enfin. Le détonateur fume, siffle, puis refroidit. Tes doigts, eux, ont gagné en \
+             endurance.",
+            "Le seuil de surchauffe monte à chaque rang du défi. Le détonateur, à moitié fondu, garde une jolie \
+             couleur : le skin Lave.",
+        ],
+    ),
+    (
+        ("invasion", "start"),
+        &[
+            "INVASION — TOUS EN MÊME TEMPS",
+            "Saboteurs, drones, manifestants et commandos ont reçu le même carton d'invitation, avec la même date. \
+             Ils arrivent tous dès le début, et ils ne viennent pas pour le buffet.",
+            "Un ennemi débarque toutes les quelques secondes. Le jardin ressemble à un parc d'attractions un jour \
+             de grève des contrôleurs.",
+            "Ta mission : atteindre le niveau demandé en tenant le siège. Martèle X, et ne lâche rien.",
+        ],
+    ),
+    (
+        ("invasion", "end"),
+        &[
+            "INVASION — LE SIÈGE EST LEVÉ",
+            "Le dernier commando repart en boitant. Les manifestants plient leurs banderoles, les drones rentrent \
+             au garage, et le saboteur oublie sa clé à molette.",
+            "Les ennemis marchent désormais plus lentement à chaque rang du défi : ils se souviennent. Le treillis \
+             du commando, abandonné dans la haie, devient le skin Camouflage.",
+        ],
+    ),
+    (
+        ("sterile", "start"),
+        &[
+            "STÉRILE — L'HYGIÈNE AVANT TOUT",
+            "Un inspecteur sanitaire a désinfecté tout le jardin à l'eau de Javel. Plus une spore, plus une \
+             mutation : le champignon est propre comme un sou neuf, et un peu vexé.",
+            "Aucune mutation ne te sera proposée. Il faudra grandir à l'ancienne, sans tentacules ni yeux en trop.",
+            "Ta mission : atteindre le niveau demandé sans le moindre coup de pouce génétique.",
+        ],
+    ),
+    (
+        ("sterile", "end"),
+        &[
+            "STÉRILE — RETOUR À LA NATURE",
+            "Les spores reviennent au premier coup de vent. Le champignon, qui a appris à s'en passer, les accueille \
+             avec une certaine condescendance.",
+            "Sa masse critique se charge plus vite à chaque rang du défi. Le carrelage javellisé, pur et brillant, \
+             devient le skin Cristal.",
+        ],
+    ),
+    (
+        ("unlucky", "start"),
+        &[
+            "CHAT NOIR — VENDREDI 13",
+            "Un chat noir a traversé le jardin sous une échelle, en cassant un miroir. Depuis, plus rien ne marche : \
+             pas de détonation critique, pas de masse critique, pas un seul ravitaillement.",
+            "L'avion de ravitaillement fait demi-tour au-dessus de la maison. Le pilote dit qu'il « le sent mal ».",
+            "Ta mission : atteindre le niveau demandé sans la moindre chance. Le chat, lui, va très bien.",
+        ],
+    ),
+    (
+        ("unlucky", "end"),
+        &[
+            "CHAT NOIR — LA CHANCE TOURNE",
+            "Le chat noir s'endort au pied du champignon, au chaud. La malchance se lève comme un brouillard du \
+             matin, et un trèfle à quatre feuilles pousse dans la pelouse irradiée.",
+            "Tes détonations deviennent critiques plus souvent à chaque rang du défi. Le pelage du chat t'inspire le \
+             skin Obsidienne.",
+        ],
+    ),
 ];
 
 /// Story of a challenge part ("start" or "end"), if it has one.
@@ -925,6 +1158,13 @@ mod tests {
             assert!(data::find_challenge(cid).is_some(), "{cid}");
             assert!(["start", "end"].contains(part));
         }
-        assert!(story("nanar", "end").is_some());
+    }
+
+    #[test]
+    fn every_challenge_has_both_stories() {
+        for c in &data::CHALLENGES {
+            assert!(story(c.id, "start").is_some(), "{}", c.id);
+            assert!(story(c.id, "end").is_some(), "{}", c.id);
+        }
     }
 }

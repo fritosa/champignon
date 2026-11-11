@@ -1878,10 +1878,7 @@ impl<S: Screen> UI<S> {
             "Entrée : relire l'histoire du professeur Morille et de son champignon.",
         ));
         for ch in &data::CHALLENGES {
-            let has_story = ["start", "end"]
-                .iter()
-                .any(|part| story(ch.id, part).is_some());
-            if g.challenges_done.contains_key(ch.id) && has_story {
+            if g.challenges_done.contains_key(ch.id) {
                 rows.push(Row::new(
                     format!("Revoir le défi {}", ch.name),
                     self.c("magenta"),
@@ -3659,10 +3656,10 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn challenge_without_story_shows_nothing() {
+    fn unknown_story_shows_nothing() {
         let mut u = bare_ui();
         u.scr.keys.push_back(Some(ch('a')));
-        u.g.pending_story = Some(("race", "end"));
+        u.g.pending_story = Some(("nope", "end"));
         assert_eq!(u.show_story(), Ok(()));
         assert_eq!(u.g.pending_story, None);
         assert_eq!(u.scr.keys.len(), 1);

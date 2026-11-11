@@ -187,7 +187,7 @@ pub const ACHIEVEMENT_BONUS: f64 = 0.02;
 
 /// Thresholds are written in each entry, with the condition that quotes them.
 #[rustfmt::skip]
-pub const ACHIEVEMENTS: [Achievement; 41] = [
+pub const ACHIEVEMENTS: [Achievement; 44] = [
     achievement("boom", "Premier boom", "Déclenche l'explosion.", |g| g.exploded),
     achievement("lvl10", "Ça chauffe", "Niveau 10.", |g| g.stats.max_level >= 10),
     achievement("lvl25", "Petit nuage", "Niveau 25.", |g| g.stats.max_level >= 25),
@@ -232,6 +232,11 @@ pub const ACHIEVEMENTS: [Achievement; 41] = [
     achievement("challenges", "Vétéran des défis", "Réussis 3 défis.", |g| g.challenges_done.len() >= 3),
     achievement("challenges_all", "Maître des défis", "Réussis tous les défis.",
                 |g| g.challenges_done.len() >= data::CHALLENGES.len()),
+    achievement("legend", "Légende", "Termine un défi au rang III.",
+                |g| g.challenges_done.values().any(|&r| r >= data::CHALLENGE_RANKS)),
+    achievement("legend_all", "Légende vivante", "Termine tous les défis au rang III.",
+                |g| data::CHALLENGES.iter().all(|c| g.challenge_rank(c.id) >= data::CHALLENGE_RANKS)),
+    achievement("double", "Doublé", "Réussis un double défi.", |g| g.stats.doubles >= 1),
 ];
 
 pub fn find_achievement(id: &str) -> Option<&'static Achievement> {
@@ -2126,6 +2131,24 @@ mod tests {
         g.challenge = Some("nanar");
         let picked: Vec<&str> = (0..50).map(|_| pick_news(&mut g)).collect();
         assert!(picked.iter().any(|n| NEWS_NANAR.contains(n)));
+    }
+
+    #[test]
+    fn legend_and_double_achievements() {
+        let mut g = exploded_game();
+        let check = |g: &Game, id: &str| (find_achievement(id).unwrap().check)(g);
+        g.challenges_done.insert("race", 2);
+        assert!(!check(&g, "legend"));
+        g.challenges_done.insert("race", data::CHALLENGE_RANKS);
+        assert!(check(&g, "legend") && !check(&g, "legend_all"));
+        g.challenges_done = data::CHALLENGES
+            .iter()
+            .map(|c| (c.id, data::CHALLENGE_RANKS))
+            .collect();
+        assert!(check(&g, "legend_all"));
+        assert!(!check(&g, "double"));
+        g.stats.doubles = 1;
+        assert!(check(&g, "double"));
     }
 
     #[test]

@@ -129,6 +129,8 @@ le jeu ne rattrape pas tout d'un coup.
   diviseur des manifestants (`protest_divisor`) ; les alertes annoncent la force du moment (`enemy_desc`,
   `{}` dans le `desc` de l'`EnemySpec`, valeur fournie par `effect_strength`). Calculé sur le niveau actuel,
   donc rien à sauvegarder.
+- **Succès des défis** : « Légende » (un défi au rang III), « Légende vivante » (tous au rang III), « Doublé »
+  (un double défi réussi, compteur `Stats::doubles`).
 - **Défis** (`data::CHALLENGES`) : contraintes codées en dur là où elles s'appliquent, toujours testées par
   `g.in_challenge("<id>")` (dans `Game`, `events.rs` comme dans `ui.rs`), jamais en comparant `g.challenge`.
   **Double défi** (ouvert après `DOUBLE_UNLOCK` défis réussis, sauf les paires de `DOUBLE_FORBIDDEN`) : `g.challenge` et `g.challenge2`
@@ -149,8 +151,9 @@ le jeu ne rattrape pas tout d'un coup.
 - **Histoires de défis** (`screens::STORIES`, clés `(id, "start" | "end")`, lues par `screens::story`) : `Game`
   pose `pending_story` au lancement et à la réussite d'un défi ; `UI::show_story` (appelé par la boucle de
   `main::play`, pas par `draw`) l'affiche en plein écran (même écran tapé à la machine que l'introduction,
-  `screens::intro`, touches ignorées pendant `STORY_GUARD` s) puis l'efface. Un défi sans histoire n'affiche
-  rien ; une fois réussi, l'onglet Infos propose de la relire. Le lore : le professeur Amédée Morille
+  `screens::intro`, touches ignorées pendant `STORY_GUARD` s) puis l'efface. Chaque défi a ses deux histoires
+  (test `every_challenge_has_both_stories`) ; une fois réussi, l'onglet Infos propose de les relire. Le lore :
+  le professeur Amédée Morille
   (`screens::INTRO`), Gérard Zédé (Nanarland : un nanar, mauvais film sympathique, jamais un navet), l'inspecteur des récoltes
   (Monoculture), le syndicat des troufions SUTA (Grève générale), les remakes de Gérard Zédé (L'attaque de la
   moussaka géante, hommage au film grec de 1999 ; L'homme qui sauve le monde, White Fire, Crocodile Fury, Devil

@@ -313,6 +313,9 @@ pub struct Stats {
     pub iso_earned: i64,
     #[serde(deserialize_with = "or_default")]
     pub enemies: u64,
+    /// Double challenges won.
+    #[serde(deserialize_with = "or_default")]
+    pub doubles: u64,
 }
 
 /// Stats of the current run (end-of-run summary).
@@ -1303,6 +1306,9 @@ impl Game {
         }
         if self.run_target().is_some_and(|t| lvl >= t) {
             let double = self.challenge2.is_some();
+            if double {
+                self.stats.doubles += 1;
+            }
             for c in self.active_challenges() {
                 self.complete_challenge(data::challenge(c), double);
             }
@@ -2928,6 +2934,7 @@ pub(crate) mod tests {
             (g.challenge_rank("race"), g.challenge_rank("nanar")),
             (1, 1)
         );
+        assert_eq!(g.stats.doubles, 1);
         assert_eq!((g.challenge, g.challenge2), (None, None));
     }
 

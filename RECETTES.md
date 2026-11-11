@@ -31,8 +31,9 @@ palette dans `art::PALETTES` (et dans la liste du test `known_skins`) + la contr
 dans le code, leurs valeurs en constantes `<DÉFI>_…` dans `data.rs` citées par `desc` et `reward` (« … par rang »).
 Vérifier ses trois rangs avec `cargo run --release --bin sim -- <runs> 6 defis`. Si le défi
 change une échéance de début de run, penser à la fin de `Game::from_save`. Le succès « Maître des défis » suit
-automatiquement `CHALLENGES.len()`. Optionnel : une histoire de lancement et de réussite dans
-`screens::STORIES` (clés `("<id>", "start")` / `("<id>", "end")`).
+automatiquement `CHALLENGES.len()`, comme « Légende vivante ». Obligatoire (test
+`every_challenge_has_both_stories`) : une histoire de lancement et de réussite dans `screens::STORIES` (clés
+`("<id>", "start")` / `("<id>", "end")`).
 
 **Nouveau talent** : un `talent_def(…)` dans `data::build_talents` (talents de run, `TALENTS`), ou une entrée
 dans `data::PTALENTS` / `STALENTS` + la constante de son effet à côté (`T_…`, `P_…`, `S_…`), citée par sa
