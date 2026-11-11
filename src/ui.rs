@@ -857,7 +857,12 @@ impl<S: Screen> UI<S> {
     pub fn draw_army(&mut self, iy: i32, ix: i32, iw: i32, ground: i32, gap: i32) {
         let owned: Vec<_> = UNITS
             .iter()
-            .filter(|u| self.g.units[u.id] > 0 && u.id != "bomber")
+            // A unit crossing the field as a challenge monster is not drawn in the army as well.
+            .filter(|u| {
+                self.g.units[u.id] > 0
+                    && u.id != "bomber"
+                    && !u.challenge.is_some_and(|(c, _)| self.g.in_challenge(c))
+            })
             .collect();
         let wanted: Vec<_> = (0..ARMY_COPIES)
             .flat_map(|copy| owned.iter().map(move |u| (*u, copy)))
@@ -3196,6 +3201,28 @@ pub(crate) mod tests {
         u.draw(0.0);
         let (_, later) = back(&u);
         assert!(later.is_some() && later < mid);
+    }
+
+    #[test]
+    fn owned_monster_drawn_once() {
+        let mut u = bare_ui();
+        u.g.time = LONG_AFTER_EXPLOSION;
+        u.t = MONSTER_CROSSING / 2.0;
+        u.g.challenge = Some("crocodile");
+        u.g.units["croc"] = 1;
+        u.draw(0.0);
+        let backs = u
+            .scr
+            .rows()
+            .iter()
+            .filter(|row| {
+                row.iter()
+                    .map(|c| c.0)
+                    .collect::<String>()
+                    .contains(",^^^^^,")
+            })
+            .count();
+        assert_eq!(backs, 1);
     }
 
     #[test]

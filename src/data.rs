@@ -744,7 +744,8 @@ pub const CHALLENGES: [Challenge; 21] = [
                   Desc::new("Débloque le Diamant blanc, sa production ×{} par rang + skin Feu blanc",
                             &[NANAR_UNIT_MULT])),
     challenge_def("crocodile", "Crocodile Fury", 100, None, "ricefield",
-                  "Toutes les {1} s, le crocodile en caoutchouc dévore {2} % d'une sorte d'unité au hasard. \
+                  "Toutes les {1} s, le crocodile en caoutchouc dévore {2} % d'une sorte d'unité au hasard \
+                   (une unité seule est épargnée). \
                    Atteins le niveau {0}.",
                   &[CROCODILE_PERIOD, percent(CROCODILE_BITE)],
                   Desc::new("Débloque le Croco en caoutchouc, sa production ×{} par rang + skin Rizière",

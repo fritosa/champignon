@@ -40,6 +40,8 @@ pub const AUTOBUY_PERIOD: f64 = 1.0;
 pub const ACHIEVEMENT_PERIOD: f64 = 1.0;
 /// Most units bought by the quartermaster at each period.
 pub const AUTOBUY_MAX: usize = 50;
+/// Smallest group of units the crocodile bites into (Crocodile Fury).
+const CROCODILE_MIN_GROUP: u64 = 2;
 /// Period of the Demi-vie challenge unit losses (data::HALFLIFE_UNIT_DECAY is per second).
 const HALFLIFE_UNIT_PERIOD: f64 = 1.0;
 /// PT per level up, and bonus every PT_BONUS_EVERY levels up to data::BASE_CAP.
@@ -1116,7 +1118,16 @@ impl Game {
         if manual {
             v *= self.combo_mult();
         }
-        v + self.production() * self.shock_share()
+        v + self.production() * self.shock_share() + self.savior_punch()
+    }
+
+    /// L'homme qui sauve le monde: army production released by each press (0 outside the challenge).
+    pub fn savior_punch(&self) -> f64 {
+        if self.in_challenge("savior") {
+            self.army_production() * data::SAVIOR_PUNCH
+        } else {
+            0.0
+        }
     }
 
     /// Share of the production added to each press ("Onde de choc").
@@ -1186,9 +1197,6 @@ impl Game {
             return;
         }
         let mut v = self.click_value(manual);
-        if self.in_challenge("savior") {
-            v += self.army_production() * data::SAVIOR_PUNCH;
-        }
         if self.rng.random() < self.crit_chance() {
             v *= self.crit_mult();
             self.last_crit = self.time;
@@ -1852,17 +1860,19 @@ impl Game {
         }
     }
 
-    /// Crocodile Fury challenge: every CROCODILE_PERIOD seconds, part of a random owned unit type is eaten.
+    /// Crocodile Fury challenge: every CROCODILE_PERIOD seconds, part of a random unit type owned by at least
+    /// CROCODILE_MIN_GROUP is eaten.
     fn crocodile(&mut self, dt: f64) {
         self.challenge_acc += dt;
         if self.challenge_acc < data::CROCODILE_PERIOD {
             return;
         }
         self.challenge_acc -= data::CROCODILE_PERIOD;
+        // A unit type owned alone is spared: the crocodile goes for groups.
         let owned: Vec<&'static str> = self
             .units
             .iter()
-            .filter(|&(_, n)| n > 0)
+            .filter(|&(_, n)| n >= CROCODILE_MIN_GROUP)
             .map(|(u, _)| u)
             .collect();
         if owned.is_empty() {
@@ -1873,9 +1883,11 @@ impl Game {
         self.sfx.push_back("enemy");
     }
 
-    /// The crocodile eats CROCODILE_BITE of the units of type uid (rounded up), and the bite is logged.
+    /// The crocodile eats CROCODILE_BITE of the units of type uid (rounded down, at least one), and the bite is
+    /// logged.
     pub fn crocodile_bite(&mut self, uid: &'static str) {
-        let eaten = (self.units[uid] as f64 * data::CROCODILE_BITE).ceil() as u64;
+        let n = self.units[uid];
+        let eaten = ((n as f64 * data::CROCODILE_BITE) as u64).clamp(n.min(1), n);
         self.units[uid] -= eaten;
         let text = format!("Croco ! -{eaten} {}", data::unit(uid).name);
         self.log(text, MsgKind::Bad, Some("CROCO !"));
@@ -2803,13 +2815,12 @@ pub(crate) mod tests {
         g.challenge = Some("savior");
         assert_eq!(g.production(), 0.0);
         assert!(approx(g.army_production(), army));
+        // The shown press value includes the army's share.
+        let press = g.click_value(false);
+        assert!(approx(press, data::BASE_CLICK + army * data::SAVIOR_PUNCH));
         let before = g.radiation;
         g.click(false);
-        let press = g.click_value(false);
-        assert!(approx(
-            g.radiation - before,
-            press + army * data::SAVIOR_PUNCH
-        ));
+        assert!(approx(g.radiation - before, press));
     }
 
     #[test]
@@ -2832,8 +2843,19 @@ pub(crate) mod tests {
         g.tick(1.0);
         assert_eq!(
             g.units["soldier"],
-            11 - (11.0 * data::CROCODILE_BITE).ceil() as u64
+            11 - (11.0 * data::CROCODILE_BITE) as u64
         );
+    }
+
+    #[test]
+    fn crocodile_spares_lone_units() {
+        let mut g = exploded_game();
+        g.challenge = Some("crocodile");
+        (g.units["soldier"], g.units["mortar"]) = (1, 2);
+        g.tick(data::CROCODILE_PERIOD);
+        assert_eq!((g.units["soldier"], g.units["mortar"]), (1, 1)); // the pair loses one
+        g.tick(data::CROCODILE_PERIOD);
+        assert_eq!((g.units["soldier"], g.units["mortar"]), (1, 1)); // nothing left to bite
     }
 
     #[test]
