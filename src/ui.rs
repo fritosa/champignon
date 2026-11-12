@@ -584,6 +584,8 @@ impl<S: Screen> UI<S> {
             return;
         }
 
+        // The mushroom's shape comes from the full width: a shake moves it, without reshaping it.
+        let shape_w = iw;
         if self.t < self.shake_until && iw > SHAKE_MIN_W {
             let shift = *self.rng.choice(&[0, 1]);
             ix += shift;
@@ -611,13 +613,14 @@ impl<S: Screen> UI<S> {
         self.draw_sky(iy, ix, iw, ground);
         let size = art::size_fraction(f64::from(self.g.level), f64::from(self.g.cap()));
         let twin = self.g.has_mut("twin");
-        for (y, x, ch, col) in art::mushroom(iw, ih, size, self.t, self.g.skin, twin) {
+        for (y, x, ch, col) in art::mushroom(shape_w, ih, size, self.t, self.g.skin, twin) {
             if 0 <= y && y < ih && 0 <= x && x < iw {
                 self.put_char(iy + y, ix + x, ch, Style::of(col));
             }
         }
 
-        let foot_w = art::mushroom_width(iw, ih, size, twin);
+        let top = ground - art::mushroom_height(shape_w, ih, size);
+        let foot_w = art::mushroom_width(shape_w, ih, size, twin);
         let gap = STEM_GAP_MIN.max(foot_w / STEM_GAP_DIV);
         self.draw_army(iy, ix, iw, ground, ARMY_GAP_MIN.max(foot_w / ARMY_GAP_DIV));
         let banners = self.banner_lines(iw);
@@ -627,7 +630,7 @@ impl<S: Screen> UI<S> {
             iw,
             ih,
             ground,
-            size,
+            top,
             gap,
             dt,
             1 + banners.len() as i32,
@@ -887,7 +890,7 @@ impl<S: Screen> UI<S> {
         }
     }
 
-    /// Unit projectiles toward the mushroom, then floating numbers above its head.
+    /// Unit projectiles toward the mushroom, then floating numbers above its head (row top).
     #[allow(clippy::too_many_arguments)]
     pub fn update_particles(
         &mut self,
@@ -896,12 +899,11 @@ impl<S: Screen> UI<S> {
         iw: i32,
         ih: i32,
         ground: i32,
-        size: f64,
+        top: i32,
         gap: i32,
         dt: f64,
         min_row: i32,
     ) {
-        let top = ground - art::mushroom_height(iw, ih, size);
         if !self.g.frozen() {
             for u in &UNITS {
                 let n = self.g.units[u.id];
@@ -3321,6 +3323,28 @@ pub(crate) mod tests {
         u.g.sfx.push_back("perfect");
         u.play_sfx();
         assert!(approx(u.shake_until, shake("supernova").unwrap()));
+    }
+
+    /// A shake moves the mushroom by a column without reshaping it: in a panel narrow enough for its
+    /// width to set its height, it keeps every row.
+    #[test]
+    fn shake_keeps_the_mushroom_height() {
+        // Top row with a cap character, left of the stats panel (45 % of the width at least).
+        let top_row = |u: &UI<BufferScreen>| {
+            (0..u.h).find(|&y| (0..u.w * 2 / 5).any(|x| "@#%&".contains(u.scr.cell(y, x).0)))
+        };
+        for w in 90..=110 {
+            let mut u = bare_ui();
+            u.g.level = u.g.cap();
+            u.g.flash_until = 0.0;
+            sized(&mut u, 40, w);
+            u.draw(0.0);
+            let still = top_row(&u);
+            assert!(still.is_some(), "{w}");
+            u.shake_until = u.t + 1.0;
+            u.draw(0.0);
+            assert_eq!(top_row(&u), still, "{w}");
+        }
     }
 
     #[test]
