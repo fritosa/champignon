@@ -1,7 +1,8 @@
 //! Sound effects synthesized on the fly, played through PulseAudio (libpulse-simple loaded at runtime).
 //!
 //! Sounds are generated once at startup, then mixed in a thread that writes small blocks to a
-//! PulseAudio stream. Without PulseAudio, everything is silently disabled.
+//! PulseAudio stream. Without PulseAudio, everything is silently disabled; a stream that fails or stalls
+//! is reopened.
 
 use std::collections::HashMap;
 use std::f64::consts::TAU;
@@ -10,6 +11,7 @@ use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use libloading::Library;
 use rand::rngs::StdRng;
@@ -1154,6 +1156,11 @@ const PA_STREAM_PLAYBACK: c_int = 1;
 const PA_DEFAULT: u32 = u32::MAX; // (uint32_t) -1: value chosen by the server
 const BYTES_PER_SAMPLE: usize = 2;
 const LATENCY_CHUNKS: usize = 4; // ~80 ms
+/// A block waits about 20 ms (CHUNK) for room in the stream: a write blocked this long means the output
+/// has stalled. WSLg does so, without any error, when its audio pipeline backs up.
+const STALL: Duration = Duration::from_secs(1);
+/// Pause before reopening an output that failed, stalled or could not be opened: time for it to recover.
+const RETRY: Duration = Duration::from_secs(5);
 pub const PCM_SCALE: f64 = 32000.0; // slightly under 32767, the 16-bit integer peak
 /// Inaudible background hiss (±2 steps out of 32,000, ~-84 dB) added to the output: WSLg's audio output
 /// (Windows Remote Desktop) cuts a stream of pure silence and is slow to restart it, so effects come late
@@ -1205,21 +1212,41 @@ type PaSimpleNew = unsafe extern "C" fn(
     *mut c_int,
 ) -> *mut c_void;
 type PaSimpleWrite = unsafe extern "C" fn(*mut c_void, *const c_void, usize, *mut c_int) -> c_int;
+type PaSimpleFree = unsafe extern "C" fn(*mut c_void);
 
-/// Playback stream opened with libpulse-simple, loaded at runtime (no build-time dependency).
-struct Pulse {
-    _lib: Library, // keeps the write function loaded
-    stream: *mut c_void,
-    write: PaSimpleWrite,
+/// Where the mixer thread sends its blocks: a PulseAudio stream, or a fake in the tests.
+trait Output {
+    /// Blocks until the samples are queued; false when the stream failed.
+    fn write(&self, pcm: &[i16]) -> bool;
 }
 
-impl Pulse {
-    fn open() -> Option<Pulse> {
+/// libpulse-simple, loaded at runtime (no build-time dependency).
+struct PulseLib {
+    _lib: Library, // keeps the functions loaded
+    new: PaSimpleNew,
+    write: PaSimpleWrite,
+    free: PaSimpleFree,
+}
+
+impl PulseLib {
+    fn load() -> Option<PulseLib> {
         // SAFETY: libpulse-simple has no unusual load-time side effects, and the symbols are declared
         // with their C signatures from <pulse/simple.h>.
         let lib = unsafe { Library::new("libpulse-simple.so.0") }.ok()?;
         let new: PaSimpleNew = *unsafe { lib.get(b"pa_simple_new\0") }.ok()?;
         let write: PaSimpleWrite = *unsafe { lib.get(b"pa_simple_write\0") }.ok()?;
+        let free: PaSimpleFree = *unsafe { lib.get(b"pa_simple_free\0") }.ok()?;
+        Some(PulseLib {
+            _lib: lib,
+            new,
+            write,
+            free,
+        })
+    }
+
+    /// Opens a playback stream; None when the server cannot be reached (a stuck server takes 30 s to
+    /// say so).
+    fn open(&self) -> Option<Pulse<'_>> {
         let spec = SampleSpec {
             format: PA_SAMPLE_S16LE,
             rate: RATE as u32,
@@ -1236,7 +1263,7 @@ impl Pulse {
         let mut err: c_int = 0;
         // SAFETY: every pointer is either null (allowed by the API) or valid for the call.
         let stream = unsafe {
-            new(
+            (self.new)(
                 ptr::null(),
                 c"Champignon atomique".as_ptr(),
                 PA_STREAM_PLAYBACK,
@@ -1248,19 +1275,29 @@ impl Pulse {
                 &mut err,
             )
         };
-        (!stream.is_null()).then_some(Pulse {
-            _lib: lib,
-            stream,
-            write,
-        })
+        (!stream.is_null()).then_some(Pulse { lib: self, stream })
     }
+}
 
-    /// Blocks until the samples are queued; false when the stream failed.
+/// Playback stream, closed when dropped.
+struct Pulse<'a> {
+    lib: &'a PulseLib,
+    stream: *mut c_void,
+}
+
+impl Output for Pulse<'_> {
     fn write(&self, pcm: &[i16]) -> bool {
         let bytes: Vec<u8> = pcm.iter().flat_map(|x| x.to_le_bytes()).collect();
         let mut err: c_int = 0;
         // SAFETY: the stream is open and bytes is valid for its length.
-        unsafe { (self.write)(self.stream, bytes.as_ptr().cast(), bytes.len(), &mut err) >= 0 }
+        unsafe { (self.lib.write)(self.stream, bytes.as_ptr().cast(), bytes.len(), &mut err) >= 0 }
+    }
+}
+
+impl Drop for Pulse<'_> {
+    fn drop(&mut self) {
+        // SAFETY: the stream is open, and never used again.
+        unsafe { (self.lib.free)(self.stream) };
     }
 }
 
@@ -1279,7 +1316,9 @@ const NO_TRACK: u8 = u8::MAX;
 
 /// State shared between the UI thread (settings, play) and the mixer thread.
 struct Shared {
-    ok: AtomicBool,
+    ok: AtomicBool, // an output is open
+    /// When the mixer thread entered the write it is in, None between two writes.
+    writing_since: Mutex<Option<Instant>>,
     muted: AtomicBool,
     music_on: AtomicBool,
     volume: AtomicU32,      // f32 bits, master volume (effects and music), 0..1
@@ -1293,11 +1332,27 @@ impl Shared {
     fn voices(&self) -> MutexGuard<'_, Vec<Voice>> {
         self.voices.lock().unwrap_or_else(PoisonError::into_inner)
     }
+
+    fn writing_since(&self) -> MutexGuard<'_, Option<Instant>> {
+        self.writing_since
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The write in progress has been blocked for longer than STALL.
+    fn stalled(&self) -> bool {
+        self.writing_since().is_some_and(|t| t.elapsed() > STALL)
+    }
+
+    /// An output is open and takes the blocks: false as soon as a write has been blocked for STALL.
+    fn flowing(&self) -> bool {
+        self.ok.load(Ordering::Acquire) && !self.stalled()
+    }
 }
 
 /// What the UI needs from the sound system, so that it can be tested with a fake.
 pub trait SoundSink {
-    /// The output works (false when PulseAudio is missing or failed).
+    /// The output works (false when PulseAudio is missing, or while its stream is down or stalled).
     fn ok(&self) -> bool;
     fn play(&self, name: &str);
     /// Wanted music track (STYLES name), crossfaded when it changes; an unknown name means none.
@@ -1316,6 +1371,7 @@ impl Sound {
     pub fn new(enabled: bool) -> Sound {
         let shared = Arc::new(Shared {
             ok: AtomicBool::new(false),
+            writing_since: Mutex::new(None),
             muted: AtomicBool::new(false),
             music_on: AtomicBool::new(true),
             volume: AtomicU32::new(1f32.to_bits()),
@@ -1337,8 +1393,8 @@ impl Sound {
     /// Plays a sound at a given volume (0..1), following the priority rules.
     pub fn play_at(&self, name: &str, vol: f64) {
         let shared = &self.shared;
-        if shared.muted.load(Ordering::Relaxed) || !shared.ok.load(Ordering::Acquire) {
-            return;
+        if shared.muted.load(Ordering::Relaxed) || !shared.flowing() {
+            return; // without an output that flows, the sound would only play late
         }
         let Some(samples) = shared.sounds.get().and_then(|bank| bank.get(name)) else {
             return;
@@ -1376,7 +1432,7 @@ impl Sound {
 
 impl SoundSink for Sound {
     fn ok(&self) -> bool {
-        self.shared.ok.load(Ordering::Acquire)
+        self.shared.flowing()
     }
 
     fn play(&self, name: &str) {
@@ -1403,27 +1459,26 @@ impl SoundSink for Sound {
     }
 }
 
-/// Mixer thread: opens the output, builds the sounds, then writes blocks until the stream fails.
+/// Mixer thread: opens the output, builds the sounds, then feeds it blocks. An output that fails or stalls
+/// is closed, and a new one opened after RETRY, for as long as the game runs.
 fn run(shared: &Arc<Shared>) {
-    let Some(pulse) = Pulse::open() else {
-        return;
+    let Some(lib) = PulseLib::load() else {
+        return; // no PulseAudio on this machine: silent for good
     };
-    let _ = shared.sounds.set(build());
-    shared.ok.store(true, Ordering::Release);
-    // Music (slower to compute) is generated alongside so it doesn't delay the effects.
-    let music_shared = Arc::clone(shared);
-    let _ = thread::Builder::new().name("music".into()).spawn(move || {
-        let _ = music_shared.tracks.set(build_music());
-    });
     let mut mixer = Mixer::new(Arc::clone(shared));
-    let mut floor_pos = 0;
     loop {
-        let pcm = keep_alive(&mixer.mix(), floor_pos);
-        floor_pos = (floor_pos + CHUNK) % KEEPALIVE.len();
-        if !pulse.write(&pcm) {
-            shared.ok.store(false, Ordering::Release);
-            return;
+        if let Some(pulse) = lib.open() {
+            if shared.sounds.get().is_none() {
+                let _ = shared.sounds.set(build());
+                // Music (slower to compute) is generated alongside so it doesn't delay the effects.
+                let music_shared = Arc::clone(shared);
+                let _ = thread::Builder::new().name("music".into()).spawn(move || {
+                    let _ = music_shared.tracks.set(build_music());
+                });
+            }
+            mixer.feed(&pulse);
         }
+        thread::sleep(RETRY);
     }
 }
 
@@ -1434,6 +1489,7 @@ struct Mixer {
     music_gain: f64,
     music_pos: usize,
     limit_gain: f64,
+    hiss_pos: usize, // position in the KEEPALIVE loop
 }
 
 impl Mixer {
@@ -1444,7 +1500,31 @@ impl Mixer {
             music_gain: 0.0,
             music_pos: 0,
             limit_gain: 1.0,
+            hiss_pos: 0,
         }
+    }
+
+    /// Feeds a freshly opened output block after block, until a write fails or takes longer than STALL to
+    /// return: the output is then unusable, and Sound::ok says so until the next one. Nothing interrupts
+    /// a blocked write: the output stays for as long as it lasts, and only Sound::ok tells.
+    fn feed(&mut self, out: &dyn Output) {
+        // Sounds asked for before this output would play late; the music fades in.
+        self.shared.voices().clear();
+        self.music_gain = 0.0;
+        self.shared.ok.store(true, Ordering::Release);
+        loop {
+            let pcm = keep_alive(&self.mix(), self.hiss_pos);
+            self.hiss_pos = (self.hiss_pos + CHUNK) % KEEPALIVE.len();
+            *self.shared.writing_since() = Some(Instant::now());
+            if !out.write(&pcm) || self.shared.stalled() {
+                break;
+            }
+            *self.shared.writing_since() = None;
+        }
+        // The last write stays on record until ok is down: Sound::ok never sees a stalled output as
+        // working in between.
+        self.shared.ok.store(false, Ordering::Release);
+        *self.shared.writing_since() = None;
     }
 
     /// Mixes the active voices over a block of CHUNK samples, returns 16-bit PCM.
@@ -1525,6 +1605,7 @@ impl Mixer {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use std::cell::Cell;
     use std::path::Path;
 
     static BANK: LazyLock<Bank> = LazyLock::new(build);
@@ -2002,5 +2083,106 @@ pub(crate) mod tests {
         snd.play("level");
         snd.play("click0");
         assert_eq!(voice_count(&snd), 2);
+    }
+
+    // --- Output
+
+    /// Output whose n-th write (counted from 0) does what the closure says of its block.
+    struct FakeOutput<F: Fn(usize, &[i16]) -> bool> {
+        write: F,
+        writes: Cell<usize>,
+    }
+
+    impl<F: Fn(usize, &[i16]) -> bool> FakeOutput<F> {
+        fn new(write: F) -> FakeOutput<F> {
+            let writes = Cell::new(0);
+            FakeOutput { write, writes }
+        }
+    }
+
+    impl<F: Fn(usize, &[i16]) -> bool> Output for FakeOutput<F> {
+        fn write(&self, pcm: &[i16]) -> bool {
+            let n = self.writes.get();
+            self.writes.set(n + 1);
+            (self.write)(n, pcm)
+        }
+    }
+
+    fn long_sound() -> (Sound, Mixer) {
+        sound_with(&[("long", vec![0.5; CHUNK * 100])])
+    }
+
+    /// When a write blocked for longer than STALL started.
+    fn long_ago() -> Instant {
+        Instant::now()
+            .checked_sub(STALL * 2)
+            .expect("machine up for more than 2 s")
+    }
+
+    #[test]
+    fn failed_output_ends_feed() {
+        let (snd, mut mixer) = long_sound();
+        snd.shared.ok.store(false, Ordering::Release); // as before any output opened
+        let out = FakeOutput::new(|n, pcm| {
+            assert!(snd.ok()); // while the output takes the blocks
+            assert!(pcm.iter().any(|&x| x != 0)); // never pure silence
+            if n == 0 {
+                snd.play("long");
+            } else {
+                assert!(pcm.iter().all(|&x| x > 15000)); // the sound asked for meanwhile
+            }
+            n < 3
+        });
+        mixer.feed(&out);
+        assert_eq!(out.writes.get(), 4); // the fourth write failed
+        assert!(!snd.ok());
+        snd.play("long");
+        assert_eq!(voice_count(&snd), 1); // nothing new without an output
+    }
+
+    #[test]
+    fn stalled_output_ends_feed() {
+        let (snd, mut mixer) = long_sound();
+        let out = FakeOutput::new(|n, _| {
+            if n == 2 {
+                *snd.shared.writing_since() = Some(long_ago()); // as if it had blocked that long
+            }
+            true // a stalled write ends up returning, without any error
+        });
+        mixer.feed(&out);
+        assert_eq!(out.writes.get(), 3);
+        assert!(!snd.ok());
+        assert!(snd.shared.writing_since().is_none()); // nothing left over for the next output
+    }
+
+    #[test]
+    fn blocked_write_is_not_ok() {
+        let (snd, _) = long_sound();
+        *snd.shared.writing_since() = Some(Instant::now());
+        assert!(snd.ok()); // a write in progress is the normal state
+        *snd.shared.writing_since() = Some(long_ago());
+        assert!(!snd.ok());
+        snd.play("long");
+        assert_eq!(voice_count(&snd), 0); // it would only play late, once the write returns
+        *snd.shared.writing_since() = None;
+        assert!(snd.ok());
+    }
+
+    #[test]
+    fn new_output_starts_from_scratch() {
+        let (snd, mut mixer) = long_sound();
+        let _ = snd.shared.tracks.set(TRACKS.clone());
+        snd.set_music("calm");
+        run_chunks(&mut mixer, 60);
+        assert_eq!(mixer.music_gain, 1.0);
+        snd.play("long"); // asked for just as the previous output went down
+        let out = FakeOutput::new(|_, pcm| {
+            assert!(pcm.iter().all(|x| x.abs() < 1000)); // no late sound, music fading in
+            false
+        });
+        mixer.feed(&out);
+        assert_eq!(out.writes.get(), 1);
+        assert_eq!(voice_count(&snd), 0);
+        assert!(mixer.music_gain < 0.1);
     }
 }

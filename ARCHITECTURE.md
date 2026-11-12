@@ -23,7 +23,7 @@ binaires, le jeu (`src/main.rs`), `sim` et `apercu`.
 | `src/game.rs` | `Game` : état complet, multiplicateurs, actions, prestige/supernova, `tick`, file de sons `Sfx`, messages ; format de sauvegarde typé (`SaveData`, serde) et conversion dans les deux sens (`save_data` / `from_save`). | `data`, `events`, `rng`, `saves`, `serde` |
 | `src/term.rs` | Couche écran : couleurs (`ColorName`, `Color`), `Style`, touches (`Key`), trait `Screen`, terminal réel `TermScreen` (crossterm, double tampon) et grille en mémoire `BufferScreen` (tests, capture). Drapeau des signaux (`interrupt_flag`), restauration du terminal après une panique. | `game` (`MsgKind`), `crossterm` |
 | `src/art.rs` | Génération ASCII : champignon procédural, palettes des skins, sprites des unités et ennemis, grosse police. Renvoie des cellules/lignes, n'écrit pas à l'écran. | `term` (`ColorName`) |
-| `src/sound.rs` | Synthèse des effets et de la musique, mixage dans un thread, sortie PulseAudio (`libpulse-simple` chargée à l'exécution par `libloading`). Silencieux sans PulseAudio. Trait `SoundSink` (ce que l'UI utilise). | `game` (`CLICK_SOUNDS`), `libloading`, `rand` |
+| `src/sound.rs` | Synthèse des effets et de la musique, mixage dans un thread, sortie PulseAudio (`libpulse-simple` chargée à l'exécution par `libloading`), rouverte quand elle tombe ou se fige. Silencieux sans PulseAudio. Trait `SoundSink` (ce que l'UI utilise). | `game` (`CLICK_SOUNDS`), `libloading`, `rand` |
 | `src/screens.rs` | Écrans plein écran hors partie, qui pilotent le `Screen` eux-mêmes : introduction et histoires des défis (texte tapé à la machine), menu des parties ; aides de texte (`wrap`, `center`, `head`, `slice`). | `game`, `saves`, `sound`, `term` |
 | `src/ui.rs` | `UI<S: Screen>` : rendu des panneaux, onglets et overlays de la partie, bandeaux, particules, sons de l'interface, touches (`handle` → `Flow`). | tous les modules de la bibliothèque |
 | `src/main.rs` | Binaire `champignon` : choix de la partie, intro des nouvelles parties, boucle principale (20 images/s), autosauvegarde toutes les 30 s, sauvegarde même après une panique, signaux, `--reset`, `--mute`. | `game`, `saves`, `screens`, `sound`, `term`, `ui`, `signal-hook` |
@@ -249,6 +249,20 @@ le jeu ne rattrape pas tout d'un coup.
   musique craque dès qu'un effet fort s'y ajoute.
 - La sortie ajoute un souffle inaudible (`keep_alive`, ±`KEEPALIVE_LSB`) : sous WSLg, un flux de silence pur
   est coupé puis relancé en retard, et les effets seuls (sans musique) arrivaient hachés.
+- **Sortie surveillée** : le fil du son (`sound::run`) ouvre le flux PulseAudio et lui donne les blocs
+  (`Mixer::feed`). Une écriture qui échoue, ou qui met plus de `STALL` (1 s : le flux n'avance plus, sans
+  erreur) à rendre la main, met fin au flux : il est fermé, et un nouveau flux est ouvert après `RETRY`
+  (5 s), tant que le jeu tourne. Rien n'interrompt une écriture bloquée : le flux n'est fermé qu'à son
+  retour, et une écriture qui ne reviendrait jamais laisserait le jeu muet. Le nouveau flux repart de zéro :
+  les sons demandés avant lui sont abandonnés (ils sortiraient en retard) et la musique revient en fondu.
+  Une ouverture ratée est retentée de même ; sans `libpulse-simple`, le fil s'arrête. `SoundSink::ok` est
+  faux pendant ce temps, écriture bloquée comprise : la barre d'aide affiche « indispo » et `play` ignore
+  les sons. Le trait `Output` isole la sortie (flux réel `Pulse`, `FakeOutput` dans les tests).
+- Sous WSL2, une sortie qui se fige après quelques secondes vient d'une horloge trop rapide dans la machine
+  virtuelle (`tick` d'`adjtimex` différent de 10000 : `systemd-timesyncd` et la synchronisation de WSL se
+  disputent l'heure). WSLg produit alors le son plus vite que Windows ne le joue : le retard grandit, puis
+  tout se bloque. Le jeu se reconnecte, mais seul le réglage de l'horloge (désactiver `systemd-timesyncd`
+  dans la distribution) rend un son continu.
 - **Priorités** (`sound::PRIORITY`) : à partir de `JINGLE` (2), ce sont des jingles exclusifs (un seul à la
   fois, un plus important coupe le précédent en fondu, un moins important est ignoré). Les autres (1 par
   défaut) sont des bruitages, limités à `MAX_MINOR` voix et atténués (`DUCK`) pendant un jingle. Tout nouveau
