@@ -74,6 +74,9 @@ const TWIN_OFFSET: i32 = 1;
 /// Cap width per row of height (terminal cells are about twice as tall as wide), and its min width.
 const CAP_W_PER_ROW: f64 = 2.4;
 const MIN_CAP_W: i32 = 5;
+/// In a panel too narrow for CAP_W_PER_ROW, the cap narrows down to this per row; beyond, the mushroom
+/// gets shorter.
+const NARROW_CAP_W_PER_ROW: f64 = 1.6;
 /// Share of the height taken by the cap, and its min height (such small caps have no rim).
 const CAP_SHARE: f64 = 0.42;
 const MIN_CAP_H: i32 = 2;
@@ -162,15 +165,17 @@ pub fn bomb(w: i32, h: i32) -> Vec<Cell> {
     cells
 }
 
-/// Total height of a size-f mushroom in a panel of height h.
-pub fn mushroom_height(h: i32, f: f64) -> i32 {
+/// Total height of a size-f mushroom in a w×h panel: share f of the free rows, or of fewer rows in a
+/// panel so narrow that the cap would be narrower than NARROW_CAP_W_PER_ROW per row.
+pub fn mushroom_height(w: i32, h: i32, f: f64) -> i32 {
+    let rows = f64::from(h - FREE_ROWS).min(f64::from(w - SIDE_MARGIN) / NARROW_CAP_W_PER_ROW);
     // Python's round(): ties to even
-    MIN_HEIGHT.max((f64::from(h - FREE_ROWS) * f).round_ties_even() as i32)
+    MIN_HEIGHT.max((rows * f).round_ties_even() as i32)
 }
 
 /// (total height, cap width) of a size-f mushroom; twins share the width.
 fn dimensions(w: i32, h: i32, f: f64, twin: bool) -> (i32, i32) {
-    let height = mushroom_height(h, f);
+    let height = mushroom_height(w, h, f);
     let mut cap_w =
         (w - SIDE_MARGIN).min(MIN_CAP_W.max((f64::from(height) * CAP_W_PER_ROW) as i32));
     if twin {
@@ -754,16 +759,19 @@ mod tests {
 
     #[test]
     fn mushroom_stands_on_the_ground_and_grows() {
-        for skin in ["classic", "rainbow", "mario", "unknown"] {
-            for twin in [false, true] {
-                for f in [0.15, 0.5, 1.0] {
-                    let (w, h) = (60, 20);
-                    let cells = mushroom(w, h, f, 3.7, skin, twin);
-                    assert!(!cells.is_empty());
-                    // The dust may overflow the sides (the UI clips), never the ground.
-                    assert!(cells.iter().all(|&(y, _, _, _)| y < h));
-                    let top = cells.iter().map(|c| c.0).min().unwrap();
-                    assert_eq!(top, h - 1 - mushroom_height(h, f), "{skin} {twin} {f}");
+        // A wide panel, and a narrow one where the width lowers the mushroom.
+        for (w, h) in [(60, 20), (34, 40)] {
+            for skin in ["classic", "rainbow", "mario", "unknown"] {
+                for twin in [false, true] {
+                    for f in [0.15, 0.5, 1.0] {
+                        let cells = mushroom(w, h, f, 3.7, skin, twin);
+                        assert!(!cells.is_empty());
+                        // The dust may overflow the sides (the UI clips), never the ground.
+                        assert!(cells.iter().all(|&(y, _, _, _)| y < h));
+                        let top = cells.iter().map(|c| c.0).min().unwrap();
+                        let height = mushroom_height(w, h, f);
+                        assert_eq!(top, h - 1 - height, "{w}×{h} {skin} {twin} {f}");
+                    }
                 }
             }
         }
@@ -771,6 +779,23 @@ mod tests {
         assert!(size_fraction(10.0, 100.0) < size_fraction(50.0, 100.0));
         assert_eq!(size_fraction(0.0, 100.0), 0.0);
         assert!((size_fraction(100.0, 100.0) - 1.0).abs() < 1e-12);
+    }
+
+    /// A narrow panel squeezes the cap down to NARROW_CAP_W_PER_ROW at most, then lowers the mushroom,
+    /// which still grows up to the max level; a wide panel gives it all its rows.
+    #[test]
+    fn narrow_panel_lowers_the_mushroom() {
+        for (w, h) in [(34, 22), (43, 28), (52, 63), (100, 63)] {
+            let (height, cap_w) = dimensions(w, h, 1.0, false);
+            // Rounding the height may cost the cap up to one column.
+            assert!(
+                f64::from(cap_w + 1) >= f64::from(height) * NARROW_CAP_W_PER_ROW,
+                "{w}×{h}"
+            );
+            assert!(mushroom_height(w, h, 0.5) < height, "{w}×{h}");
+        }
+        assert!(mushroom_height(52, 63, 1.0) < 63 - FREE_ROWS);
+        assert_eq!(mushroom_height(160, 63, 1.0), 63 - FREE_ROWS);
     }
 
     #[test]
@@ -791,9 +816,9 @@ mod tests {
 
     #[test]
     fn python_rounding_and_noise() {
-        assert_eq!(mushroom_height(7, 0.5), 4); // round(2.5) == 2 → floor of 4
-        assert_eq!(mushroom_height(13, 0.5), 6); // round(5.5) == 6
-        assert_eq!(mushroom_height(19, 0.5), 8); // round(8.5) == 8
+        assert_eq!(mushroom_height(80, 7, 0.5), 4); // round(2.5) == 2 → floor of 4
+        assert_eq!(mushroom_height(80, 13, 0.5), 6); // round(5.5) == 6
+        assert_eq!(mushroom_height(80, 19, 0.5), 8); // round(8.5) == 8
         assert_eq!(
             noise(-3, 2, 1),
             ((-3i64 * 73856093) ^ (2 * 19349663) ^ 83492791) as usize & 0xFFFF

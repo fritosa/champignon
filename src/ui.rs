@@ -901,7 +901,7 @@ impl<S: Screen> UI<S> {
         dt: f64,
         min_row: i32,
     ) {
-        let top = ground - art::mushroom_height(ih, size);
+        let top = ground - art::mushroom_height(iw, ih, size);
         if !self.g.frozen() {
             for u in &UNITS {
                 let n = self.g.units[u.id];
