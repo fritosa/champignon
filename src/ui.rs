@@ -619,7 +619,7 @@ impl<S: Screen> UI<S> {
             }
         }
 
-        let top = ground - art::mushroom_height(shape_w, ih, size);
+        let top = ground - art::mushroom_height(shape_w, ih, size, twin);
         let foot_w = art::mushroom_width(shape_w, ih, size, twin);
         let gap = STEM_GAP_MIN.max(foot_w / STEM_GAP_DIV);
         self.draw_army(iy, ix, iw, ground, ARMY_GAP_MIN.max(foot_w / ARMY_GAP_DIV));
