@@ -65,7 +65,7 @@ const LEFT_SHARE: f64 = 0.45; // …or this share of the terminal width…
 // …or all but this many columns: a wide terminal widens the mushroom, the tabs keep room for the key help.
 const RIGHT_MAX_W: i32 = 84;
 const STATS_H: i32 = 10;
-const PANEL_PAD: i32 = 2; // columns between a panel edge and its text (border + space)
+const PANEL_PAD: i32 = 2; // columns between a panel edge and its text (border + space: the tab scroll arrows)
 const INITIAL_TAB_W: i32 = 40; // inner tab width before the first draw
 const SEL_PREFIX_W: i32 = 2; // "▶ " before every tab row
 const POPUP_MARGIN: i32 = 4; // columns kept around a popup narrower than the screen
@@ -2006,7 +2006,8 @@ impl<S: Screen> UI<S> {
     }
 
     /// Scrolling list of the tab rows, then under a rule the description of the selected row
-    /// (with the unit sprite on the right if it fits).
+    /// (with the unit sprite on the right if it fits). The scroll arrows go in the column right of
+    /// the iw text columns (the panel padding).
     pub fn draw_tab_body(&mut self, iy: i32, ix: i32, ih: i32, iw: i32) {
         let rows = self.rows();
         let selectable: Vec<usize> = (0..rows.len()).filter(|&i| rows[i].sel).collect();
@@ -2046,11 +2047,12 @@ impl<S: Screen> UI<S> {
             );
         }
         let grey = self.c("grey");
+        let arrow_x = ix + iw; // padding column, between the text and the right border
         if sc > 0 {
-            self.put(iy, ix + iw - 1, "↑", grey);
+            self.put(iy, arrow_x, "↑", grey);
         }
         if sc + (list_h as usize) < rows.len() {
-            self.put(iy + list_h - 1, ix + iw - 1, "↓", grey);
+            self.put(iy + list_h - 1, arrow_x, "↓", grey);
         }
 
         self.put(iy + list_h, ix, &"─".repeat(iw.max(0) as usize), grey);
@@ -4026,20 +4028,42 @@ pub(crate) mod tests {
 
     // --- Whole screen ----------------------------------------------------------------
 
-    /// At their widest, the tabs show every key help line whole.
+    /// At their widest, the tabs show every key help line whole, next to a scroll arrow too.
     #[test]
     fn key_help_fits_the_widest_tab() {
         for (lang, texts) in i18n::LANGS {
             i18n::with_lang(texts, || {
                 let mut u = bare_ui();
-                u.scr = BufferScreen::new(30, 240);
-                u.draw(0.0);
-                // The rule, then a row per key: unclipped, it ends with the whole text.
-                for (row, (_, what)) in u.info_rows()[1..].iter().zip(key_help()) {
-                    assert!(row.text.ends_with(&what), "{lang}: {}", row.text);
+                u.tab = 4; // Infos, scrolling on a screen this short
+                sized(&mut u, MIN_H, 240);
+                let help = key_help();
+                // Down the list, then back up: once the list scrolls, the selected row goes next
+                // to ↓, then next to ↑ (not the first one, which brings the list back to the top).
+                for i in (0..help.len()).chain((0..help.len()).rev()) {
+                    let (k, what) = &help[i];
+                    u.sel[u.tab] = i;
+                    u.draw(0.0);
+                    let row = format!("▶ {k:<9} {what}");
+                    assert!(u.scr.contains(&row), "{lang}: {row}");
                 }
             });
         }
+    }
+
+    /// The tab scroll arrows go in the padding column, between the text and the right border.
+    #[test]
+    fn scroll_arrows_in_the_padding() {
+        let mut u = bare_ui();
+        u.tab = 4; // Infos, scrolling on a screen this short
+        sized(&mut u, MIN_H, MIN_W);
+        u.sel[u.tab] = 3; // rows hidden above and below
+        u.draw(0.0);
+        let (pad, border) = (MIN_W - PANEL_PAD, MIN_W - 1);
+        let inside = STATS_H + 1..MIN_H - 2; // rows inside the tab frame
+        let at = |y, x| u.scr.cell(y, x).0;
+        assert_eq!(at(inside.start, pad), '↑');
+        assert!(inside.clone().any(|y| at(y, pad) == '↓'));
+        assert!(inside.clone().all(|y| at(y, border) == '│'));
     }
 
     /// On a wide terminal, the tabs stop growing: the extra columns go to the mushroom panel.
