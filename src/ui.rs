@@ -61,7 +61,9 @@ const BLINK_GAUGE_READY: f64 = 0.4; // critical mass ready
 
 // Layout of the game screen.
 const LEFT_MIN_W: i32 = 30; // mushroom panel: at least this wide…
-const LEFT_SHARE: f64 = 0.45; // …or this share of the terminal width
+const LEFT_SHARE: f64 = 0.45; // …or this share of the terminal width…
+// …or all but this many columns: a wide terminal widens the mushroom, the tabs keep room for the key help.
+const RIGHT_MAX_W: i32 = 84;
 const STATS_H: i32 = 10;
 const PANEL_PAD: i32 = 2; // columns between a panel edge and its text (border + space)
 const INITIAL_TAB_W: i32 = 40; // inner tab width before the first draw
@@ -468,7 +470,9 @@ impl<S: Screen> UI<S> {
             self.scr.refresh();
             return;
         }
-        let left_w = LEFT_MIN_W.max((f64::from(self.w) * LEFT_SHARE) as i32);
+        let left_w = LEFT_MIN_W
+            .max((f64::from(self.w) * LEFT_SHARE) as i32)
+            .max(self.w - RIGHT_MAX_W);
         let right_w = self.w - left_w;
         let stats_h = STATS_H;
         let news_y = self.h - 1;
@@ -3900,7 +3904,7 @@ pub(crate) mod tests {
     /// The mushroom panel with the whole army and every enemy stays on screen.
     #[test]
     fn army_and_enemies_inside_screen() {
-        for w in [30, 45, 80] {
+        for w in [30, 45, 80, 160] {
             for kind in EnemyKind::ALL {
                 let mut u = bare_ui();
                 sized(&mut u, 24, w);
@@ -4022,6 +4026,41 @@ pub(crate) mod tests {
 
     // --- Whole screen ----------------------------------------------------------------
 
+    /// At their widest, the tabs show every key help line whole.
+    #[test]
+    fn key_help_fits_the_widest_tab() {
+        for (lang, texts) in i18n::LANGS {
+            i18n::with_lang(texts, || {
+                let mut u = bare_ui();
+                u.scr = BufferScreen::new(30, 240);
+                u.draw(0.0);
+                // The rule, then a row per key: unclipped, it ends with the whole text.
+                for (row, (_, what)) in u.info_rows()[1..].iter().zip(key_help()) {
+                    assert!(row.text.ends_with(&what), "{lang}: {}", row.text);
+                }
+            });
+        }
+    }
+
+    /// On a wide terminal, the tabs stop growing: the extra columns go to the mushroom panel.
+    #[test]
+    fn wide_terminal_widens_the_mushroom_panel() {
+        let title = format!(" {} ", tr().ui.stats_title);
+        // 45 % of the width up to 152 columns, all but RIGHT_MAX_W from 153.
+        for (w, left_w) in [
+            (100, 45),
+            (152, 68),
+            (153, 153 - RIGHT_MAX_W),
+            (240, 240 - RIGHT_MAX_W),
+        ] {
+            let mut u = bare_ui();
+            u.scr = BufferScreen::new(30, w);
+            u.draw(0.0);
+            let at = (0, left_w + PANEL_PAD, title.clone());
+            assert!(u.scr.writes.contains(&at), "{w}");
+        }
+    }
+
     /// Full frames at the minimum size and larger, with overlays, never write off screen.
     #[test]
     fn full_draw_fits() {
@@ -4031,7 +4070,7 @@ pub(crate) mod tests {
     }
 
     fn full_draws_fit(lang: &str) {
-        for (h, w) in [(MIN_H, MIN_W), (24, 80), (40, 140), (10, 30)] {
+        for (h, w) in [(MIN_H, MIN_W), (24, 80), (40, 140), (65, 240), (10, 30)] {
             let mut u = bare_ui();
             u.scr = BufferScreen::new(h, w);
             u.g.talents.insert("u_soldier", 1);

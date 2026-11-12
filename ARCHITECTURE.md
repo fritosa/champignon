@@ -273,8 +273,10 @@ le jeu ne rattrape pas tout d'un coup.
 - Terminal minimum 60×20 (`ui::MIN_W`, `MIN_H`) : tout rendu doit rester dans l'écran à cette taille
   (`UI::put` coupe, mais `BufferScreen::put`, utilisé par les tests, panique sur tout débordement ; `sized`
   dans les tests de `ui.rs` change la taille de l'écran de test). Les tests d'écran entier (`full_draw_fits`,
-  `draw_report_fits`, `chest_overlay_fits`, `mutation_overlay_fits`, `texts_fit_80x24`) tournent dans
-  chaque langue de `i18n::LANGS` : une traduction trop longue y panique.
+  `draw_report_fits`, `chest_overlay_fits`, `mutation_overlay_fits`, `texts_fit_80x24`), et
+  `key_help_fits_the_widest_tab` (chaque ligne de l'aide des touches entière dans l'onglet le plus large,
+  plafonné par `ui::RIGHT_MAX_W`) tournent dans chaque langue de `i18n::LANGS` : une traduction trop longue y
+  panique.
 - **1 colonne par caractère** : `term::width` compte les `char`. Les textes affichés ne doivent contenir que
   des caractères d'une colonne (pas d'emoji ni de caractère double largeur ou combinant), sinon la mise en
   page se décale. Couper une chaîne par caractère (`screens::slice`, `head`, `ui::clip`), jamais par octet.

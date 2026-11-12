@@ -80,7 +80,8 @@ compatibilité devenu inutile.
 [README](README.md#-le-mode-demploi-du-détonateur). Touches déjà prises : toutes les lettres de
 `events::DROP_LETTERS` (coffres), plus F, X, M, Q, J, K, chiffres, + = -, Espace, Tab, Maj+Tab, flèches,
 Page préc./suiv., Entrée. Une touche spéciale nouvelle demande une variante de `term::Key` et sa traduction
-dans `key_from_key_event`.
+dans `key_from_key_event`. Chaque ligne de l'aide doit tenir entière dans l'onglet le plus large (test
+`key_help_fits_the_widest_tab`) : sinon la raccourcir, ou monter `ui::RIGHT_MAX_W`.
 
 **Nouvel écran plein (overlay)** : dessiné en fin de `UI::draw` ; s'il doit capturer les touches, le traiter
 en tête de `UI::handle` (voir l'écran de fin de partie). Écrans bloquants hors jeu (menu, intro) : fonctions
@@ -90,7 +91,8 @@ de `screens.rs` qui reçoivent un `&mut dyn Screen`, lisent les touches par `rea
 **Nouvelle langue** : copier `src/i18n/fr/` en `src/i18n/<code>/` (sa constante `FR` renommée) et le
 traduire : le compilateur exige chaque champ, `every_table_entry_has_its_text` chaque entrée des tables,
 `every_template_quotes_its_values` chaque valeur citée par un gabarit, `titles_use_the_big_font` des titres
-dessinables, et les tests d'écran entier une mise en page qui tient en 60×20. Déclarer le module dans
+dessinables, les tests d'écran entier une mise en page qui tient en 60×20, et
+`key_help_fits_the_widest_tab` une aide des touches entière dans l'onglet le plus large. Déclarer le module dans
 `src/i18n/mod.rs` et l'ajouter à `LANGS`. Adapter `num`, `dur`, `percent`, `typography` et les suffixes à la langue, et
 garder les textes en caractères d'une colonne. Choisir la langue (variable d'environnement, réglage
 sauvegardé…) se branche dans `i18n::tr()`, seul point qui la lit. La sauvegarde ne contient que des
