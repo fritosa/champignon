@@ -613,7 +613,10 @@ impl<S: Screen> UI<S> {
         self.draw_sky(iy, ix, iw, ground);
         let size = art::size_fraction(f64::from(self.g.level), f64::from(self.g.cap()));
         let twin = self.g.has_mut("twin");
+        // Centered on the shaken panel, like everything that aims at it (projectiles, army, enemies).
+        let dx = iw / 2 - shape_w / 2;
         for (y, x, ch, col) in art::mushroom(shape_w, ih, size, self.t, self.g.skin, twin) {
+            let x = x + dx;
             if 0 <= y && y < ih && 0 <= x && x < iw {
                 self.put_char(iy + y, ix + x, ch, Style::of(col));
             }
@@ -3325,25 +3328,49 @@ pub(crate) mod tests {
         assert!(approx(u.shake_until, shake("supernova").unwrap()));
     }
 
-    /// A shake moves the mushroom by a column without reshaping it: in a panel narrow enough for its
-    /// width to set its height, it keeps every row.
+    /// A shake moves the mushroom (or the twins) by a column without reshaping it: in a panel narrow
+    /// enough for its width to set its height, it keeps every row. It stays centered on the shaken
+    /// panel, like the projectiles, the army and the enemies that aim at it.
     #[test]
     fn shake_keeps_the_mushroom_height() {
         // Top row with a cap character, left of the stats panel (45 % of the width at least).
         let top_row = |u: &UI<BufferScreen>| {
             (0..u.h).find(|&y| (0..u.w * 2 / 5).any(|x| "@#%&".contains(u.scr.cell(y, x).0)))
         };
-        for w in 90..=110 {
-            let mut u = bare_ui();
-            u.g.level = u.g.cap();
-            u.g.flash_until = 0.0;
-            sized(&mut u, 40, w);
-            u.draw(0.0);
-            let still = top_row(&u);
-            assert!(still.is_some(), "{w}");
-            u.shake_until = u.t + 1.0;
-            u.draw(0.0);
-            assert_eq!(top_row(&u), still, "{w}");
+        // Middle columns of the cap's top row y (symmetric) and of the ground line (the shaken panel).
+        let middles = |u: &UI<BufferScreen>, y: i32| {
+            let cap: Vec<i32> = (0..u.w * 2 / 5)
+                .filter(|&x| "@#%&*+=.:'".contains(u.scr.cell(y, x).0))
+                .collect();
+            let ground_y = (0..u.h).find(|&y| u.scr.cell(y, 2).0 == '▁').unwrap();
+            let ground: Vec<i32> = (0..u.w)
+                .skip_while(|&x| u.scr.cell(ground_y, x).0 != '▁')
+                .take_while(|&x| u.scr.cell(ground_y, x).0 == '▁')
+                .collect();
+            (
+                (cap[0] + cap[cap.len() - 1]) / 2,
+                ground[0] + ground.len() as i32 / 2,
+            )
+        };
+        for twin in [false, true] {
+            for w in 90..=110 {
+                let mut u = bare_ui();
+                u.g.level = u.g.cap();
+                u.g.flash_until = 0.0;
+                if twin {
+                    u.g.mutations = vec!["twin"];
+                }
+                sized(&mut u, 40, w);
+                u.draw(0.0);
+                let still = top_row(&u).unwrap();
+                let (cap, ground) = middles(&u, still);
+                assert_eq!(cap, ground, "{w} {twin}");
+                u.shake_until = u.t + 1.0;
+                u.draw(0.0);
+                assert_eq!(top_row(&u), Some(still), "{w} {twin}");
+                let (cap, ground) = middles(&u, still);
+                assert_eq!(cap, ground, "{w} {twin} shaken");
+            }
         }
     }
 
