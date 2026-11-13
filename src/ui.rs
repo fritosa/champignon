@@ -656,6 +656,7 @@ impl<S: Screen> UI<S> {
         }
 
         let top = ground - art::mushroom_height(iw, ih, size, twin);
+        let centers = art::mushroom_centers(iw, ih, size, twin);
         let foot_w = art::mushroom_width(iw, ih, size, twin);
         let gap = STEM_GAP_MIN.max(foot_w / STEM_GAP_DIV);
         self.draw_army(iy, ix, iw, ground, ARMY_GAP_MIN.max(foot_w / ARMY_GAP_DIV));
@@ -667,6 +668,7 @@ impl<S: Screen> UI<S> {
             ih,
             ground,
             top,
+            &centers,
             gap,
             dt,
             1 + banners.len() as i32,
@@ -926,7 +928,8 @@ impl<S: Screen> UI<S> {
         }
     }
 
-    /// Unit projectiles toward the mushroom, then floating numbers above its head (row top).
+    /// Unit projectiles toward the mushroom (one of the centers: twins have two), then floating numbers
+    /// above its head (row top).
     #[allow(clippy::too_many_arguments)]
     pub fn update_particles(
         &mut self,
@@ -936,6 +939,7 @@ impl<S: Screen> UI<S> {
         ih: i32,
         ground: i32,
         top: i32,
+        centers: &[i32],
         gap: i32,
         dt: f64,
         min_row: i32,
@@ -952,8 +956,15 @@ impl<S: Screen> UI<S> {
                 while acc >= 1.0 && self.particles.len() < MAX_PARTICLES {
                     acc -= 1.0;
                     let rng = &mut self.rng;
-                    let (sx, sy, peak) = if u.id == "bomber" {
-                        (rng.randint(0, i64::from(iw - 1)), PARTICLE_SKY_ROW, 0.0)
+                    // Bombs fall from the sky on any mushroom; shots from the ground hit the twin on
+                    // their side, without crossing the other one.
+                    let (sx, sy, peak, left) = if u.id == "bomber" {
+                        (
+                            rng.randint(0, i64::from(iw - 1)),
+                            PARTICLE_SKY_ROW,
+                            0.0,
+                            None,
+                        )
                     } else {
                         let left = rng.random() < 0.5;
                         let sx = if left {
@@ -965,9 +976,15 @@ impl<S: Screen> UI<S> {
                             sx,
                             ground - 1,
                             rng.uniform(PARTICLE_PEAK_MIN, PARTICLE_PEAK_MAX),
+                            Some(left),
                         )
                     };
-                    let tx = iw / 2 + rng.randint(-PARTICLE_SPREAD, PARTICLE_SPREAD) as i32;
+                    let cx = match (centers, left) {
+                        ([c], _) => *c,
+                        ([c, _], Some(true)) | ([_, c], Some(false)) => *c,
+                        _ => *rng.choice(centers),
+                    };
+                    let tx = cx + rng.randint(-PARTICLE_SPREAD, PARTICLE_SPREAD) as i32;
                     let ty = rng
                         .randint(i64::from((top + 1).min(ground - 2)), i64::from(ground - 2))
                         as i32;
@@ -3522,6 +3539,42 @@ pub(crate) mod tests {
                 }
             }
         }
+    }
+
+    /// With twins, every projectile aims at one of them, never at the empty middle of the panel: a shot
+    /// from the ground at the twin on its side, a bomb at either.
+    #[test]
+    fn projectiles_aim_at_the_twins() {
+        let mut u = bare_ui();
+        u.g.mutations = vec!["twin"];
+        u.g.level = u.g.cap();
+        u.g.units["soldier"] = 1000;
+        u.g.units["bomber"] = 1000;
+        u.g.flash_until = 0.0;
+        sized(&mut u, 40, 100);
+        u.draw(0.0);
+        let (iw, ih) = (panel_right(&u) - 1, u.h - 3);
+        let size = art::size_fraction(f64::from(u.g.level), f64::from(u.g.cap()));
+        let centers = art::mushroom_centers(iw, ih, size, true);
+        assert!(centers[1] - centers[0] > 4 * PARTICLE_SPREAD as i32);
+        // Checked after every frame, so that every projectile is seen, not only the last ones in flight.
+        // [ground, bombs] × [left twin, right twin]
+        let mut aimed = [[0, 0], [0, 0]];
+        for _ in 0..40 {
+            u.draw(0.1);
+            for p in &u.particles {
+                let twin = centers
+                    .iter()
+                    .position(|c| (p.tx - c).abs() <= PARTICLE_SPREAD as i32)
+                    .expect("aims at a twin");
+                let bomb = p.sy == PARTICLE_SKY_ROW;
+                if !bomb {
+                    assert_eq!(twin, usize::from(p.sx > iw / 2), "{} → {}", p.sx, p.tx);
+                }
+                aimed[usize::from(bomb)][twin] += 1;
+            }
+        }
+        assert!(aimed.iter().flatten().all(|&n| n > 0), "{aimed:?}");
     }
 
     #[test]

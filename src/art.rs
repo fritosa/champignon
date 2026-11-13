@@ -207,17 +207,8 @@ pub fn mushroom(w: i32, h: i32, f: f64, t: f64, skin: &str, twin: bool) -> Vec<C
     let (height, cap_w) = dimensions(w, h, f, twin);
     let cap_h = MIN_CAP_H.max((f64::from(height) * CAP_SHARE) as i32);
     let stem_h = height - cap_h;
-    let half_w = w.div_euclid(2);
-    let centers = if twin {
-        vec![
-            half_w - cap_w.div_euclid(2) - TWIN_OFFSET,
-            half_w + cap_w.div_euclid(2) + TWIN_OFFSET,
-        ]
-    } else {
-        vec![half_w]
-    };
     let mut cells = Vec::new();
-    for cx in centers {
+    for cx in mushroom_centers(w, h, f, twin) {
         let mario = skin == "mario";
         let shape = Shape {
             cx,
@@ -374,6 +365,16 @@ fn dust(cells: &mut Vec<Cell>, s: &Shape, ground: i32, height: i32) {
             cells.push((y, x, pick(DUST, n), color));
         }
     }
+}
+
+/// Column of the center of each mushroom: the panel center, or one twin on each side of it.
+pub fn mushroom_centers(w: i32, h: i32, f: f64, twin: bool) -> Vec<i32> {
+    let half_w = w.div_euclid(2);
+    if !twin {
+        return vec![half_w];
+    }
+    let offset = dimensions(w, h, f, twin).1.div_euclid(2) + TWIN_OFFSET;
+    vec![half_w - offset, half_w + offset]
 }
 
 /// Approximate width taken on the ground (to place the units and the inspector).
