@@ -127,6 +127,9 @@ const FLOAT_SPREAD: i64 = 4; // random horizontal offset of a floating number
 const PLANE_EXIT: i32 = 8; // the plane flies until this many columns past the left edge
 const PLANE_LABEL_GAP: i32 = 2; // columns from the plane to its letter
 const INSPECTOR_START: i32 = 6; // columns from the right edge where the inspector appears
+// Columns the inspector walks at least (its walk is the countdown before the freeze), even when twins
+// leave no room right of their stems: as much as in front of a single mushroom on the smallest screen.
+const INSPECTOR_MIN_WALK: i32 = 4;
 const HIPPIES_RUSH: f64 = 4.0; // protesters walk this much faster, then stage their sit-in
 const DRONE_ALTITUDE: i32 = 2; // sky enemies: rows above their sprite top
 
@@ -174,6 +177,14 @@ const OPTION_ROW_H: i32 = 2; // name, then description
 const OPTION_DESC_X: i32 = 5; // description indent in the popup
 const NEWS_SPEED: f64 = 12.0; // columns/s of the news ticker
 pub const NEWS_MARGIN: i32 = 2; // columns of the news line outside the label and the ticker
+
+/// Number drawn evenly from the inclusive ranges a then b (b may be empty): with b empty, the same draw as
+/// randint over a alone.
+fn randint2(rng: &mut dyn Rng, a: (i32, i32), b: (i32, i32)) -> i32 {
+    let b_len = (b.1 - b.0 + 1).max(0);
+    let k = rng.randint(i64::from(a.0), i64::from(a.1 + b_len)) as i32;
+    if k <= a.1 { k } else { b.0 + (k - a.1 - 1) }
+}
 
 fn sfx_gap(key: &str) -> f64 {
     SFX_GAP
@@ -328,6 +339,85 @@ struct View {
     bottom: i32,
     left: i32,
     right: i32,
+}
+
+/// The stems on the ground of the mushroom panel, for what stands around them or shoots at them.
+#[derive(Clone, Copy, Debug)]
+struct Stems {
+    /// Columns of the first and the last stem: the same one for a single mushroom, both twins' otherwise.
+    first: i32,
+    last: i32,
+    /// Columns kept clear on each side of a stem.
+    gap: i32,
+    /// First row under the caps: between twins, only what fits below it stands there.
+    under_caps: i32,
+}
+
+impl Stems {
+    /// Middle column between the twins (the stem of a single mushroom).
+    fn mid(self) -> i32 {
+        (self.first + self.last) / 2
+    }
+
+    fn with_gap(self, gap: i32) -> Stems {
+        Stems { gap, ..self }
+    }
+}
+
+/// A run of ground where army sprites line up, one column apart, from cursor toward limit.
+#[derive(Clone, Copy, Debug)]
+struct Run {
+    cursor: i32,
+    limit: i32,
+    /// Lining up toward the left: cursor is the column after the next sprite.
+    leftward: bool,
+    /// Sprites facing left.
+    mirrored: bool,
+    /// Under the caps of twins: only for sprites that fit below them.
+    under_caps: bool,
+}
+
+impl Run {
+    fn rightward(from: i32, limit: i32, mirrored: bool, under_caps: bool) -> Run {
+        Run {
+            cursor: from,
+            limit,
+            leftward: false,
+            mirrored,
+            under_caps,
+        }
+    }
+
+    fn leftward(from: i32, limit: i32, mirrored: bool, under_caps: bool) -> Run {
+        Run {
+            cursor: from,
+            limit,
+            leftward: true,
+            mirrored,
+            under_caps,
+        }
+    }
+
+    fn fits(&self, w: i32) -> bool {
+        if self.leftward {
+            self.cursor - w >= self.limit
+        } else {
+            self.cursor + w <= self.limit
+        }
+    }
+
+    /// Column of a sprite w wide placed next, the cursor moved past it.
+    fn place(&mut self, w: i32) -> i32 {
+        if self.leftward {
+            let x = self.cursor - w;
+            self.cursor = x - 1;
+            x
+        } else {
+            let x = self.cursor;
+            self.cursor = x + w + 1;
+            x
+        }
+    }
 }
 
 /// What the main loop does after a key.
@@ -657,9 +747,17 @@ impl<S: Screen> UI<S> {
 
         let top = ground - art::mushroom_height(iw, ih, size, twin);
         let centers = art::mushroom_centers(iw, ih, size, twin);
+        // The army and the shooters stand on all the ground but around the stems (between twins too,
+        // under their caps); the enemies stop left of the first stem, the inspector right of the last.
         let foot_w = art::mushroom_width(iw, ih, size, twin);
-        let gap = STEM_GAP_MIN.max(foot_w / STEM_GAP_DIV);
-        self.draw_army(iy, ix, iw, ground, ARMY_GAP_MIN.max(foot_w / ARMY_GAP_DIV));
+        let stems = Stems {
+            first: centers[0],
+            last: centers[centers.len() - 1],
+            gap: STEM_GAP_MIN.max(foot_w / STEM_GAP_DIV),
+            under_caps: ground - art::stem_height(iw, ih, size, twin),
+        };
+        let army_gap = ARMY_GAP_MIN.max(foot_w / ARMY_GAP_DIV);
+        self.draw_army(iy, ix, iw, ground, stems.with_gap(army_gap));
         let banners = self.banner_lines(iw);
         self.update_particles(
             iy,
@@ -669,13 +767,13 @@ impl<S: Screen> UI<S> {
             ground,
             top,
             &centers,
-            gap,
+            stems,
             dt,
             1 + banners.len() as i32,
         );
         self.draw_challenge_monsters(iy, ix, iw, ground);
-        self.draw_inspector(iy, ix, iw, ground, (iw - INSPECTOR_START).min(iw / 2 + gap));
-        self.draw_enemy(iy, ix, iw, ground, gap);
+        self.draw_inspector(iy, ix, iw, ground, stems.last + stems.gap);
+        self.draw_enemy(iy, ix, iw, ground, stems.first - stems.gap);
         self.draw_plane(iy, ix, iw);
         self.draw_banners(iy, ix, iw, Some(banners));
     }
@@ -860,9 +958,10 @@ impl<S: Screen> UI<S> {
     }
 
     /// One sprite per owned unit type, a 2nd from 10 units and a 3rd from 100 if there is room.
-    /// Placed from the edges toward the center, leaving the stem clear; those on the right face left.
-    /// Bombers fly separately.
-    pub fn draw_army(&mut self, iy: i32, ix: i32, iw: i32, ground: i32, gap: i32) {
+    /// Placed from the edges toward the center, stems.gap columns off the stems; those on the right face
+    /// left. Between twins, they line up from each stem toward the middle, facing that stem, on a line
+    /// only if they fit under the caps. Bombers fly separately, in the sky.
+    fn draw_army(&mut self, iy: i32, ix: i32, iw: i32, ground: i32, stems: Stems) {
         let owned: Vec<_> = UNITS
             .iter()
             // A unit crossing the field as a challenge monster is not drawn in the army as well.
@@ -880,32 +979,42 @@ impl<S: Screen> UI<S> {
         if ground >= ARMY_UPPER_MIN {
             bottoms.push(ground - ARMY_UPPER_ROW);
         }
-        // (bottom line, on the right side)
-        let slots: Vec<(i32, bool)> = bottoms
-            .iter()
-            .flat_map(|&b| [(b, false), (b, true)])
-            .collect();
-        let mut cursor: Vec<i32> = slots
-            .iter()
-            .map(|&(_, right)| if right { iw - 1 } else { 1 })
-            .collect();
+        // One slot per line and side, each a list of runs of ground, the outer one first.
+        let (first, last, gap, mid) = (stems.first, stems.last, stems.gap, stems.mid());
+        let mut slots: Vec<(i32, Vec<Run>)> = Vec::new();
+        for &bottom in &bottoms {
+            let mut left = vec![Run::rightward(1, first - gap, false, false)];
+            let mut right = vec![Run::leftward(iw - 1, last + gap, true, false)];
+            if first < last {
+                left.push(Run::rightward(first + gap, mid, true, true));
+                right.push(Run::leftward(last - gap, mid, false, true));
+            }
+            slots.push((bottom, left));
+            slots.push((bottom, right));
+        }
         let mut next_slot = 0;
         for (u, copy) in wanted {
             let frames = art::unit_art(u.id).expect("every unit has art");
-            let w = art::sprite_width(frames);
-            for tries in 0..slots.len() {
+            let (w, sprite_h) = (
+                art::sprite_width(frames),
+                art::sprite(frames, 0.0, false).len(),
+            );
+            let place = (0..slots.len()).find_map(|tries| {
                 let k = (next_slot + tries) % slots.len();
-                let (bottom, right) = slots[k];
-                let x = if right { cursor[k] - w } else { cursor[k] };
-                if (!right && x + w <= iw / 2 - gap) || (right && x >= iw / 2 + gap) {
-                    cursor[k] = if right { x - 1 } else { x + w + 1 };
-                    let rows =
-                        art::sprite(frames, self.t + f64::from(copy) * ARMY_COPY_PHASE, right);
-                    let style = self.c(u.color).bold();
-                    self.draw_sprite(iy, ix, iw, bottom, x, &rows, style, true);
-                    next_slot = (next_slot + tries + 1) % slots.len();
-                    break;
-                }
+                let bottom = slots[k].0;
+                let fits_under = bottom - sprite_h as i32 + 1 >= stems.under_caps;
+                let run = slots[k]
+                    .1
+                    .iter_mut()
+                    .find(|r| r.fits(w) && (!r.under_caps || fits_under))?;
+                Some((tries, bottom, run.place(w), run.mirrored))
+            });
+            if let Some((tries, bottom, x, mirrored)) = place {
+                let rows =
+                    art::sprite(frames, self.t + f64::from(copy) * ARMY_COPY_PHASE, mirrored);
+                let style = self.c(u.color).bold();
+                self.draw_sprite(iy, ix, iw, bottom, x, &rows, style, true);
+                next_slot = (next_slot + tries + 1) % slots.len();
             }
         }
         let frames = art::unit_art("bomber").expect("bombers have art");
@@ -928,10 +1037,10 @@ impl<S: Screen> UI<S> {
         }
     }
 
-    /// Unit projectiles toward the mushroom (one of the centers: twins have two), then floating numbers
-    /// above its head (row top).
+    /// Unit projectiles toward the mushroom (one of the centers: twins have two), shot from the ground off
+    /// the stems, at the twin on their side, then floating numbers above its head (row top).
     #[allow(clippy::too_many_arguments)]
-    pub fn update_particles(
+    fn update_particles(
         &mut self,
         iy: i32,
         ix: i32,
@@ -940,7 +1049,7 @@ impl<S: Screen> UI<S> {
         ground: i32,
         top: i32,
         centers: &[i32],
-        gap: i32,
+        stems: Stems,
         dt: f64,
         min_row: i32,
     ) {
@@ -960,17 +1069,20 @@ impl<S: Screen> UI<S> {
                     // their side, without crossing the other one.
                     let (sx, sy, peak, left) = if u.id == "bomber" {
                         (
-                            rng.randint(0, i64::from(iw - 1)),
+                            rng.randint(0, i64::from(iw - 1)) as i32,
                             PARTICLE_SKY_ROW,
                             0.0,
                             None,
                         )
                     } else {
                         let left = rng.random() < 0.5;
+                        let (first, last, gap, mid) =
+                            (stems.first, stems.last, stems.gap, stems.mid());
+                        // The outer ground first, then the ground between twins (empty otherwise).
                         let sx = if left {
-                            rng.randint(1, i64::from(iw / 2 - gap))
+                            randint2(&mut **rng, (1, first - gap), (first + gap, mid - 1))
                         } else {
-                            rng.randint(i64::from(iw / 2 + gap), i64::from(iw - 2))
+                            randint2(&mut **rng, (last + gap, iw - 2), (mid + 1, last - gap))
                         };
                         (
                             sx,
@@ -990,7 +1102,7 @@ impl<S: Screen> UI<S> {
                         as i32;
                     let dur = rng.uniform(PARTICLE_DUR_MIN, PARTICLE_DUR_MAX);
                     self.particles.push(Particle {
-                        sx: sx as i32,
+                        sx,
                         sy,
                         tx,
                         ty,
@@ -1033,7 +1145,13 @@ impl<S: Screen> UI<S> {
             if fl.age < FLOAT_TIME {
                 let y = (f64::from(top) - 1.0 - fl.age * FLOAT_SPEED) as i32;
                 let len = width(&fl.text);
-                let x = iw / 2 + fl.dx - len / 2;
+                // Above the left twin when shifted left, else above the right one.
+                let cx = if fl.dx < 0 {
+                    centers[0]
+                } else {
+                    centers[centers.len() - 1]
+                };
+                let x = cx + fl.dx - len / 2;
                 self.put(
                     iy + min_row.max(y),
                     ix + (iw - len).min(x).max(0),
@@ -1065,10 +1183,13 @@ impl<S: Screen> UI<S> {
         }
     }
 
-    pub fn draw_inspector(&mut self, iy: i32, ix: i32, iw: i32, ground: i32, target: i32) {
+    /// The inspector walks from the right edge to column stop, at the foot of the mushroom (twins: the right
+    /// one), or further if that leaves it less than INSPECTOR_MIN_WALK columns.
+    pub fn draw_inspector(&mut self, iy: i32, ix: i32, iw: i32, ground: i32, stop: i32) {
         let Some(ins) = self.g.inspector else { return };
         let progress = ((self.g.time - ins.start) / ins.dur).min(1.0);
         let start = iw - INSPECTOR_START;
+        let target = stop.min(start - INSPECTOR_MIN_WALK);
         let x = (f64::from(start) - f64::from(start - target) * progress) as i32;
         let sign = tr().ui.inspector_sign;
         let x = x.min(iw - width(sign)).max(0);
@@ -1103,10 +1224,11 @@ impl<S: Screen> UI<S> {
     }
 
     /// Enemies coming from the left (drones through the sky), remaining hits above each one.
-    /// The front one stops at the foot of the mushroom, the others queue up behind it.
-    pub fn draw_enemy(&mut self, iy: i32, ix: i32, iw: i32, ground: i32, gap: i32) {
+    /// The front one stops just left of column stop, at the foot of the mushroom (twins: the left one), the
+    /// others queue up behind it.
+    pub fn draw_enemy(&mut self, iy: i32, ix: i32, iw: i32, ground: i32, stop: i32) {
         for sky in [false, true] {
-            let mut target = iw / 2 - gap;
+            let mut target = stop;
             let mut enemies: Vec<_> = self
                 .g
                 .enemies
@@ -3415,7 +3537,7 @@ pub(crate) mod tests {
                     }
                     g.enemies = vec![Enemy {
                         kind: EnemyKind::Commando,
-                        start: g.time - 5.0,
+                        start: g.time - 14.0,
                         dur: 15.0,
                         hits: 0,
                     }];
@@ -3570,11 +3692,176 @@ pub(crate) mod tests {
                 let bomb = p.sy == PARTICLE_SKY_ROW;
                 if !bomb {
                     assert_eq!(twin, usize::from(p.sx > iw / 2), "{} → {}", p.sx, p.tx);
+                    // Off the stem it aims at: never from under that twin.
+                    let off = (p.sx - centers[twin]).abs();
+                    assert!(off > PARTICLE_SPREAD as i32, "{} → {}", p.sx, p.tx);
                 }
                 aimed[usize::from(bomb)][twin] += 1;
             }
         }
         assert!(aimed.iter().flatten().all(|&n| n > 0), "{aimed:?}");
+    }
+
+    /// With twins, the army, the enemy and the inspector stay off both stems, as off the stem of a single
+    /// mushroom.
+    #[test]
+    fn scene_keeps_off_the_twins() {
+        let scene = |crowded: bool| {
+            let mut u = bare_ui();
+            let g = &mut u.g;
+            g.mutations = vec!["twin"];
+            g.level = g.cap();
+            g.flash_until = 0.0;
+            if crowded {
+                for uid in ["soldier", "mortar", "artillery", "tank", "sub", "icbm"] {
+                    g.talents.insert(data::talent(&format!("u_{uid}")).id, 1);
+                    g.units[uid] = 1000;
+                }
+                // Both arrived at the mushroom.
+                g.enemies = vec![Enemy {
+                    kind: EnemyKind::Commando,
+                    start: g.time - 100.0,
+                    dur: 10.0,
+                    hits: 0,
+                }];
+                g.inspector = Some(Inspector {
+                    start: g.time - 100.0,
+                    dur: 10.0,
+                    hits: 0,
+                });
+            }
+            sized(&mut u, 40, 100);
+            u.draw(0.0);
+            u
+        };
+        let (alone, crowded) = (scene(false), scene(true));
+        assert!(written(&crowded, tr().ui.inspector_sign));
+        let (iw, ih) = (panel_right(&alone) - 1, alone.h - 3);
+        let size = art::size_fraction(f64::from(alone.g.level), f64::from(alone.g.cap()));
+        // The stem (and its ring) of each twin, at its center, over the rows of the army (lower and upper
+        // lines). Except the row of the commando's hit counter, longer than the commando: it may pass over
+        // a stem, as over the stem of a single mushroom.
+        let ground = ih - 1;
+        let commando = art::enemy_art("commando").expect("commando art");
+        let counter = ground - 1 - art::sprite(commando, 0.0, false).len() as i32;
+        let mut checked = 0;
+        for c in art::mushroom_centers(iw, ih, size, true) {
+            for y in (ground - ARMY_UPPER_ROW - 2..ground).filter(|&y| y != counter) {
+                let (sy, sx) = (1 + y, 1 + c);
+                let stem = alone.scr.cell(sy, sx).0;
+                // The dust at the foot is not the stem: the army stands on it, as around a single mushroom.
+                if "!|:=-".contains(stem) {
+                    assert_eq!(crowded.scr.cell(sy, sx).0, stem, "{c} {y}");
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked >= 6, "{checked}");
+    }
+
+    /// With twins, the army also stands between them, under their caps, without covering the caps.
+    #[test]
+    fn army_stands_under_the_twins() {
+        for (h, w) in [(24, 80), (40, 100)] {
+            let scene = |army: bool| {
+                let mut u = bare_ui();
+                u.g.mutations = vec!["twin"];
+                u.g.level = u.g.cap();
+                u.g.flash_until = 0.0;
+                if army {
+                    for unit in UNITS.iter().filter(|u| u.id != "bomber") {
+                        u.g.units[unit.id] = 1000;
+                    }
+                }
+                sized(&mut u, h, w);
+                u.draw(0.0);
+                u
+            };
+            let (alone, crowded) = (scene(false), scene(true));
+            let (iw, ih) = (panel_right(&alone) - 1, alone.h - 3);
+            let size = art::size_fraction(f64::from(alone.g.level), f64::from(alone.g.cap()));
+            let centers = art::mushroom_centers(iw, ih, size, true);
+            let army_gap = ARMY_GAP_MIN.max(art::mushroom_width(iw, ih, size, true) / ARMY_GAP_DIV);
+            let between = centers[0] + army_gap..centers[1] - army_gap;
+            let ground = ih - 1;
+            let under_caps = ground - art::stem_height(iw, ih, size, true);
+            // Screen cell of a cell of the panel's inside (from row 1 and column 1).
+            let cell = |u: &UI<BufferScreen>, y: i32, x: i32| u.scr.cell(1 + y, 1 + x).0;
+            assert!(
+                between
+                    .clone()
+                    .any(|x| cell(&crowded, ground - 1, x) != cell(&alone, ground - 1, x)),
+                "{w}×{h}: no army between the twins"
+            );
+            for y in 0..under_caps {
+                for x in between.clone() {
+                    assert_eq!(cell(&crowded, y, x), cell(&alone, y, x), "{w}×{h} {y} {x}");
+                }
+            }
+        }
+    }
+
+    /// With twins, a floating number rises above one of them, not from the gap between them.
+    #[test]
+    fn floats_rise_above_the_twins() {
+        for dx in [-FLOAT_SPREAD as i32, FLOAT_SPREAD as i32] {
+            let mut u = bare_ui();
+            u.g.mutations = vec!["twin"];
+            u.g.level = u.g.cap();
+            u.g.flash_until = 0.0;
+            sized(&mut u, 40, 100);
+            u.add_float("+42".to_string(), Style::PLAIN, dx);
+            u.draw(0.0);
+            let (iw, ih) = (panel_right(&u) - 1, u.h - 3);
+            let size = art::size_fraction(f64::from(u.g.level), f64::from(u.g.cap()));
+            let centers = art::mushroom_centers(iw, ih, size, true);
+            let twin = if dx < 0 { centers[0] } else { centers[1] };
+            let (_, x, _) = u
+                .scr
+                .writes
+                .iter()
+                .find(|w| w.2 == "+42")
+                .expect("float drawn");
+            // Its middle, in the columns of the panel's inside (which starts at screen column 1).
+            let middle = x - 1 + width("+42") / 2;
+            assert!((middle - twin - dx).abs() <= 1, "{dx}: {middle} vs {twin}");
+        }
+    }
+
+    /// The inspector walks toward the mushroom (its walk is the countdown before the freeze), even when
+    /// big twins leave no room right of their stems.
+    #[test]
+    fn inspector_walks_even_beside_the_twins() {
+        for (h, w) in [(MIN_H, MIN_W), (24, 80), (30, 100), (40, 140)] {
+            for twin in [false, true] {
+                // Column of the inspector's sign, at the start and at the end of its walk.
+                let at = |progress: f64| {
+                    let mut u = bare_ui();
+                    let g = &mut u.g;
+                    if twin {
+                        g.mutations = vec!["twin"];
+                    }
+                    g.level = g.cap();
+                    g.flash_until = 0.0;
+                    g.inspector = Some(Inspector {
+                        start: g.time - 10.0 * progress,
+                        dur: 10.0,
+                        hits: 0,
+                    });
+                    sized(&mut u, h, w);
+                    u.draw(0.0);
+                    let sign = tr().ui.inspector_sign;
+                    u.scr
+                        .writes
+                        .iter()
+                        .find(|wr| wr.2 == sign)
+                        .expect("sign drawn")
+                        .1
+                };
+                let walk = at(0.0) - at(1.0);
+                assert!(walk >= INSPECTOR_MIN_WALK, "{w}×{h} {twin}: {walk}");
+            }
+        }
     }
 
     #[test]

@@ -205,7 +205,7 @@ pub fn mushroom(w: i32, h: i32, f: f64, t: f64, skin: &str, twin: bool) -> Vec<C
     let ground = h - 1;
     let frame = (t * FLICKER_FPS) as i64;
     let (height, cap_w) = dimensions(w, h, f, twin);
-    let cap_h = MIN_CAP_H.max((f64::from(height) * CAP_SHARE) as i32);
+    let cap_h = cap_height(height);
     let stem_h = height - cap_h;
     let mut cells = Vec::new();
     for cx in mushroom_centers(w, h, f, twin) {
@@ -367,6 +367,17 @@ fn dust(cells: &mut Vec<Cell>, s: &Shape, ground: i32, height: i32) {
     }
 }
 
+/// Rows of the cap of a mushroom this tall.
+fn cap_height(height: i32) -> i32 {
+    MIN_CAP_H.max((f64::from(height) * CAP_SHARE) as i32)
+}
+
+/// Rows of the stem, under the cap, of a size-f mushroom (each twin's).
+pub fn stem_height(w: i32, h: i32, f: f64, twin: bool) -> i32 {
+    let height = mushroom_height(w, h, f, twin);
+    height - cap_height(height)
+}
+
 /// Column of the center of each mushroom: the panel center, or one twin on each side of it.
 pub fn mushroom_centers(w: i32, h: i32, f: f64, twin: bool) -> Vec<i32> {
     let half_w = w.div_euclid(2);
@@ -377,12 +388,10 @@ pub fn mushroom_centers(w: i32, h: i32, f: f64, twin: bool) -> Vec<i32> {
     vec![half_w - offset, half_w + offset]
 }
 
-/// Approximate width taken on the ground (to place the units and the inspector).
+/// Approximate width taken on the ground by one mushroom (each twin by itself), to keep the units, the
+/// enemies and the inspector off its stem.
 pub fn mushroom_width(w: i32, h: i32, f: f64, twin: bool) -> i32 {
     let cap_w = dimensions(w, h, f, twin).1;
-    if twin {
-        return (w - SIDE_MARGIN).min(2 * cap_w + 2 * TWIN_OFFSET);
-    }
     (w - SIDE_MARGIN).min((f64::from(cap_w) * DUST_LOW) as i32)
 }
 
