@@ -178,12 +178,12 @@ const OPTION_DESC_X: i32 = 5; // description indent in the popup
 const NEWS_SPEED: f64 = 12.0; // columns/s of the news ticker
 pub const NEWS_MARGIN: i32 = 2; // columns of the news line outside the label and the ticker
 
-/// Number drawn evenly from the inclusive ranges a then b (b may be empty): with b empty, the same draw as
-/// randint over a alone.
+/// Number drawn evenly from the inclusive ranges a then b (either may be empty, not both): with b empty,
+/// the same draw as randint over a alone.
 fn randint2(rng: &mut dyn Rng, a: (i32, i32), b: (i32, i32)) -> i32 {
-    let b_len = (b.1 - b.0 + 1).max(0);
-    let k = rng.randint(i64::from(a.0), i64::from(a.1 + b_len)) as i32;
-    if k <= a.1 { k } else { b.0 + (k - a.1 - 1) }
+    let (a_len, b_len) = ((a.1 - a.0 + 1).max(0), (b.1 - b.0 + 1).max(0));
+    let k = rng.randint(0, i64::from(a_len + b_len - 1)) as i32;
+    if k < a_len { a.0 + k } else { b.0 + k - a_len }
 }
 
 fn sfx_gap(key: &str) -> f64 {
@@ -995,14 +995,11 @@ impl<S: Screen> UI<S> {
         let mut next_slot = 0;
         for (u, copy) in wanted {
             let frames = art::unit_art(u.id).expect("every unit has art");
-            let (w, sprite_h) = (
-                art::sprite_width(frames),
-                art::sprite(frames, 0.0, false).len(),
-            );
+            let (w, sprite_h) = (art::sprite_width(frames), frames[0].len() as i32);
             let place = (0..slots.len()).find_map(|tries| {
                 let k = (next_slot + tries) % slots.len();
                 let bottom = slots[k].0;
-                let fits_under = bottom - sprite_h as i32 + 1 >= stems.under_caps;
+                let fits_under = bottom - sprite_h + 1 >= stems.under_caps;
                 let run = slots[k]
                     .1
                     .iter_mut()
@@ -1146,11 +1143,7 @@ impl<S: Screen> UI<S> {
                 let y = (f64::from(top) - 1.0 - fl.age * FLOAT_SPEED) as i32;
                 let len = width(&fl.text);
                 // Above the left twin when shifted left, else above the right one.
-                let cx = if fl.dx < 0 {
-                    centers[0]
-                } else {
-                    centers[centers.len() - 1]
-                };
+                let cx = if fl.dx < 0 { stems.first } else { stems.last };
                 let x = cx + fl.dx - len / 2;
                 self.put(
                     iy + min_row.max(y),
