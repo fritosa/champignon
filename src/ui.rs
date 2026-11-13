@@ -89,7 +89,7 @@ const ARMY_GAP_DIV: i32 = 10;
 const SKY_GROUND_MARGIN: i32 = 3; // rows above the ground without sky objects
 const SKY_MIN_H: i32 = 2;
 const SKY_MIN_W: i32 = 10;
-const SKY_SEED_STRIDE: i32 = 1000; // sky seed: unshaken width * SKY_SEED_STRIDE + ground (one sky per size)
+const SKY_SEED_STRIDE: i32 = 1000; // sky seed: iw * SKY_SEED_STRIDE + ground (same sky for a same size)
 const SKY_STARS_LEVEL: u32 = 100; // clouds below, stars from there
 const SKY_PLANETS_LEVEL: u32 = 1000;
 const CLOUD: &str = "(~~)";
@@ -319,6 +319,14 @@ pub struct Float {
     pub style: Style,
 }
 
+/// Screen shake of the mushroom panel: everything written moves dx columns, clipped to [left, right).
+#[derive(Clone, Copy, Debug)]
+struct Jolt {
+    dx: i32,
+    left: i32,
+    right: i32,
+}
+
 /// What the main loop does after a key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Flow {
@@ -344,6 +352,8 @@ pub struct UI<S: Screen> {
     /// Challenge stories listed in the Infos tab (folded by default).
     pub show_stories: bool,
     pub shake_until: f64,
+    /// During a shake, the move applied by UI::put to the mushroom panel.
+    jolt: Option<Jolt>,
     /// Last terminal title; None: title disabled (main enables it with Some("")).
     pub title: Option<String>,
     pub title_at: f64,
@@ -379,6 +389,7 @@ impl<S: Screen> UI<S> {
             show_done: false,
             show_stories: false,
             shake_until: 0.0,
+            jolt: None,
             title: None,
             title_at: LONG_AGO,
             tab: 0,
@@ -410,20 +421,25 @@ impl<S: Screen> UI<S> {
         (self.t / period) as i64 % 2 == 0
     }
 
-    /// Writes clipped to the screen: what sticks out on the left or the right is cut.
+    /// Writes clipped to the screen: what sticks out on the left or the right is cut. During a shake,
+    /// moved by the jolt and clipped to its columns instead.
     pub fn put(&mut self, y: i32, x: i32, s: &str, style: Style) {
-        if y < 0 || y >= self.h || x >= self.w || s.is_empty() {
+        let (x, left, right) = match self.jolt {
+            Some(j) => (x + j.dx, j.left, j.right),
+            None => (x, 0, self.w),
+        };
+        if y < 0 || y >= self.h || x >= right || s.is_empty() {
             return;
         }
         // Borrowed cuts (no allocation: this runs for every cell of the mushroom and the sprites).
         let byte_at =
             |s: &str, n: i32| s.char_indices().nth(n as usize).map_or(s.len(), |(i, _)| i);
-        let (s, x) = if x < 0 {
-            (&s[byte_at(s, -x)..], 0)
+        let (s, x) = if x < left {
+            (&s[byte_at(s, left - x)..], left)
         } else {
             (s, x)
         };
-        let s = &s[..byte_at(s, self.w - x)];
+        let s = &s[..byte_at(s, right - x)];
         if !s.is_empty() {
             self.scr.put(y, x, s, style);
         }
@@ -565,8 +581,7 @@ impl<S: Screen> UI<S> {
             border = self.c("blue").bold();
         }
         self.frame(y0, x0, h, w, tr().ui.mushroom_title, border);
-        let (iy, mut ix, ih, mut iw) = (y0 + 1, x0 + 1, h - 2, w - 2);
-        let ground = ih - 1;
+        let (iy, ix, ih, iw) = (y0 + 1, x0 + 1, h - 2, w - 2);
 
         if self.g.time < self.g.flash_until {
             for y in 0..ih {
@@ -584,14 +599,22 @@ impl<S: Screen> UI<S> {
             return;
         }
 
-        // The sky and the mushroom are laid out on the full width: a shake moves them, without redrawing
-        // them.
-        let layout_w = iw;
+        // A shake moves the whole scene by a column, clipped to the frame: nothing in it is laid out again.
         if self.t < self.shake_until && iw > SHAKE_MIN_W {
-            let shift = *self.rng.choice(&[0, 1]);
-            ix += shift;
-            iw -= 1; // the lost width keeps the shift inside the frame
+            let dx = *self.rng.choice(&[0, 1]);
+            self.jolt = Some(Jolt {
+                dx,
+                left: ix,
+                right: ix + iw,
+            });
         }
+        self.draw_scene(iy, ix, ih, iw, dt);
+        self.jolt = None;
+    }
+
+    /// Inside of the mushroom panel: ground, bomb or mushroom, sky, army, threats, banners.
+    fn draw_scene(&mut self, iy: i32, ix: i32, ih: i32, iw: i32, dt: f64) {
+        let ground = ih - 1;
         self.put(
             iy + ground,
             ix,
@@ -611,21 +634,17 @@ impl<S: Screen> UI<S> {
             return;
         }
 
-        // Centered on the shaken panel, like everything that aims at the mushroom (projectiles, army,
-        // enemies).
-        let dx = iw / 2 - layout_w / 2;
-        self.draw_sky(iy, ix, iw, ground, layout_w, dx);
+        self.draw_sky(iy, ix, iw, ground);
         let size = art::size_fraction(f64::from(self.g.level), f64::from(self.g.cap()));
         let twin = self.g.has_mut("twin");
-        for (y, x, ch, col) in art::mushroom(layout_w, ih, size, self.t, self.g.skin, twin) {
-            let x = x + dx;
+        for (y, x, ch, col) in art::mushroom(iw, ih, size, self.t, self.g.skin, twin) {
             if 0 <= y && y < ih && 0 <= x && x < iw {
                 self.put_char(iy + y, ix + x, ch, Style::of(col));
             }
         }
 
-        let top = ground - art::mushroom_height(layout_w, ih, size, twin);
-        let foot_w = art::mushroom_width(layout_w, ih, size, twin);
+        let top = ground - art::mushroom_height(iw, ih, size, twin);
+        let foot_w = art::mushroom_width(iw, ih, size, twin);
         let gap = STEM_GAP_MIN.max(foot_w / STEM_GAP_DIV);
         self.draw_army(iy, ix, iw, ground, ARMY_GAP_MIN.max(foot_w / ARMY_GAP_DIV));
         let banners = self.banner_lines(iw);
@@ -668,50 +687,43 @@ impl<S: Screen> UI<S> {
     }
 
     /// Backdrop that evolves with the level: clouds, then stars, then planets (fixed positions per size).
-    /// Laid out on layout_w columns (the panel without shake), moved by dx columns and clipped to the iw
-    /// columns at ix: a shake moves it without redrawing it.
-    pub fn draw_sky(&mut self, iy: i32, ix: i32, iw: i32, ground: i32, layout_w: i32, dx: i32) {
+    pub fn draw_sky(&mut self, iy: i32, ix: i32, iw: i32, ground: i32) {
         let (lvl, top) = (self.g.level, ground - SKY_GROUND_MARGIN);
-        if top < SKY_MIN_H || layout_w < SKY_MIN_W {
+        if top < SKY_MIN_H || iw < SKY_MIN_W {
             return;
         }
-        let mut rng = StdRandom::seeded((layout_w * SKY_SEED_STRIDE + ground) as u64);
+        let mut rng = StdRandom::seeded((iw * SKY_SEED_STRIDE + ground) as u64);
         let grey = self.c("grey");
         if lvl < SKY_STARS_LEVEL {
-            for i in 0..1.max(layout_w / CLOUD_SPACING) {
+            for i in 0..1.max(iw / CLOUD_SPACING) {
                 let y = rng.randint(1, i64::from(top)) as i32;
-                let x0 = rng.randint(0, i64::from(layout_w));
+                let x0 = rng.randint(0, i64::from(iw));
                 let x = ((x0 as f64 + self.t * (CLOUD_SPEED + CLOUD_SPEED_STEP * f64::from(i)))
                     as i64)
-                    .rem_euclid(i64::from(layout_w + WRAP_MARGIN)) as i32
-                    - WRAP_MARGIN
-                    + dx;
+                    .rem_euclid(i64::from(iw + WRAP_MARGIN)) as i32
+                    - WRAP_MARGIN;
                 let cloud = slice(CLOUD, (-x).max(0), width(CLOUD).min(iw - x).max(0));
                 self.put(iy + y, ix + x.max(0), &cloud, grey);
             }
             return;
         }
-        for i in 0..layout_w * top / STAR_DENSITY {
+        for i in 0..iw * top / STAR_DENSITY {
             let y = rng.randint(1, i64::from(top)) as i32;
-            let x = rng.randint(0, i64::from(layout_w - 1)) as i32 + dx;
+            let x = rng.randint(0, i64::from(iw - 1)) as i32;
             let ch = if i % BIG_STAR_EVERY == 0 { "✦" } else { "·" };
             let style = if (i64::from(i) + (self.t * TWINKLE_SPEED) as i64) % TWINKLE_EVERY == 0 {
                 self.c("white")
             } else {
                 grey
             };
-            if (0..iw).contains(&x) {
-                self.put(iy + y, ix + x, ch, style);
-            }
+            self.put(iy + y, ix + x, ch, style);
         }
         if lvl >= SKY_PLANETS_LEVEL {
             for (ch, col) in [("◯", "cyan"), ("♄", "yellow"), ("☾", "white")] {
                 let y = rng.randint(1, i64::from(top)) as i32;
-                let x = rng.randint(0, i64::from(layout_w - 1)) as i32 + dx;
+                let x = rng.randint(0, i64::from(iw - 1)) as i32;
                 let style = self.c(col).bold();
-                if (0..iw).contains(&x) {
-                    self.put(iy + y, ix + x, ch, style);
-                }
+                self.put(iy + y, ix + x, ch, style);
             }
         }
     }
@@ -3337,103 +3349,99 @@ pub(crate) mod tests {
         assert!(approx(u.shake_until, shake("supernova").unwrap()));
     }
 
-    /// A shake moves the mushroom (or the twins) by a column without reshaping it: in a panel narrow
-    /// enough for its width to set its height, it keeps every row. It stays centered on the shaken
-    /// panel, like the projectiles, the army and the enemies that aim at it.
+    /// A shake moves the whole mushroom panel by a column, clipped to its frame, without laying anything
+    /// out again: mushroom or twins, sky, army, bombers, enemy, plane, banners.
     #[test]
-    fn shake_keeps_the_mushroom_height() {
-        // Top row with a cap character, left of the stats panel (45 % of the width at least).
-        let top_row = |u: &UI<BufferScreen>| {
-            (0..u.h).find(|&y| (0..u.w * 2 / 5).any(|x| "@#%&".contains(u.scr.cell(y, x).0)))
+    fn shake_moves_the_panel_without_changing_it() {
+        // Rows of the mushroom panel between its side borders included (the right one is the first ┐ of
+        // the top row).
+        let panel = |u: &UI<BufferScreen>| -> Vec<Vec<char>> {
+            let right = (0..u.w).find(|&x| u.scr.cell(0, x).0 == '┐').unwrap();
+            (1..u.h - 2)
+                .map(|y| (0..=right).map(|x| u.scr.cell(y, x).0).collect())
+                .collect()
         };
-        // Middle columns of the cap's top row y (symmetric) and of the ground line (the shaken panel).
-        let middles = |u: &UI<BufferScreen>, y: i32| {
-            let cap: Vec<i32> = (0..u.w * 2 / 5)
-                .filter(|&x| "@#%&*+=.:'".contains(u.scr.cell(y, x).0))
-                .collect();
-            let ground_y = (0..u.h).find(|&y| u.scr.cell(y, 2).0 == '▁').unwrap();
-            let ground: Vec<i32> = (0..u.w)
-                .skip_while(|&x| u.scr.cell(ground_y, x).0 != '▁')
-                .take_while(|&x| u.scr.cell(ground_y, x).0 == '▁')
-                .collect();
-            (
-                (cap[0] + cap[cap.len() - 1]) / 2,
-                ground[0] + ground.len() as i32 / 2,
-            )
+        let inside = |rows: &[Vec<char>]| -> Vec<Vec<char>> {
+            rows.iter().map(|r| r[1..r.len() - 1].to_vec()).collect()
         };
-        for twin in [false, true] {
-            for w in 90..=110 {
-                let mut u = bare_ui();
-                u.g.level = u.g.cap();
-                u.g.flash_until = 0.0;
-                if twin {
-                    u.g.mutations = vec!["twin"];
-                }
-                sized(&mut u, 40, w);
-                u.draw(0.0);
-                let still = top_row(&u).unwrap();
-                let (cap, ground) = middles(&u, still);
-                assert_eq!(cap, ground, "{w} {twin}");
-                u.shake_until = u.t + 1.0;
-                u.draw(0.0);
-                assert_eq!(top_row(&u), Some(still), "{w} {twin}");
-                let (cap, ground) = middles(&u, still);
-                assert_eq!(cap, ground, "{w} {twin} shaken");
-            }
-        }
-    }
-
-    /// A shake moves the sky by a column with the mushroom, without redrawing it: the clouds, the stars
-    /// and the planets keep their places.
-    #[test]
-    fn shake_moves_the_sky_without_redrawing_it() {
-        // Cells of the mushroom panel (45 % of the width at least) holding one of chars.
-        let cells = |u: &UI<BufferScreen>, chars: &str| {
-            let mut cells = Vec::new();
-            for y in 0..u.h {
-                for x in 0..u.w * 2 / 5 {
-                    if chars.contains(u.scr.cell(y, x).0) {
-                        cells.push((y, x));
-                    }
-                }
-            }
-            cells
-        };
-        // Sky (clouds, stars, planets) and cap of the mushroom.
-        let scene = |u: &UI<BufferScreen>| (cells(u, "(~)·✦◯♄☾"), cells(u, "@#%&"));
+        let mut moved = 0;
         for level in [1, SKY_PLANETS_LEVEL] {
-            let mut seen = 0;
-            for w in 90..=110 {
-                let mut u = bare_ui();
-                u.g.ptalents.insert("p_cap", 1);
-                u.g.level = level;
-                u.g.flash_until = 0.0;
-                // Clouds that drifted far enough for a change of wrapping width to move them.
-                u.t = 600.0;
-                sized(&mut u, 40, w);
-                u.draw(0.0);
-                let (sky, cap) = scene(&u);
-                seen += sky.len();
-                u.shake_until = u.t + 1.0;
-                u.draw(0.0);
-                let (shaken_sky, shaken_cap) = scene(&u);
-                // One same move for the whole sky and the mushroom, the panel edges aside (clipped there).
-                let inner = |cells: &[(i32, i32)], d: i32| -> Vec<(i32, i32)> {
-                    cells
-                        .iter()
-                        .map(|&(y, x)| (y, x + d))
-                        .filter(|&(_, x)| (3..w * 2 / 5 - 3).contains(&x))
-                        .collect()
-                };
-                assert!(
-                    (-1..=1).any(|d| inner(&sky, d) == inner(&shaken_sky, 0)
-                        && inner(&cap, d) == inner(&shaken_cap, 0)
-                        && !inner(&cap, d).is_empty()),
-                    "{level} {w}"
-                );
+            let (mut skies, mut bombers) = (0, 0);
+            for twin in [false, true] {
+                for w in 90..=110 {
+                    let mut u = bare_ui();
+                    let g = &mut u.g;
+                    g.ptalents.insert("p_cap", 1);
+                    g.level = level;
+                    if twin {
+                        g.mutations = vec!["twin"];
+                    }
+                    for (uid, n) in [("soldier", 500), ("tank", 40), ("bomber", 20)] {
+                        g.talents.insert(data::talent(&format!("u_{uid}")).id, 1);
+                        g.units[uid] = n;
+                    }
+                    g.enemies = vec![Enemy {
+                        kind: EnemyKind::Commando,
+                        start: g.time - 5.0,
+                        dur: 15.0,
+                        hits: 0,
+                    }];
+                    g.plane = Some(game::Plane {
+                        letter: 'a',
+                        start: g.time - 2.0,
+                        dur: 10.0,
+                    });
+                    g.log("Coffre : Frénésie !", game::MsgKind::Loot, Some("COFFRE"));
+                    g.sfx.clear();
+                    g.flash_until = 0.0;
+                    // Clouds and bombers that drifted far enough for a change of width to move them.
+                    u.t = 600.0;
+                    sized(&mut u, 40, w);
+                    u.draw(0.0);
+                    let still = inside(&panel(&u));
+                    // Every element is drawn, so that the comparison below does not pass on an empty
+                    // panel: mushroom, tank, commando, plane, banner, and for some widths the sky in the
+                    // upper half and the bombers (they drift and may be off the panel).
+                    let text: Vec<String> = still.iter().map(|r| r.iter().collect()).collect();
+                    let sky = if level < SKY_STARS_LEVEL {
+                        "()~"
+                    } else {
+                        "✦◯♄☾"
+                    };
+                    let has = |rows: &[String], chars: &str| {
+                        rows.iter().any(|r| r.contains(|c| chars.contains(c)))
+                    };
+                    skies += usize::from(has(&text[..text.len() / 2], sky));
+                    bombers += usize::from(has(&text, ">"));
+                    assert!(has(&text, "@#%&"), "{level} {twin} {w}");
+                    for wanted in ["[__]", ".o.", "✈", "Frénésie"] {
+                        assert!(
+                            text.iter().any(|r| r.contains(wanted)),
+                            "{level} {twin} {w} {wanted}"
+                        );
+                    }
+                    u.shake_until = u.t + 1.0;
+                    u.draw(0.0);
+                    let rows = panel(&u);
+                    // The shake stays inside the frame.
+                    assert!(
+                        rows.iter().all(|r| r[0] == '│' && r[r.len() - 1] == '│'),
+                        "{level} {twin} {w}"
+                    );
+                    let shaken = inside(&rows);
+                    let moved_by = |d: usize| {
+                        still
+                            .iter()
+                            .zip(&shaken)
+                            .all(|(a, b)| a[..a.len() - d] == b[d..])
+                    };
+                    assert!(moved_by(0) || moved_by(1), "{level} {twin} {w}");
+                    moved += usize::from(still != shaken);
+                }
             }
-            assert!(seen > 20, "{level}");
+            assert!(skies > 0 && bombers > 0, "{level}");
         }
+        assert!(moved > 0);
     }
 
     #[test]
