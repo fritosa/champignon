@@ -40,9 +40,11 @@ Les tests sont dans un module `#[cfg(test)] mod tests` en fin de chaque fichier 
   appelle des méthodes de `Game` ou des fonctions d'`events` ; elle ne calcule pas de règles du jeu.
 - **Les sons passent par `g.sfx`** (`Sfx`, file de `&'static str` bornée à `SFX_MAX`). La logique fait
   `g.sfx.push_back("nom")`, l'UI les vide dans `UI::play_sfx` (dédoublonnage par image, espacement minimal
-  `SFX_GAP`, secousse d'écran `SHAKE`). Pendant la secousse, `UI::put` décale d'une colonne tout ce qui
-  s'écrit dans le panneau du champignon et le coupe au cadre (`UI::jolt`, posé par `draw_mushroom` autour
-  de `draw_scene`) : un nouvel élément du panneau n'a rien à prévoir pour elle, il garde sa largeur.
+  `SFX_GAP`, secousse d'écran `SHAKE`).
+- **Le panneau du champignon reste dans son cadre.** Tout ce qui s'y écrit passe par `UI::put`, qui le
+  coupe au cadre et, pendant une secousse, le décale d'une colonne (`UI::view`, posé par `draw_mushroom`
+  autour de `draw_scene` et `draw_flash`) : un nouvel élément du panneau peut déborder sans risque, et n'a
+  rien à prévoir pour la secousse (il garde sa largeur).
 - **Les messages passent par `g.log(msg, kind, title)`.** `kind` (`MsgKind::Info`, `Good`, `Bad`, `Loot`,
   `Star`, `Epic`) donne la couleur du bandeau, `title` (`Some(titre)` ou `None`) un titre court en grosses
   lettres. Texte et titre viennent du catalogue : `let msg = &tr().msg;` puis `msg.overheat` ou

@@ -319,10 +319,13 @@ pub struct Float {
     pub style: Style,
 }
 
-/// Screen shake of the mushroom panel: everything written moves dx columns, clipped to [left, right).
+/// Where UI::put writes while the mushroom panel draws: moved dx columns (screen shake), clipped to rows
+/// [top, bottom) and columns [left, right), the inside of its frame.
 #[derive(Clone, Copy, Debug)]
-struct Jolt {
+struct View {
     dx: i32,
+    top: i32,
+    bottom: i32,
     left: i32,
     right: i32,
 }
@@ -352,8 +355,8 @@ pub struct UI<S: Screen> {
     /// Challenge stories listed in the Infos tab (folded by default).
     pub show_stories: bool,
     pub shake_until: f64,
-    /// During a shake, the move applied by UI::put to the mushroom panel.
-    jolt: Option<Jolt>,
+    /// While the mushroom panel draws, its clipping and shake move, applied by UI::put.
+    view: Option<View>,
     /// Last terminal title; None: title disabled (main enables it with Some("")).
     pub title: Option<String>,
     pub title_at: f64,
@@ -389,7 +392,7 @@ impl<S: Screen> UI<S> {
             show_done: false,
             show_stories: false,
             shake_until: 0.0,
-            jolt: None,
+            view: None,
             title: None,
             title_at: LONG_AGO,
             tab: 0,
@@ -421,14 +424,14 @@ impl<S: Screen> UI<S> {
         (self.t / period) as i64 % 2 == 0
     }
 
-    /// Writes clipped to the screen: what sticks out on the left or the right is cut. During a shake,
-    /// moved by the jolt and clipped to its columns instead.
+    /// Writes clipped to the screen: what sticks out on any side is cut. Inside the mushroom panel, moved
+    /// and clipped by its view instead.
     pub fn put(&mut self, y: i32, x: i32, s: &str, style: Style) {
-        let (x, left, right) = match self.jolt {
-            Some(j) => (x + j.dx, j.left, j.right),
-            None => (x, 0, self.w),
+        let (x, top, bottom, left, right) = match self.view {
+            Some(v) => (x + v.dx, v.top, v.bottom, v.left, v.right),
+            None => (x, 0, self.h, 0, self.w),
         };
-        if y < 0 || y >= self.h || x >= right || s.is_empty() {
+        if y < top || y >= bottom || x >= right || s.is_empty() {
             return;
         }
         // Borrowed cuts (no allocation: this runs for every cell of the mushroom and the sprites).
@@ -582,34 +585,43 @@ impl<S: Screen> UI<S> {
         }
         self.frame(y0, x0, h, w, tr().ui.mushroom_title, border);
         let (iy, ix, ih, iw) = (y0 + 1, x0 + 1, h - 2, w - 2);
-
-        if self.g.time < self.g.flash_until {
-            for y in 0..ih {
-                let line: String = (0..iw)
-                    .map(|_| *self.rng.choice(&['█', '▓', '▒', '░']))
-                    .collect();
-                let style = if self.blink(BLINK_FLASH) {
-                    self.c("flash")
-                } else {
-                    self.c("white").bold()
-                };
-                self.put(iy + y, ix, &line, style);
-            }
-            self.draw_banners(iy, ix, iw, None);
-            return;
+        let flash = self.g.time < self.g.flash_until;
+        // Everything written inside is clipped to the frame; a shake moves it all by a column, without
+        // laying anything out again.
+        let dx = if !flash && self.t < self.shake_until && iw > SHAKE_MIN_W {
+            *self.rng.choice(&[0, 1])
+        } else {
+            0
+        };
+        self.view = Some(View {
+            dx,
+            top: iy,
+            bottom: iy + ih,
+            left: ix,
+            right: ix + iw,
+        });
+        if flash {
+            self.draw_flash(iy, ix, ih, iw);
+        } else {
+            self.draw_scene(iy, ix, ih, iw, dt);
         }
+        self.view = None;
+    }
 
-        // A shake moves the whole scene by a column, clipped to the frame: nothing in it is laid out again.
-        if self.t < self.shake_until && iw > SHAKE_MIN_W {
-            let dx = *self.rng.choice(&[0, 1]);
-            self.jolt = Some(Jolt {
-                dx,
-                left: ix,
-                right: ix + iw,
-            });
+    /// Inside of the mushroom panel during the explosion flash.
+    fn draw_flash(&mut self, iy: i32, ix: i32, ih: i32, iw: i32) {
+        for y in 0..ih {
+            let line: String = (0..iw)
+                .map(|_| *self.rng.choice(&['█', '▓', '▒', '░']))
+                .collect();
+            let style = if self.blink(BLINK_FLASH) {
+                self.c("flash")
+            } else {
+                self.c("white").bold()
+            };
+            self.put(iy + y, ix, &line, style);
         }
-        self.draw_scene(iy, ix, ih, iw, dt);
-        self.jolt = None;
+        self.draw_banners(iy, ix, iw, None);
     }
 
     /// Inside of the mushroom panel: ground, bomb or mushroom, sky, army, threats, banners.
@@ -2866,6 +2878,11 @@ pub(crate) mod tests {
         u.scr.writes.iter().any(|(_, _, s)| s.contains(needle))
     }
 
+    /// Column of the right border of the mushroom panel drawn by UI::draw: the first ┐ of the top row.
+    fn panel_right(u: &UI<BufferScreen>) -> i32 {
+        (0..u.w).find(|&x| u.scr.cell(0, x).0 == '┐').unwrap()
+    }
+
     fn row_texts(rows: &[Row]) -> Vec<String> {
         rows.iter().map(|r| r.text.clone()).collect()
     }
@@ -3353,10 +3370,9 @@ pub(crate) mod tests {
     /// out again: mushroom or twins, sky, army, bombers, enemy, plane, banners.
     #[test]
     fn shake_moves_the_panel_without_changing_it() {
-        // Rows of the mushroom panel between its side borders included (the right one is the first ┐ of
-        // the top row).
+        // Rows of the mushroom panel between its side borders included.
         let panel = |u: &UI<BufferScreen>| -> Vec<Vec<char>> {
-            let right = (0..u.w).find(|&x| u.scr.cell(0, x).0 == '┐').unwrap();
+            let right = panel_right(u);
             (1..u.h - 2)
                 .map(|y| (0..=right).map(|x| u.scr.cell(y, x).0).collect())
                 .collect()
@@ -3442,6 +3458,70 @@ pub(crate) mod tests {
             assert!(skies > 0 && bombers > 0, "{level}");
         }
         assert!(moved > 0);
+    }
+
+    /// Nothing drawn inside the mushroom panel spills over its frame, shake or not: the plane coming in
+    /// on the right, the inspector's hit counter at the max level (its longest), the impact of a
+    /// projectile aimed when the panel was taller (the terminal just shrank).
+    #[test]
+    fn mushroom_panel_stays_in_its_frame() {
+        for (h, w) in [(MIN_H, MIN_W), (24, 80), (40, 140)] {
+            for shaking in [false, true] {
+                let mut u = bare_ui();
+                let g = &mut u.g;
+                g.ptalents.insert("p_cap", 4);
+                g.level = data::MAX_CAP;
+                g.plane = Some(game::Plane {
+                    letter: 'a',
+                    start: g.time,
+                    dur: 10.0,
+                });
+                g.inspector = Some(Inspector {
+                    start: g.time - 100.0,
+                    dur: 10.0,
+                    hits: 0,
+                });
+                g.flash_until = 0.0;
+                // Impact row on the bottom border: the panel has h - 3 inner rows, from row 1.
+                u.particles.push(Particle {
+                    sx: 1,
+                    sy: 1,
+                    tx: 1,
+                    ty: h - 3,
+                    peak: 0.0,
+                    age: 1.0,
+                    dur: 1.0,
+                    ch: "*",
+                    col: "red",
+                });
+                sized(&mut u, h, w);
+                if shaking {
+                    u.shake_until = u.t + 1.0;
+                }
+                u.draw(0.0);
+                // The inspector and its counter are drawn, so that the checks below do not pass on an
+                // empty panel.
+                assert!(
+                    written(&u, tr().ui.inspector_sign) && written(&u, "··"),
+                    "{w}×{h} {shaking}"
+                );
+                let right = panel_right(&u);
+                let bottom: String = (1..right).map(|x| u.scr.cell(h - 2, x).0).collect();
+                assert!(
+                    bottom.chars().all(|c| c == '─'),
+                    "{w}×{h} {shaking} {bottom}"
+                );
+                for y in 1..h - 2 {
+                    let borders = (u.scr.cell(y, 0).0, u.scr.cell(y, right).0);
+                    assert_eq!(borders, ('│', '│'), "{w}×{h} {shaking} row {y}");
+                    // Nor over the panel on the right.
+                    assert!(
+                        "│┌└".contains(u.scr.cell(y, right + 1).0),
+                        "{w}×{h} row {y}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
